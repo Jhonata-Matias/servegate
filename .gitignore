@@ -34,3 +34,6 @@ Thumbs.db
 
 # AIOX framework (project-dev mode)
 .aiox-core/
+
+# Windows NTFS metadata (alt data streams in WSL)
+*Zone.Identifier*

@@ -47,7 +47,7 @@ Estabelecer e operar um stack de inferência multi-modalidade (texto + imagem) n
 
 | ID | Titulo | Status | Owner |
 |---|---|---|---|
-| 1.1 | Install ComfyUI + FLUX.1-schnell on Pod | Review (impl @dev — aguarda @qa) | @dev |
+| 1.1 | Install ComfyUI + FLUX.1-schnell on Pod | **Done** (QA APPROVE, commit `88907e5` em 2026-04-21) | @dev |
 | 1.x | (futuras stories conforme necessidade) | — | — |
 
 ## Constraints (cross-story)
