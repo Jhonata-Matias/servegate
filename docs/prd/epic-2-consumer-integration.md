@@ -13,6 +13,7 @@
 |---|---|---|---|
 | 0.1 | 2026-04-21 | @pm Morgan | Initial draft — pre-implementation, projections ungrounded |
 | 0.2 | 2026-04-21 | @pm Morgan | **Post Story 2.1 update** — cost projection calibrada com medição real (+2.5x), cold start realism (AC5 gap documentado), stories 2.1.1 + 2.1.2 adicionadas, cold SLA deferido para ADR-0001 |
+| 0.3 | 2026-04-21 | @pm Morgan | **Post ADR-0001 approval** — Path A accepted (accept cold, solve via client UX). Cold SLA: warm <10s p95 (primary), cold ~130s first-invocation after idle (secondary, mitigated via SDK warmup + demo pre-warm). Path B reserved as reversible pivot (1-2 dev-days). 30-day review 2026-05-21 with measurable criteria. |
 
 ---
 
@@ -69,6 +70,21 @@ Habilitar consumo da capacidade de geração de imagem (Story 1.1) por aplicaç�
 ### Calibration note (v0.2)
 
 O critério "cold spawn sub-30s" foi invalidado empiricamente pela Story 2.1 (medido 98-150s true cold). **Decisão de SLA cold-start deferida** para ADR-0001 em Story 2.1.2 (architectural spike). Warm p95 <10s mantido como SLA primário para consumers Epic 2 (2.2 SDK / 2.3 demo).
+
+### SLA decision post-ADR-0001 (v0.3 — 2026-04-21)
+
+**Path A accepted** (accept cold, solve via client UX):
+
+| SLA layer | Target | Who enforces |
+|---|---|---|
+| Warm p95 (primary) | <10s | Story 2.1 — validated ✅ |
+| Cold first-invocation after idle | ~130s expected, 180s timeout | Story 2.2 SDK retry-with-backoff |
+| Web demo first-load-to-interactive | <150s with pre-warm UI | Story 2.3 pre-warm hook + loading states |
+| Subsequent warm in same session | <10s | SDK retry logic keeps warm while active |
+
+**ADR reference:** `docs/architecture/adr-0001-flux-cold-start.md` (approved 2026-04-21 with 4 PM addenda).
+
+**Pivot criterion (30-day review 2026-05-21):** if volume >1000/mo OR demo bounce >40% OR cold >180s sustained → Story 2.1.3 (Path B bake-in, 1-2 dev-days).
 
 ## Stories (status atualizado — v0.2)
 

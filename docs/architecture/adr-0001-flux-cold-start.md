@@ -2,9 +2,11 @@
 
 ## Status
 
-**Proposed** (2026-04-21) — awaiting @pm approval per Story 2.1.2 AC3.
+**✅ Accepted with PM refinements** (2026-04-21) — @pm validated per Story 2.1.2 Task 3.
 
-Review date: **2026-05-21** (30 days post-approval) — critério de reavaliação baseado em dados reais de produção.
+Approved by @pm (Morgan) subject to 4 addenda documented in "PM Validation Notes" section below. ADR not blocked by addenda — Stories 2.2/2.3/2.5 may proceed with Path A assumption.
+
+Review date: **2026-05-21** (30 days post-approval) — critérios mensuráveis definidos em PM Validation Notes.
 
 ## Context
 
@@ -209,13 +211,93 @@ Source: `serverless/tests/bench-results-1776789792.json` + RunPod billing API
 
 ---
 
+## PM Validation Notes (added by @pm 2026-04-21)
+
+### Addendum 1 — Path A dev effort honesty
+
+ADR Option Analysis claims Path A has "zero dev effort em infra". Technically true for infra, but **Path A shifts complexity to client-side**:
+
+| Client-side work | Estimate | Story |
+|---|---|---|
+| SDK `warmup()` helper + retry-with-backoff + `ColdStartError` type | ~4-8h | 2.2 |
+| Web demo pre-warm UI + loading states + analytics | ~2-4h | 2.3 |
+| **Total Path A actual cost** | **~0.5-1 dev-days** | — |
+
+Path A is **still cheaper than Path B** (1-2 dev-days for bake-in), but the margin is narrower than implied. Adjusted net effort comparison:
+
+| | Infra effort | Client effort | Total |
+|---|---|---|---|
+| Path A | 0 days | 0.5-1 day | **0.5-1 day** |
+| Path B | 1-2 days | 0 days | **1-2 days** |
+
+**Impact on decision:** Path A still wins on effort, but economic break-even shifts slightly. Re-evaluate if SDK/demo UX engineering reveals hidden complexity.
+
+### Addendum 2 — Review criteria measurables (30-day review)
+
+Original ADR says "review date 2026-05-21" without thresholds. Adding concrete pivot criteria:
+
+**Trigger Path B (bake-in) pivot if ANY:**
+- Sustained volume >1000 imgs/mo for 2+ consecutive weeks (Path B breakeven at ~500-1000)
+- Web demo bounce rate on first-load session >40% (measure via Story 2.3 analytics)
+- Average first-use cold experience >180s (SDK warmup doesn't converge)
+- Customer complaints about first-use latency >3 reports in 30 days
+
+**Trigger stay-the-course (no pivot) if ALL:**
+- Volume <500 imgs/mo sustained
+- SDK retry mechanism handles cold transparently (measured via retry success rate >95%)
+- Web demo first-load UX accepted by user testing
+- Cost trending <$15/mo inferência
+
+**Data collection requirement for review:**
+- RunPod billing monthly breakdown (via GET /billing/endpoints)
+- Story 2.3 analytics: warmup start/end timestamps, bounce rate
+- GitHub/Linear issue triage for UX complaints
+
+### Addendum 3 — MVP volume estimate uncertainty
+
+ADR uses "100-500 imgs/mês" as MVP volume assumption. This is **@pm's MVP hypothesis, not validated data**. Scenarios:
+
+| Scenario | Probability (@pm subjective) | Path A cost |
+|---|---|---|
+| Low demand (~50-200/mo) | 40% | $2-5/mo |
+| Expected demand (~100-500/mo) | 35% | $3-8/mo |
+| Unexpected traction (~500-1500/mo) | 20% | $10-20/mo |
+| Rapid success (>1500/mo) | 5% | $20-50/mo (trigger Path B pivot) |
+
+**Implication:** Path A remains rational expected-value decision. Rapid-success scenario (5%) triggers auto-pivot via review criteria — no downside risk.
+
+### Addendum 4 — Web demo UX risk flag
+
+130s first-load-to-interactive is **significant UX penalty** even with pre-warming:
+- User opens demo page → 130s warmup → button becomes active
+- Alternative: button visible immediately, but first click takes 130s
+- Neither is "good" UX
+
+**Mitigation priorities for Story 2.3:**
+1. **Pre-warm on page visit** (not wait for button click) — warmup starts in background on page load
+2. **Show progress explicitly** — "Preparing server (one-time, ~2min)..." with timer, not generic spinner
+3. **Save demo state** — if user abandons during warmup, server stays warm 5s idle; returning user may hit warm
+4. **Analytics from day 1** — measure warmup→first-interaction latency; this is the primary PM KPI for 30-day review
+
+**If demo UX fails acceptance testing:** Path B pivot justified regardless of cost analysis (demo-driven adoption = business value).
+
+### PM Validation Summary
+
+- ✅ **Path A APPROVED** as Epic 2 MVP strategy
+- ✅ Cost alignment confirmed (within ±20% of PRD v0.2)
+- ✅ Reversibility plan acceptable
+- ⚠️ 4 addenda added above — @architect/@dev must honor during Stories 2.2/2.3 implementation
+- ⚠️ 30-day review transitions from "scheduled check" to **governance gate** with measurable criteria
+
+---
+
 **Decision log:**
 
 | Date | Who | Action |
 |---|---|---|
 | 2026-04-21 | @architect (Aria) | Drafted ADR consolidating Task 1 data gathering |
-| TBD | @pm (Morgan) | Approval (Task 3 of Story 2.1.2) |
-| 2026-05-21 | @pm + @architect | 30-day review with production data |
+| 2026-04-21 | @pm (Morgan) | **Approved with 4 addenda** (Task 3 of Story 2.1.2) |
+| 2026-05-21 | @pm + @architect | 30-day review with production data (criteria defined in Addendum 2) |
 
 **References:**
 - `docs/stories/2.1.2.decide-cold-start-mitigation.story.md` — story driving this ADR
