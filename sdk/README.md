@@ -1,6 +1,20 @@
 # `@jhonata-matias/flux-client`
 
+[![alpha](https://img.shields.io/badge/status-alpha-orange)](../docs/legal/TERMS.md) [![license MIT](https://img.shields.io/badge/license-MIT-blue)](./LICENSE)
+
 TypeScript SDK para o gateway de geração de imagens FLUX do projeto **gemma4**. Encapsula chamadas ao gateway autenticado (Story 2.5), trata cold-start realista (~130s, ADR-0001 Path A) via `warmup()` + retry-with-backoff, e expõe error classes tipadas para UX flows diferenciados.
+
+## ⚠️ ALPHA STATUS
+
+This SDK is in **alpha** (v0.x). Breaking changes expected. Do not use in production without understanding:
+
+- **No SLA:** single-endpoint, single-owner personal project
+- **Breaking changes:** minor version bumps may introduce API changes (follow `CHANGELOG.md`)
+- **Limited support:** best-effort via GitHub issues
+- **Rate limits:** 100 images/day global across all users during alpha
+- **Terms required:** see [Terms of Use](../docs/legal/TERMS.md) and [Privacy Statement](../docs/legal/PRIVACY.md)
+
+For onboarding (API key request), see [dev-onboarding.md](../docs/usage/dev-onboarding.md).
 
 > **Note:** Scope `@jhonata-matias` matches GitHub Packages owner do repo `Jhonata-Matias/gemma4`. Project codename remains "gemma4".
 
