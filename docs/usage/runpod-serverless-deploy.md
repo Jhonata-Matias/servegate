@@ -72,7 +72,7 @@ ENDPOINT=$(curl -sS -X POST "https://rest.runpod.io/v1/endpoints" \
     \"workersMin\": 0,
     \"workersMax\": 3,
     \"idleTimeout\": 5,
-    \"executionTimeoutMs\": 120000,
+    \"executionTimeoutMs\": 300000,
     \"flashboot\": true,
     \"scalerType\": \"QUEUE_DELAY\",
     \"scalerValue\": 4

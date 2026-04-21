@@ -18,6 +18,9 @@ GPU_TYPE="${GPU_TYPE:-NVIDIA GeForce RTX 4090}"
 DATACENTER="${DATACENTER:-US-IL-1}"
 NETWORK_VOLUME_ID="${NETWORK_VOLUME_ID:-mqqgzwnfp1}"
 CONTAINER_REGISTRY_AUTH_ID="${CONTAINER_REGISTRY_AUTH_ID:-${RUNPOD_GHCR_AUTH_ID:-}}"
+# 300s aligns with handler.py COMFY_GENERATION_TIMEOUT_S (280s + margin). 120s was insufficient
+# for cold starts loading the 23GB FLUX UNET from the network volume (observed 98-150s real cold).
+EXECUTION_TIMEOUT_MS="${EXECUTION_TIMEOUT_MS:-300000}"
 
 API="https://rest.runpod.io/v1"
 AUTH=(-H "Authorization: Bearer $RUNPOD_API_KEY")
@@ -65,7 +68,8 @@ upsert_kv "RUNPOD_SERVERLESS_TEMPLATE_ID" "$TEMPLATE_ID"
 
 # 2) Endpoint
 echo "→ Resolving endpoint '$ENDPOINT_NAME'..."
-ENDPOINT_ID=$(curl -sS "${AUTH[@]}" "$API/endpoints" | jq -r --arg n "$ENDPOINT_NAME" '.[] | select(.name==$n) | .id' | head -1)
+ENDPOINT_JSON=$(curl -sS "${AUTH[@]}" "$API/endpoints" | jq --arg n "$ENDPOINT_NAME" '.[] | select(.name==$n)' | head -1000)
+ENDPOINT_ID=$(echo "$ENDPOINT_JSON" | jq -r '.id // empty')
 if [ -z "$ENDPOINT_ID" ] || [ "$ENDPOINT_ID" = "null" ]; then
   echo "  Creating new endpoint..."
   RESP=$(curl -sS -X POST "${AUTH[@]}" -H "Content-Type: application/json" \
@@ -76,6 +80,7 @@ if [ -z "$ENDPOINT_ID" ] || [ "$ENDPOINT_ID" = "null" ]; then
       --arg gpu "$GPU_TYPE" \
       --arg dc "$DATACENTER" \
       --arg nv "$NETWORK_VOLUME_ID" \
+      --argjson timeout "$EXECUTION_TIMEOUT_MS" \
       '{
         name: $name,
         templateId: $tid,
@@ -87,7 +92,7 @@ if [ -z "$ENDPOINT_ID" ] || [ "$ENDPOINT_ID" = "null" ]; then
         workersMin: 0,
         workersMax: 3,
         idleTimeout: 5,
-        executionTimeoutMs: 120000,
+        executionTimeoutMs: $timeout,
         flashboot: true,
         scalerType: "QUEUE_DELAY",
         scalerValue: 4
@@ -98,9 +103,18 @@ if [ -z "$ENDPOINT_ID" ] || [ "$ENDPOINT_ID" = "null" ]; then
     echo "$RESP" | jq . >&2
     exit 1
   fi
-  echo "  ✅ Created ENDPOINT_ID=$ENDPOINT_ID"
+  echo "  ✅ Created ENDPOINT_ID=$ENDPOINT_ID (executionTimeoutMs=$EXECUTION_TIMEOUT_MS)"
 else
-  echo "  ↻ Reusing ENDPOINT_ID=$ENDPOINT_ID"
+  CURRENT_TIMEOUT=$(echo "$ENDPOINT_JSON" | jq -r '.executionTimeoutMs // empty')
+  if [ -n "$CURRENT_TIMEOUT" ] && [ "$CURRENT_TIMEOUT" != "$EXECUTION_TIMEOUT_MS" ]; then
+    echo "  ⚠ executionTimeoutMs drift: live=$CURRENT_TIMEOUT target=$EXECUTION_TIMEOUT_MS — applying PATCH"
+    curl -sS -X PATCH "${AUTH[@]}" -H "Content-Type: application/json" \
+      "$API/endpoints/$ENDPOINT_ID" \
+      -d "$(jq -n --argjson t "$EXECUTION_TIMEOUT_MS" '{executionTimeoutMs: $t}')" > /dev/null
+    echo "  ✅ Patched ENDPOINT_ID=$ENDPOINT_ID executionTimeoutMs → $EXECUTION_TIMEOUT_MS"
+  else
+    echo "  ↻ Reusing ENDPOINT_ID=$ENDPOINT_ID (executionTimeoutMs=$CURRENT_TIMEOUT already aligned)"
+  fi
 fi
 upsert_kv "RUNPOD_SERVERLESS_ENDPOINT_ID" "$ENDPOINT_ID"
 
