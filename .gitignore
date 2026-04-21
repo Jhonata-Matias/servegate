@@ -37,3 +37,9 @@ Thumbs.db
 
 # Windows NTFS metadata (alt data streams in WSL)
 *Zone.Identifier*
+
+# Serverless test artifacts (generated, not checked-in)
+serverless/tests/__pycache__/
+serverless/tests/smoke-*.png
+serverless/tests/bench-results-*.json
+__pycache__/
