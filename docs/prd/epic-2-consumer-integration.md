@@ -1,9 +1,9 @@
 # Epic 2 — Consumer Integration (Hybrid Pragmatic)
 
-**Status:** In Progress (v0.4 — post QA gate 2.1.2 PASS)
+**Status:** In Progress (v0.5 — post batch close 2.1.1+2.1.2+2.2)
 **Owner:** @pm (Morgan)
 **Created:** 2026-04-21
-**Last Updated:** 2026-04-21 (v0.4)
+**Last Updated:** 2026-04-21 (v0.5)
 **Project:** gemma4
 **Predecessor:** Epic 1 (Pod Inference Stack — Done em 2026-04-21)
 
@@ -15,6 +15,7 @@
 | 0.2 | 2026-04-21 | @pm Morgan | **Post Story 2.1 update** — cost projection calibrada com medição real (+2.5x), cold start realism (AC5 gap documentado), stories 2.1.1 + 2.1.2 adicionadas, cold SLA deferido para ADR-0001 |
 | 0.3 | 2026-04-21 | @pm Morgan | **Post ADR-0001 approval** — Path A accepted (accept cold, solve via client UX). Cold SLA: warm <10s p95 (primary), cold ~130s first-invocation after idle (secondary, mitigated via SDK warmup + demo pre-warm). Path B reserved as reversible pivot (1-2 dev-days). 30-day review 2026-05-21 with measurable criteria. |
 | 0.4 | 2026-04-21 | @pm Morgan | **Post QA gate 2.1.2 PASS** (95/100) — Added preliminary ACs for Stories 2.2 (SDK) + 2.3 (demo) derived from ADR-0001 Impact + PM Addenda 1+4; @sm can now draft both stories with anchored scope. Risk R4 aligned with ADR "no change Story 2.5" (pre-warm = SDK responsibility, not gateway). New "30-Day Review Governance" section formalizing 4 pivot triggers + 4 stay-course criteria + DRI assignment (**@pm owns data collection until 2026-05-21**: RunPod billing, demo analytics, issue triage). Resolves QA gate observations O2/O3/O4. |
+| 0.5 | 2026-04-21 | @po Pax | **Batch close 3 stories** (PM-approved): 2.1.1 (QA 9.4/10), 2.1.2 (QA 95/100), 2.2 (QA 92/100, merged PR #1). Stories table updated. Dependency graph repintado para refletir único caminho crítico restante (publish 2.2 → 2.5 → integ smoke → 2.3). New "Tech Debt Backlog" section com 7 items priorizados: TD1 publish (HIGH, @devops imediato), TD2 integ smoke (MEDIUM, @qa), TD3 redeploy v0.1.1 (MEDIUM, @devops), TD4 re-bench cold n≥10 (LOW, @dev pre-2026-05-15), TD5-TD7 SDK refinements (LOW, @dev). Total tech debt budget ~6-9h (HIGH+MEDIUM ~3-4h). |
 
 ---
 
@@ -92,34 +93,33 @@ O critério "cold spawn sub-30s" foi invalidado empiricamente pela Story 2.1 (me
 | ID | Título | Prioridade | Owner | Status |
 |---|---|---|---|---|
 | **2.1** | Empacotar workflow ComfyUI+FLUX como RunPod Serverless endpoint | **MUST** | @dev | **Done** (QA CONCERNS 8.2/10 — gaps deferidos para 2.1.1 + 2.1.2) |
-| **2.1.1** | Fix serverless endpoint QA concerns (deploy idempotent + input validation + robustness + unit tests) | **HIGH** | @dev | **Ready for Review** (QA PASS 9.4/10 — pending close-story + optional redeploy) |
-| **2.1.2** | Decide cold-start mitigation strategy (ADR-0001) | **HIGH** | @architect + @pm | **Ready** (Draft→Ready PO 9.7/10 — spike ADR-driven, timebox 72h) |
-| **2.2** | Implementar TypeScript SDK `@gemma4/flux-client` consumindo o endpoint | **MUST** | @dev | **Backlog** — bloqueada por 2.1.1 Done + 2.1.2 ADR (retry strategy depende) |
-| **2.5** | Gateway Cloudflare Worker + KV pra auth (X-API-Key) + rate-limit 100/dia global | **MUST** | @dev | **Ready** (validada @po 9.75/10) — pode rodar paralela a 2.2 |
-| **2.3** | App demo Next.js + Vercel usando SDK contra gateway URL | **MUST** | @dev (+ @ux opcional) | **Backlog** — requer 2.1.1 Done + 2.2 + 2.5 |
+| **2.1.1** | Fix serverless endpoint QA concerns (deploy idempotent + input validation + robustness + unit tests) | **HIGH** | @dev | **Done** (QA PASS 9.4/10; redeploy v0.1.1 = tech debt MEDIUM, neutralizado via SDK AC1) |
+| **2.1.2** | Decide cold-start mitigation strategy (ADR-0001) | **HIGH** | @architect + @pm | **Done** (Path A approved; QA PASS 95/100; ADR + PRD v0.4 deliverables) |
+| **2.2** | Implementar TypeScript SDK `@gemma4/flux-client` consumindo o endpoint | **MUST** | @dev | **Done** (QA PASS 92/100; merged via PR #1 squash; publish é tech debt HIGH @devops) |
+| **2.5** | Gateway Cloudflare Worker + KV pra auth (X-API-Key) + rate-limit 100/dia global | **MUST** | @dev | **Ready** (validada @po 9.75/10) — pode rodar paralela a 2.3 |
+| **2.3** | App demo Next.js + Vercel usando SDK contra gateway URL | **MUST** | @dev (+ @ux opcional) | **Ready** (PO 10/10 — bloqueada por SDK published + 2.5 Done) |
 | **2.4** | (Opcional) Custom node n8n integrando o SDK | SHOULD | @dev | **Backlog** opportunistic |
 
-### Dependency graph atualizado
+### Dependency graph atualizado (v0.5 — pós-batch close 2.1.1+2.1.2+2.2)
 
 ```
 2.1 (Done)
- ├── 2.1.1 (Ready for Review) ──┐
- ├── 2.1.2 (Ready)              │
- │    └── ADR-0001 ─────────────┤
- │                              ├── 2.2 (blocked)
- │                              │    └── 2.3 (blocked)
- └── 2.5 (Ready) ───────────────┘         ↑
-                                          │
-                                     requires 2.5 gateway too
+ ├── 2.1.1 (Done — redeploy = tech debt)
+ ├── 2.1.2 (Done — Path A formalizado em ADR-0001 + PRD v0.4)
+ ├── 2.2 (Done — SDK merged; publish = tech debt HIGH)
+ │    └── publish → desbloqueia 2.3 install
+ ├── 2.5 (Ready — gateway, paralelo)
+ │    └── + integration smoke 2.2 → desbloqueia 2.3 dev
+ └── 2.3 (Ready — bloqueada por: SDK published + 2.5 Done)
 ```
 
-**MVP revisado path (ordem otimizada):**
-1. Fechar **2.1.1** (pending close-story + redeploy) → **2.2 draft + dev** desbloqueado parcialmente
-2. Executar **2.1.2** em paralelo (architect spike 72h)
-3. Post-ADR: ajustar **Epic 2 PRD** se path B ou C escolhido (cria story filha 2.1.3 se implementação requerida)
-4. **2.2** dev (SDK com retry strategy definida por ADR)
-5. **2.5** dev em paralelo a 2.2 (independente)
-6. **2.3** dev depende de 2.2 + 2.5 operacionais
+**MVP path remaining (post-batch close):**
+1. **`*publish`** SDK 2.2 → GitHub Packages (~15min @devops, resolve AC8 deferred) — desbloqueia install em 2.3
+2. **`*develop 2.5`** gateway (3-5h @dev) — paralelo, independente
+3. Após 2.5 Done: **integration smoke 2.2 vs 2.5** (~30min @qa fecha tech debt) — desbloqueia 2.3 dev
+4. **`*develop 2.3`** demo Next.js + Vercel (2-4h @dev)
+5. **Close 2.5 + 2.3** + Epic 2 Done declaration
+6. Handoff para 30-day review tracking (DRI: @pm)
 
 ## Preliminary ACs — Stories 2.2 & 2.3 (derived from ADR-0001, v0.4)
 
@@ -235,7 +235,25 @@ Com 100 imgs/dia globais + pior caso cold-dominated:
 | R8 | Rate limit bypass se atacante descobre endpoint serverless URL direto | Ativa | RUNPOD_API_KEY como secret do Worker |
 | **R9** (NEW) | Cost projection 2.5x off arruinou budgets de consumers downstream | Mitigada via v0.2 calibration | PRD agora tem cost real-world ($0.0015/warm); consumers Epic 2 podem orçar corretamente |
 | **R10** (NEW) | Image v0.1.0 em produção tem bug L1 (`steps=0` silent default) | Fix pronto, redeploy pendente | Story 2.1.1 closure inclui redeploy atomic op + smoke validation |
-| **R11** (NEW) | Low-traffic pattern vira cold-dominated, caro por imagem | Ativa | ADR-0001 avalia workersMin=1 standby pra use cases steady-trickle; accept pra batch-heavy |
+| **R11** (NEW) | Low-traffic pattern vira cold-dominated, caro por invocação | Ativa | ADR-0001 avalia workersMin=1 standby pra use cases steady-trickle; accept pra batch-heavy |
+
+## Tech Debt Backlog (v0.5 — post batch close 2.1.1+2.1.2+2.2)
+
+> Items capturados do close-story batch. PM-approved priorização. Cada item tem owner + condição de execução (timing) + critério de done.
+
+| ID | Severity | Origem | Item | Owner | When | Done criteria |
+|---|---|---|---|---|---|---|
+| **TD1** | **HIGH** | Story 2.2 AC8 deferred | Publish `@gemma4/flux-client@0.1.0` ao GitHub Packages | @devops | **Imediato** (desbloqueia 2.3 install) | `npm view @gemma4/flux-client` retorna 0.1.0; consumer test project `npm install` resolve types |
+| **TD2** | MEDIUM | Story 2.2 Task 11 deferred | Integration smoke 2.2 SDK contra gateway 2.5 real | @qa | Após Story 2.5 Done | 4 paths validados: success warm + cold-then-warm + 429 + 401; evidence em `docs/qa/2.2-integration-smoke.md` |
+| **TD3** | MEDIUM | Story 2.1.1 close decision | Redeploy serverless image v0.1.1 (defense-in-depth) | @devops | Sprint próximo (não-blocker MVP) | RunPod endpoint reporting image tag v0.1.1; smoke test passa contra `steps=0` rejeitando explicit |
+| **TD4** | LOW | Gate 2.1.2 O1 | Re-bench cold n≥10 | @dev | **Antes 2026-05-15** (prep 30-day review) | `serverless/tests/bench-cold-2026-05-15.json` com n≥10 true colds; análise comparada com baseline n=2 (ADR-0001) |
+| **TD5** | LOW | Gate 2.2 O1-O4 | SDK coverage refinements (NetworkError, warmup timeout, linear backoff, safeReadJson) | @dev | Sprint próximo | 4 testes adicionais em `sdk/tests/`; total tests >=41; vitest pass |
+| **TD6** | LOW | Gate 2.2 O5-O6 | SDK v0.2: warmup error classification + input upper bounds | @dev | v0.2 release | `sdk/CHANGELOG.md` documenta breaking changes; `MAX_STEPS`/`MAX_DIMENSION` constants |
+| **TD7** | LOW | Gate 2.2 O7 | Add `@vitest/coverage-v8` devDep + npm script | @dev | Junto com TD5 | `npm run coverage` gera report; CI integration opcional |
+
+**Tech debt budget (effort estimate):** ~6-9h total (HIGH+MEDIUM apenas: ~3-4h). Não bloqueia MVP delivery.
+
+**Tracking convention:** quando @dev/@qa pegar item, criar nota em PR description "Resolves Epic 2 TD<N>". @pm reviews TD board mensalmente.
 
 ## 30-Day Review Governance (v0.4)
 
