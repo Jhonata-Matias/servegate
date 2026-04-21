@@ -1,5 +1,5 @@
 /**
- * Public type contracts for @gemma4/flux-client.
+ * Public type contracts for @jhonata-matias/flux-client.
  * Matches gateway request/response schemas (Story 2.5) which passthrough RunPod Serverless (Story 2.1).
  */
 

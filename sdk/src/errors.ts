@@ -1,5 +1,5 @@
 /**
- * Typed error hierarchy for @gemma4/flux-client.
+ * Typed error hierarchy for @jhonata-matias/flux-client.
  * All errors extend Error and are designed to work with `instanceof` in both CJS and ESM bundles.
  */
 

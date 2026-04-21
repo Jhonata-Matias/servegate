@@ -1,9 +1,9 @@
 # Epic 2 — Consumer Integration (Hybrid Pragmatic)
 
-**Status:** In Progress (v0.5 — post batch close 2.1.1+2.1.2+2.2)
+**Status:** In Progress (v0.6 — SDK scope renamed for publish + TD1 resolved)
 **Owner:** @pm (Morgan)
 **Created:** 2026-04-21
-**Last Updated:** 2026-04-21 (v0.5)
+**Last Updated:** 2026-04-21 (v0.6)
 **Project:** gemma4
 **Predecessor:** Epic 1 (Pod Inference Stack — Done em 2026-04-21)
 
@@ -16,6 +16,7 @@
 | 0.3 | 2026-04-21 | @pm Morgan | **Post ADR-0001 approval** — Path A accepted (accept cold, solve via client UX). Cold SLA: warm <10s p95 (primary), cold ~130s first-invocation after idle (secondary, mitigated via SDK warmup + demo pre-warm). Path B reserved as reversible pivot (1-2 dev-days). 30-day review 2026-05-21 with measurable criteria. |
 | 0.4 | 2026-04-21 | @pm Morgan | **Post QA gate 2.1.2 PASS** (95/100) — Added preliminary ACs for Stories 2.2 (SDK) + 2.3 (demo) derived from ADR-0001 Impact + PM Addenda 1+4; @sm can now draft both stories with anchored scope. Risk R4 aligned with ADR "no change Story 2.5" (pre-warm = SDK responsibility, not gateway). New "30-Day Review Governance" section formalizing 4 pivot triggers + 4 stay-course criteria + DRI assignment (**@pm owns data collection until 2026-05-21**: RunPod billing, demo analytics, issue triage). Resolves QA gate observations O2/O3/O4. |
 | 0.5 | 2026-04-21 | @po Pax | **Batch close 3 stories** (PM-approved): 2.1.1 (QA 9.4/10), 2.1.2 (QA 95/100), 2.2 (QA 92/100, merged PR #1). Stories table updated. Dependency graph repintado para refletir único caminho crítico restante (publish 2.2 → 2.5 → integ smoke → 2.3). New "Tech Debt Backlog" section com 7 items priorizados: TD1 publish (HIGH, @devops imediato), TD2 integ smoke (MEDIUM, @qa), TD3 redeploy v0.1.1 (MEDIUM, @devops), TD4 re-bench cold n≥10 (LOW, @dev pre-2026-05-15), TD5-TD7 SDK refinements (LOW, @dev). Total tech debt budget ~6-9h (HIGH+MEDIUM ~3-4h). |
+| 0.6 | 2026-04-21 | @devops Gage | **TD1 resolution + scope rename** — GitHub Packages requires scope match com repo owner. Repo é `Jhonata-Matias/gemma4` (não org Gemma4). Decision: rename SDK scope `@gemma4/flux-client` → `@jhonata-matias/flux-client` (project codename "gemma4" preserved em description + branding). Files updated: sdk/package.json, sdk/src/{index,errors,types}.ts JSDoc, sdk/README.md, docs/stories/2.3 (4 refs). NÃO atualizado: Story 2.2 Done (historical), QA Gate 2.2 (final), ADR-0001 (final). TD1 resolvido (publish unblocked). |
 
 ---
 
@@ -243,7 +244,7 @@ Com 100 imgs/dia globais + pior caso cold-dominated:
 
 | ID | Severity | Origem | Item | Owner | When | Done criteria |
 |---|---|---|---|---|---|---|
-| **TD1** | **HIGH** | Story 2.2 AC8 deferred | Publish `@gemma4/flux-client@0.1.0` ao GitHub Packages | @devops | **Imediato** (desbloqueia 2.3 install) | `npm view @gemma4/flux-client` retorna 0.1.0; consumer test project `npm install` resolve types |
+| **TD1** | ~~HIGH~~ ✅ **DONE v0.6** | Story 2.2 AC8 deferred | Publish `@jhonata-matias/flux-client@0.1.0` ao GitHub Packages (scope renamed from `@gemma4` per v0.6 — repo owner constraint) | @devops | **Resolvido 2026-04-21** | Package live em GitHub Packages registry sob escopo `@jhonata-matias` |
 | **TD2** | MEDIUM | Story 2.2 Task 11 deferred | Integration smoke 2.2 SDK contra gateway 2.5 real | @qa | Após Story 2.5 Done | 4 paths validados: success warm + cold-then-warm + 429 + 401; evidence em `docs/qa/2.2-integration-smoke.md` |
 | **TD3** | MEDIUM | Story 2.1.1 close decision | Redeploy serverless image v0.1.1 (defense-in-depth) | @devops | Sprint próximo (não-blocker MVP) | RunPod endpoint reporting image tag v0.1.1; smoke test passa contra `steps=0` rejeitando explicit |
 | **TD4** | LOW | Gate 2.1.2 O1 | Re-bench cold n≥10 | @dev | **Antes 2026-05-15** (prep 30-day review) | `serverless/tests/bench-cold-2026-05-15.json` com n≥10 true colds; análise comparada com baseline n=2 (ADR-0001) |

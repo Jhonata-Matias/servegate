@@ -1,7 +1,7 @@
 {
-  "name": "@gemma4/flux-client",
+  "name": "@jhonata-matias/flux-client",
   "version": "0.1.0",
-  "description": "TypeScript SDK for the gemma4 FLUX image-generation gateway (Story 2.5). Handles cold-start (~130s) via warmup() + retry-with-backoff, exposes typed errors (ColdStartError, RateLimitError, ValidationError, AuthError, NetworkError).",
+  "description": "TypeScript SDK for the gemma4 FLUX image-generation gateway (Story 2.5). Handles cold-start (~130s) via warmup() + retry-with-backoff, exposes typed errors (ColdStartError, RateLimitError, ValidationError, AuthError, NetworkError). NOTE: scope @jhonata-matias matches GitHub Packages owner of repo Jhonata-Matias/gemma4 (project codename remains 'gemma4').",
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",

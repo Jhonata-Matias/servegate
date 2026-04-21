@@ -1,20 +1,22 @@
-# `@gemma4/flux-client`
+# `@jhonata-matias/flux-client`
 
 TypeScript SDK para o gateway de geração de imagens FLUX do projeto **gemma4**. Encapsula chamadas ao gateway autenticado (Story 2.5), trata cold-start realista (~130s, ADR-0001 Path A) via `warmup()` + retry-with-backoff, e expõe error classes tipadas para UX flows diferenciados.
+
+> **Note:** Scope `@jhonata-matias` matches GitHub Packages owner do repo `Jhonata-Matias/gemma4`. Project codename remains "gemma4".
 
 ## Install
 
 Configure `.npmrc` no projeto consumer para autenticar com GitHub Packages:
 
 ```
-@gemma4:registry=https://npm.pkg.github.com
+@jhonata-matias:registry=https://npm.pkg.github.com
 //npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}
 ```
 
 Onde `GITHUB_TOKEN` é um Personal Access Token com scope `read:packages`.
 
 ```bash
-npm install @gemma4/flux-client
+npm install @jhonata-matias/flux-client
 ```
 
 **Requisitos:** Node.js >= 18 (usa native `fetch` + `AbortController`).
@@ -22,7 +24,7 @@ npm install @gemma4/flux-client
 ## Quickstart
 
 ```typescript
-import { FluxClient, ColdStartError, RateLimitError, AuthError } from '@gemma4/flux-client';
+import { FluxClient, ColdStartError, RateLimitError, AuthError } from '@jhonata-matias/flux-client';
 
 const client = new FluxClient({
   apiKey: process.env.GATEWAY_API_KEY!,

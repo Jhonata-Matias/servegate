@@ -1,5 +1,5 @@
 /**
- * @gemma4/flux-client
+ * @jhonata-matias/flux-client
  *
  * TypeScript SDK for the gemma4 FLUX image-generation gateway.
  * Encapsulates cold-start handling (~130s ADR-0001 Path A), retry-with-backoff,
@@ -7,7 +7,7 @@
  *
  * @example
  * ```ts
- * import { FluxClient, ColdStartError, RateLimitError } from '@gemma4/flux-client';
+ * import { FluxClient, ColdStartError, RateLimitError } from '@jhonata-matias/flux-client';
  *
  * const client = new FluxClient({
  *   apiKey: process.env.GATEWAY_API_KEY!,
