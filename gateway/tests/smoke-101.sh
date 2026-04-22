@@ -22,6 +22,9 @@ fi
 
 echo "Running 101 sequential POSTs to $GATEWAY_URL..."
 
+# NOTE: using assignment-style increments (count=$((count+1))) instead of
+# ((count++)) because post-increment returns pre-value (0) under set -e,
+# which triggers silent exit on first increment from 0. Known bash gotcha.
 count_200=0
 count_429=0
 count_other=0
@@ -36,9 +39,9 @@ for i in $(seq 1 101); do
     "$GATEWAY_URL")
 
   case "$status" in
-    200) ((count_200++)) ;;
+    200) count_200=$((count_200 + 1)) ;;
     429)
-      ((count_429++))
+      count_429=$((count_429 + 1))
       # Capture Retry-After on first 429
       if [[ -z "$last_retry_after" ]]; then
         last_retry_after=$(curl -sS -I \
@@ -46,10 +49,13 @@ for i in $(seq 1 101); do
           -H "X-API-Key: $GATEWAY_API_KEY" \
           -H "Content-Type: application/json" \
           -d "{\"input\":{\"prompt\":\"check\",\"steps\":1,\"width\":256,\"height\":256}}" \
-          "$GATEWAY_URL" | grep -i 'retry-after' | awk '{print $2}' | tr -d '\r\n')
+          "$GATEWAY_URL" | grep -i 'retry-after' | awk '{print $2}' | tr -d '\r\n' || true)
       fi
       ;;
-    *) ((count_other++)); echo "  Request $i: unexpected status $status" >&2 ;;
+    *)
+      count_other=$((count_other + 1))
+      echo "  Request $i: unexpected status $status" >&2
+      ;;
   esac
 
   # Print progress every 10 requests
