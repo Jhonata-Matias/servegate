@@ -11,7 +11,7 @@
  *
  * const client = new FluxClient({
  *   apiKey: process.env.GATEWAY_API_KEY!,
- *   gatewayUrl: 'https://gemma4-gateway.workers.dev',
+ *   gatewayUrl: 'https://gemma4-gateway.jhonata-matias.workers.dev',
  * });
  *
  * await client.warmup(); // pre-warm on app init

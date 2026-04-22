@@ -1,0 +1,30 @@
+{
+  "name": "@jhonata-matias/gemma4-gateway",
+  "version": "0.1.0",
+  "description": "Cloudflare Worker gateway for gemma4 FLUX endpoint — auth (X-API-Key) + rate-limit 100/day global + RunPod proxy. Story 2.5 implementation.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "deploy": "wrangler deploy",
+    "tail": "wrangler tail",
+    "kv:create": "wrangler kv namespace create RATE_LIMIT_KV",
+    "secret:gateway-key": "wrangler secret put GATEWAY_API_KEY",
+    "secret:runpod-key": "wrangler secret put RUNPOD_API_KEY",
+    "secret:runpod-endpoint": "wrangler secret put RUNPOD_ENDPOINT_ID",
+    "secret:list": "wrangler secret list"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20240909.0",
+    "typescript": "^5.5.0",
+    "vitest": "^2.1.0",
+    "wrangler": "^4.0.0"
+  },
+  "license": "MIT"
+}

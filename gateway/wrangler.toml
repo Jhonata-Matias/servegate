@@ -1,0 +1,30 @@
+# Cloudflare Worker config — gemma4 FLUX gateway (Story 2.5)
+# After `wrangler kv namespace create RATE_LIMIT_KV`, replace KV_NAMESPACE_ID_PLACEHOLDER below
+# with the real ID returned by Wrangler.
+#
+# Secrets configured via `wrangler secret put`:
+# - GATEWAY_API_KEY — generated random (openssl rand -hex 32)
+# - RUNPOD_API_KEY  — same as serverless/.env (Story 2.1)
+# - RUNPOD_ENDPOINT_ID — endpoint ID from Story 2.1 deploy
+
+name = "gemma4-gateway"
+main = "src/index.ts"
+compatibility_date = "2026-04-01"
+
+# Free tier: 100k requests/day, 10ms CPU per request — way over our 100/day budget
+workers_dev = true
+
+# KV namespace for rate-limit counter (key: count:YYYY-MM-DD, TTL 48h)
+# Created via `npm run kv:create` 2026-04-21
+[[kv_namespaces]]
+binding = "RATE_LIMIT_KV"
+id = "55bd0b4a7c3c44bb958331ba82035e55"
+
+# Observability — logs visible in `wrangler tail` and Cloudflare dashboard
+[observability]
+enabled = true
+
+# Optional: limit to specific routes (uncomment when custom domain configured)
+# [[routes]]
+# pattern = "gateway.gemma4.dev/*"
+# custom_domain = true
