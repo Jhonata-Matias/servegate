@@ -50,6 +50,7 @@ test-onboarding/
 # AIOX framework artifacts (local-only, not for public repo consumers)
 # Owner workflow tooling — not relevant to external SDK/API users
 .ai/
+.agent/
 .agents/
 .antigravity/
 .claude/
@@ -59,3 +60,4 @@ test-onboarding/
 .github/agents/
 squads/
 .env.example
+AGENTS.md
