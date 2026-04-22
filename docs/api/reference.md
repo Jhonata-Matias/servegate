@@ -1,4 +1,4 @@
-# gemma4 FLUX API — Reference
+# servegate FLUX API — Reference  *(formerly gemma4)*
 
 **Status:** Alpha (invite-only) • **Gateway:** live at `gemma4-gateway.jhonata-matias.workers.dev` • **Model:** FLUX.1-schnell (Apache 2.0)
 
@@ -232,8 +232,8 @@ See [ADR-0001](../architecture/adr-0001-flux-cold-start.md) for the cold-start a
 ## Security notes
 
 - **Server-side only:** Never embed `GATEWAY_API_KEY` in client-side JS bundles, mobile apps, or anywhere a browser can read it. Proxy through your own backend.
-- **Key rotation:** If compromised, request a new key via the [access request](https://github.com/Jhonata-Matias/gemma4/issues/new/choose) template with a `[Rotation]` prefix.
-- **Reporting vulnerabilities:** Use [private security advisories](https://github.com/Jhonata-Matias/gemma4/security/advisories/new), not public issues.
+- **Key rotation:** If compromised, request a new key via the [access request](https://github.com/Jhonata-Matias/servegate/issues/new/choose) template with a `[Rotation]` prefix.
+- **Reporting vulnerabilities:** Use [private security advisories](https://github.com/Jhonata-Matias/servegate/security/advisories/new), not public issues.
 
 ---
 

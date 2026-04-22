@@ -1,12 +1,12 @@
 name: Alpha Access Request
-description: Request a GATEWAY_API_KEY for alpha access to the gemma4 FLUX API.
+description: Request a GATEWAY_API_KEY for alpha access to the servegate FLUX API.
 title: "[Access] <your name or organization>"
 labels: ["access-request", "alpha"]
 body:
   - type: markdown
     attributes:
       value: |
-        Thanks for your interest in the gemma4 FLUX API alpha!
+        Thanks for your interest in the servegate FLUX API alpha!
 
         Alpha is **invite-only**, manually reviewed. Expected response time: **3–7 business days**.
 

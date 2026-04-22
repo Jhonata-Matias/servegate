@@ -1,7 +1,7 @@
 /**
  * @jhonata-matias/flux-client
  *
- * TypeScript SDK for the gemma4 FLUX image-generation gateway.
+ * TypeScript SDK for the servegate FLUX image-generation gateway (formerly gemma4).
  * Encapsulates cold-start handling (~130s ADR-0001 Path A), retry-with-backoff,
  * and exposes typed errors for differentiated UX flows.
  *

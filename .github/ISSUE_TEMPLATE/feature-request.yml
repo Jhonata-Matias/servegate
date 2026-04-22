@@ -44,6 +44,6 @@ body:
       options:
         - "Nice-to-have (would use occasionally)"
         - "Important (would use regularly)"
-        - "Critical (can't adopt gemma4 without it)"
+        - "Critical (can't adopt servegate without it)"
     validations:
       required: true

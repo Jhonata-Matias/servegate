@@ -65,6 +65,6 @@ If you used the pre-alpha local SDK (`@gemma4/flux-client` scope):
 
 ---
 
-**Repository:** https://github.com/Jhonata-Matias/gemma4
-**Issues:** https://github.com/Jhonata-Matias/gemma4/issues
+**Repository:** https://github.com/Jhonata-Matias/servegate (renamed from `gemma4` on 2026-04-22)
+**Issues:** https://github.com/Jhonata-Matias/servegate/issues
 **License:** MIT

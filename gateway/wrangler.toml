@@ -1,4 +1,6 @@
-# Cloudflare Worker config — gemma4 FLUX gateway (Story 2.5)
+# Cloudflare Worker config — servegate FLUX gateway (Story 2.5, formerly gemma4)
+# Worker name below stays "gemma4-gateway" intentionally — renaming would break the public URL
+# gemma4-gateway.jhonata-matias.workers.dev that SDK v0.1.0-alpha clients depend on.
 # After `wrangler kv namespace create RATE_LIMIT_KV`, replace KV_NAMESPACE_ID_PLACEHOLDER below
 # with the real ID returned by Wrangler.
 #

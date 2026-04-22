@@ -2,7 +2,7 @@
 # Models are NOT baked in — mounted at runtime from /runpod-volume (network volume mqqgzwnfp1)
 FROM runpod/pytorch:2.4.0-py3.11-cuda12.4.1-devel-ubuntu22.04
 
-LABEL org.opencontainers.image.source="https://github.com/Jhonata-Matias/gemma4" \
+LABEL org.opencontainers.image.source="https://github.com/Jhonata-Matias/servegate" \
       org.opencontainers.image.description="ComfyUI + FLUX.1-schnell handler for RunPod Serverless (Story 2.1)" \
       org.opencontainers.image.licenses="Apache-2.0"
 

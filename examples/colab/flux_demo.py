@@ -1,12 +1,12 @@
 """
-gemma4 FLUX — Google Colab Demo
+servegate FLUX — Google Colab Demo  (project formerly known as gemma4)
 
-Quickstart para gerar imagens via gemma4 alpha gateway (Story 2.5).
+Quickstart para gerar imagens via servegate alpha gateway (Story 2.5).
 Standalone Python — sem deps extras (requests + PIL já vêm no Colab).
 
 Cole este arquivo inteiro em uma célula do Colab OU faça upload e execute.
 Você precisa de um GATEWAY_API_KEY (alpha invite-only — request via:
-https://github.com/Jhonata-Matias/gemma4/issues/new/choose).
+https://github.com/Jhonata-Matias/servegate/issues/new/choose).
 """
 
 import base64
@@ -41,7 +41,7 @@ RETRY_BACKOFF_SECONDS = [5, 15, 30]   # Espaça retries para dar tempo ao worker
 
 print("🔑 Cole seu GATEWAY_API_KEY abaixo (não será logado).")
 print("   Sem key? Request alpha access em:")
-print("   https://github.com/Jhonata-Matias/gemma4/issues/new/choose")
+print("   https://github.com/Jhonata-Matias/servegate/issues/new/choose")
 print()
 GATEWAY_API_KEY = getpass("GATEWAY_API_KEY: ").strip()
 if not GATEWAY_API_KEY:
@@ -199,8 +199,8 @@ png = generate(
 # - image_b64 ausente → upstream failure; reporte via bug-report issue template
 #
 # Refs:
-# - API reference: https://github.com/Jhonata-Matias/gemma4/blob/main/docs/api/reference.md
-# - Onboarding: https://github.com/Jhonata-Matias/gemma4/blob/main/docs/usage/dev-onboarding.md
+# - API reference: https://github.com/Jhonata-Matias/servegate/blob/main/docs/api/reference.md
+# - Onboarding: https://github.com/Jhonata-Matias/servegate/blob/main/docs/usage/dev-onboarding.md
 # - TypeScript SDK (alternativa com retry built-in): @jhonata-matias/flux-client
 # - ADR-0001 cold-start: docs/architecture/adr-0001-flux-cold-start.md
 # ─────────────────────────────────────────────────────────────────

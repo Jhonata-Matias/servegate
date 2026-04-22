@@ -1,7 +1,7 @@
 {
   "name": "@jhonata-matias/flux-client",
   "version": "0.1.0",
-  "description": "TypeScript SDK for the gemma4 FLUX image-generation gateway (Story 2.5). Handles cold-start (~130s) via warmup() + retry-with-backoff, exposes typed errors (ColdStartError, RateLimitError, ValidationError, AuthError, NetworkError). NOTE: scope @jhonata-matias matches GitHub Packages owner of repo Jhonata-Matias/gemma4 (project codename remains 'gemma4').",
+  "description": "TypeScript SDK for the servegate (ex-gemma4) FLUX image-generation gateway (Story 2.5). Handles cold-start (~130s) via warmup() + retry-with-backoff, exposes typed errors (ColdStartError, RateLimitError, ValidationError, AuthError, NetworkError). Repo: Jhonata-Matias/servegate.",
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
@@ -41,9 +41,18 @@
     "image-generation",
     "runpod",
     "sdk",
+    "servegate",
     "gemma4"
   ],
-  "author": "gemma4",
+  "author": "Jhonata Matias",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Jhonata-Matias/servegate.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Jhonata-Matias/servegate/issues"
+  },
+  "homepage": "https://github.com/Jhonata-Matias/servegate#readme",
   "license": "MIT",
   "publishConfig": {
     "registry": "https://npm.pkg.github.com",

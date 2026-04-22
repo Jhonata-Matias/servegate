@@ -1,5 +1,5 @@
 /**
- * gemma4 Cloudflare Worker Gateway — Story 2.5
+ * servegate Cloudflare Worker Gateway — Story 2.5 (project formerly known as gemma4)
  *
  * Single public entry for FLUX image generation:
  *   POST /  → auth (X-API-Key) → rate-limit (100/day UTC) → proxy RunPod Serverless

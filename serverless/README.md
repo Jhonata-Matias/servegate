@@ -1,4 +1,4 @@
-# gemma4 — RunPod Serverless (FLUX.1-schnell)
+# servegate — RunPod Serverless (FLUX.1-schnell)  *(formerly gemma4)*
 
 Endpoint Serverless empacotando ComfyUI + FLUX.1-schnell. Modelos vêm do network volume `mqqgzwnfp1` (mounted em `/runpod-volume`), não da imagem.
 

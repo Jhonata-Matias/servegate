@@ -1,8 +1,8 @@
-# gemma4 FLUX — Google Colab Examples
+# servegate FLUX — Google Colab Examples
 
-Scripts Python standalone para gerar imagens via gemma4 alpha gateway direto do Colab.
+Scripts Python standalone para gerar imagens via servegate (ex-gemma4) alpha gateway direto do Colab.
 
-> **Alpha invite-only:** você precisa de um `GATEWAY_API_KEY` para usar. Request via [issue template](https://github.com/Jhonata-Matias/gemma4/issues/new/choose) — manual review 3-7 business days.
+> **Alpha invite-only:** você precisa de um `GATEWAY_API_KEY` para usar. Request via [issue template](https://github.com/Jhonata-Matias/servegate/issues/new/choose) — manual review 3-7 business days.
 
 ## `flux_demo.py`
 
@@ -24,7 +24,7 @@ Quickstart — single sync POST ao gateway com retry-on-cold, decodifica PNG e e
 
 **Opção 3: GitHub direct** (repo público)
 ```
-https://colab.research.google.com/github/Jhonata-Matias/gemma4/blob/main/examples/colab/flux_demo.py
+https://colab.research.google.com/github/Jhonata-Matias/servegate/blob/main/examples/colab/flux_demo.py
 ```
 
 ### Latency expectations
