@@ -1,10 +1,12 @@
 """
 gemma4 FLUX — Google Colab Demo
 
-Quickstart para gerar imagens usando o endpoint RunPod Serverless (Story 2.1)
-direto do Colab. Standalone, sem deps extras (requests + PIL já vêm no Colab).
+Quickstart para gerar imagens via gemma4 alpha gateway (Story 2.5).
+Standalone Python — sem deps extras (requests + PIL já vêm no Colab).
 
 Cole este arquivo inteiro em uma célula do Colab OU faça upload e execute.
+Você precisa de um GATEWAY_API_KEY (alpha invite-only — request via:
+https://github.com/Jhonata-Matias/gemma4/issues/new/choose).
 """
 
 import base64
@@ -18,8 +20,7 @@ from IPython.display import Image, display
 # Config (edite se necessário)
 # ─────────────────────────────────────────────────────────────────
 
-ENDPOINT_ID = "80e45g6gct1opm"  # gemma4 FLUX endpoint (Story 2.1)
-RUNPOD_BASE = "https://api.runpod.ai/v2"
+GATEWAY_URL = "https://gemma4-gateway.jhonata-matias.workers.dev"
 
 DEFAULT_INPUT = {
     "prompt": "a cat reading a book in a cozy library, photorealistic, warm lighting",
@@ -29,72 +30,105 @@ DEFAULT_INPUT = {
     "seed": 42,
 }
 
-MAX_WAIT_SECONDS = 300   # 5 min — cold start pode chegar em 130-180s (ADR-0001 Path A)
-POLL_INTERVAL_SECONDS = 3
+REQUEST_TIMEOUT_SECONDS = 70   # Gateway sync timeout = 60s; +10s de margem network
+MAX_RETRIES = 3                # Cold start (~130s) pode requerer 2-3 attempts até warm
+RETRY_BACKOFF_SECONDS = [5, 15, 30]   # Espaça retries para dar tempo ao worker aquecer
 
 
 # ─────────────────────────────────────────────────────────────────
 # Auth
 # ─────────────────────────────────────────────────────────────────
 
-print("🔑 Cole seu RUNPOD_API_KEY abaixo (não será logado):")
-RUNPOD_API_KEY = getpass("RUNPOD_API_KEY: ").strip()
-if not RUNPOD_API_KEY:
-    raise SystemExit("❌ RUNPOD_API_KEY não pode estar vazio")
+print("🔑 Cole seu GATEWAY_API_KEY abaixo (não será logado).")
+print("   Sem key? Request alpha access em:")
+print("   https://github.com/Jhonata-Matias/gemma4/issues/new/choose")
+print()
+GATEWAY_API_KEY = getpass("GATEWAY_API_KEY: ").strip()
+if not GATEWAY_API_KEY:
+    raise SystemExit("❌ GATEWAY_API_KEY não pode estar vazio")
 
 
-def _auth_headers():
+def _headers():
     return {
-        "Authorization": f"Bearer {RUNPOD_API_KEY}",
+        "X-API-Key": GATEWAY_API_KEY,
         "Content-Type": "application/json",
     }
 
 
 # ─────────────────────────────────────────────────────────────────
-# Generation flow — async submit + poll (evita HTTP timeout em cold)
+# Generation flow — sync POST + retry-on-cold (gateway proxy model)
 # ─────────────────────────────────────────────────────────────────
 
-def submit_job(input_params: dict) -> str:
-    """Submete job async. Retorna job_id."""
-    url = f"{RUNPOD_BASE}/{ENDPOINT_ID}/run"
-    resp = requests.post(url, json={"input": input_params}, headers=_auth_headers(), timeout=30)
-    resp.raise_for_status()
-    data = resp.json()
-    job_id = data.get("id")
-    if not job_id:
-        raise RuntimeError(f"Submit falhou: {data}")
-    return job_id
+def call_gateway(input_params: dict) -> dict:
+    """
+    POST sync ao gateway. Retorna response JSON em sucesso.
+    Tenta até MAX_RETRIES em caso de cold-start timeout (gateway 504/upstream_timeout).
+    Raises HTTPError em 401/405/429/non-retryable issues.
+    """
+    last_error = None
 
+    for attempt in range(MAX_RETRIES):
+        try:
+            resp = requests.post(
+                GATEWAY_URL,
+                json={"input": input_params},
+                headers=_headers(),
+                timeout=REQUEST_TIMEOUT_SECONDS,
+            )
 
-def poll_job(job_id: str, max_wait: int = MAX_WAIT_SECONDS) -> dict:
-    """Poll status até COMPLETED / FAILED / timeout. Retorna response body completo."""
-    url = f"{RUNPOD_BASE}/{ENDPOINT_ID}/status/{job_id}"
-    start = time.time()
-    last_status = None
+            # Success path
+            if resp.status_code == 200:
+                return resp.json()
 
-    while True:
-        elapsed = int(time.time() - start)
-        if elapsed > max_wait:
-            raise TimeoutError(f"Job {job_id} timeout após {max_wait}s (último status: {last_status})")
+            # Auth fail — no retry
+            if resp.status_code == 401:
+                raise RuntimeError(
+                    f"401 Unauthorized: {resp.json()}. Verifique GATEWAY_API_KEY."
+                )
 
-        resp = requests.get(url, headers=_auth_headers(), timeout=15)
-        resp.raise_for_status()
-        data = resp.json()
-        status = data.get("status")
+            # Method not allowed — no retry (shouldn't happen, we POST)
+            if resp.status_code == 405:
+                raise RuntimeError(f"405 Method Not Allowed: {resp.json()}")
 
-        if status != last_status:
-            print(f"  [{elapsed:3d}s] status={status}")
-            last_status = status
+            # Rate limit — no retry, surface Retry-After
+            if resp.status_code == 429:
+                body = resp.json()
+                retry_after = resp.headers.get("Retry-After", "?")
+                raise RuntimeError(
+                    f"429 Rate limit exhausted (100/day global). "
+                    f"Reset at {body.get('reset_at')}. Retry after ~{retry_after}s."
+                )
 
-        if status in ("COMPLETED", "FAILED", "CANCELLED"):
-            return data
+            # 502/503/504 — retry (cold start or transient upstream)
+            if resp.status_code in (502, 503, 504):
+                body_preview = resp.text[:200]
+                last_error = f"HTTP {resp.status_code}: {body_preview}"
+                if attempt < MAX_RETRIES - 1:
+                    delay = RETRY_BACKOFF_SECONDS[attempt]
+                    print(f"  ⏳ {resp.status_code} (likely cold start) — retrying in {delay}s "
+                          f"(attempt {attempt + 1}/{MAX_RETRIES})")
+                    time.sleep(delay)
+                    continue
 
-        time.sleep(POLL_INTERVAL_SECONDS)
+            # Other status codes — no retry
+            resp.raise_for_status()
+
+        except requests.exceptions.Timeout:
+            last_error = f"Request timeout after {REQUEST_TIMEOUT_SECONDS}s"
+            if attempt < MAX_RETRIES - 1:
+                delay = RETRY_BACKOFF_SECONDS[attempt]
+                print(f"  ⏳ Timeout (likely cold start) — retrying in {delay}s "
+                      f"(attempt {attempt + 1}/{MAX_RETRIES})")
+                time.sleep(delay)
+                continue
+            raise RuntimeError(f"Esgotaram retries por timeout. Último erro: {last_error}")
+
+    raise RuntimeError(f"Esgotaram {MAX_RETRIES} retries. Último erro: {last_error}")
 
 
 def generate(input_params: dict = None, save_path: str = None) -> bytes:
     """
-    Gera imagem e exibe inline no Colab.
+    Gera imagem via gateway e exibe inline no Colab.
     Retorna bytes da PNG.
     """
     params = dict(DEFAULT_INPUT)
@@ -107,14 +141,8 @@ def generate(input_params: dict = None, save_path: str = None) -> bytes:
 
     wall_start = time.time()
 
-    job_id = submit_job(params)
-    print(f"✅ Job submitted: {job_id}")
-
-    result = poll_job(job_id)
+    result = call_gateway(params)
     wall_elapsed = int(time.time() - wall_start)
-
-    if result.get("status") != "COMPLETED":
-        raise RuntimeError(f"Job {job_id} finalizou com status={result.get('status')}: {result}")
 
     output = result.get("output") or {}
     image_b64 = output.get("image_b64")
@@ -126,8 +154,7 @@ def generate(input_params: dict = None, save_path: str = None) -> bytes:
 
     print()
     print(f"🖼️  Image: {len(png_bytes):,} bytes")
-    print(f"⏱️  Wall time: {wall_elapsed}s  |  Inference: {inference_ms}ms")
-    print(f"💰 Custo estimado: ~${(wall_elapsed * 0.000306):.4f}")
+    print(f"⏱️  Wall time: {wall_elapsed}s  |  Inference: {inference_ms}ms (server)")
     print()
 
     if save_path:
@@ -152,7 +179,7 @@ png = generate(
 )
 
 # ─────────────────────────────────────────────────────────────────
-# Reusable — rode novamente com prompts diferentes (worker estará warm ~8s)
+# Reusable — rode novamente com prompts diferentes (worker estará warm ~7s)
 # ─────────────────────────────────────────────────────────────────
 
 # generate({"prompt": "a futuristic city at sunset, cyberpunk style", "seed": 123})
@@ -160,17 +187,20 @@ png = generate(
 
 # ─────────────────────────────────────────────────────────────────
 # Expected behavior:
-# - Primeira run (cold): 60-180s wall time, ~$0.02-0.05 custo
-# - Runs subsequentes (warm <5min idle): 5-10s wall, ~$0.002-0.004 custo
-# - Worker idle >5min → volta para cold na próxima request
+# - Primeira run cold: 60-180s wall (1-2 retries enquanto worker aquece, depois 200 OK)
+# - Runs subsequentes warm <5min idle: 5-10s wall
+# - Worker idle >5min → volta para cold; primeira request acumula novos retries
+# - Rate limit: 100 imagens/dia GLOBAL durante alpha (compartilhado entre todos os users)
 #
 # Troubleshooting:
-# - 401 Unauthorized → verifique RUNPOD_API_KEY (precisa write:workers scope)
-# - Timeout → endpoint pode estar em cold persistente; aguarde e tente novamente
-# - image_b64 ausente → handler failure; check RunPod dashboard logs
+# - 401 invalid_api_key → verifique GATEWAY_API_KEY (request access via issue template)
+# - 429 rate_limit_exceeded → quota global esgotada, retry após reset_at (00:00 UTC)
+# - Esgotaram retries por timeout → cold persistente >180s; aguarde minutos e re-execute
+# - image_b64 ausente → upstream failure; reporte via bug-report issue template
 #
 # Refs:
-# - Story 2.1: docs/stories/2.1.runpod-serverless-flux-endpoint.story.md
+# - API reference: https://github.com/Jhonata-Matias/gemma4/blob/main/docs/api/reference.md
+# - Onboarding: https://github.com/Jhonata-Matias/gemma4/blob/main/docs/usage/dev-onboarding.md
+# - TypeScript SDK (alternativa com retry built-in): @jhonata-matias/flux-client
 # - ADR-0001 cold-start: docs/architecture/adr-0001-flux-cold-start.md
-# - Epic 2 PRD: docs/prd/epic-2-consumer-integration.md
 # ─────────────────────────────────────────────────────────────────
