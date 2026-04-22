@@ -3,7 +3,7 @@
 **FLUX image-generation API — alpha, authenticated, rate-limited.**
 
 [![status: alpha](https://img.shields.io/badge/status-alpha-orange)](./docs/legal/TERMS.md)
-[![license: MIT](https://img.shields.io/badge/license-MIT-blue)](./LICENSE)
+[![license: MIT](https://img.shields.io/badge/license-MIT-blue)](./sdk/LICENSE)
 [![gateway: live](https://img.shields.io/badge/gateway-live-green)](https://gemma4-gateway.jhonata-matias.workers.dev)
 [![SDK: v0.1.0](https://img.shields.io/badge/sdk-v0.1.0-brightgreen)](./sdk/README.md)
 
