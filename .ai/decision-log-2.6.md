@@ -48,11 +48,24 @@
 
 ## Files Modified
 
-(populated as work progresses)
+**Created (commit 48b4fc6):**
+- `README.md` (74 lines)
+- `.github/ISSUE_TEMPLATE/access-request.yml` (66 lines, GH Forms)
+- `.github/ISSUE_TEMPLATE/bug-report.yml` (54 lines, GH Forms)
+- `.github/ISSUE_TEMPLATE/feature-request.yml` (43 lines, GH Forms)
+- `.github/ISSUE_TEMPLATE/config.yml` (10 lines)
+- `docs/api/reference.md` (264 lines)
+- `.ai/decision-log-2.6.md` (this file)
+
+**Modified (commit 48b4fc6):**
+- `sdk/README.md` — added Contact section + cross-links (+15 lines)
+- `docs/usage/dev-onboarding.md` — Step 1 Option A simplified (-25 net lines)
 
 ## Tests Run
 
-(populated as work progresses)
+- ✅ YAML syntax: `python3 yaml.safe_load` for 4/4 issue templates → all pass
+- ✅ Pre-flight: SDK package status (private), merge commit existence (9d1f100), clean slate (no `README.md`, no `docs/api/`, no `.github/ISSUE_TEMPLATE/`)
+- ⏭ Curl validation deferred to AC7 external smoke (avoids burning 1/100 daily quota during dev)
 
 ## HALT Items (require user/external action)
 
