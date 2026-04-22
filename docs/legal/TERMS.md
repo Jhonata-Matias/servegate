@@ -1,5 +1,7 @@
 # Terms of Use — servegate FLUX API (Alpha)  *(formerly gemma4)*
 
+> 🌐 **English** | [Português (Brasil)](./TERMS.pt-BR.md)
+
 **Effective date:** 2026-04-21
 **Version:** 0.1.0-alpha
 **Status:** ⚠️ **ALPHA — no uptime SLA, no stability guarantees, breaking changes expected**
@@ -140,3 +142,11 @@ These Terms are governed by the laws of Brazil. Disputes will be resolved in the
 | Version | Date | Notes |
 |---|---|---|
 | 0.1.0-alpha | 2026-04-21 | Initial alpha Terms — single-owner personal project |
+
+---
+
+## Bilingual Equivalence
+
+Both the English and Portuguese (Brazil) versions of these Terms are canonical and equally binding. In case of divergence, the version corresponding to the user's country of residence prevails.
+
+See also: [TERMS.pt-BR.md](./TERMS.pt-BR.md)

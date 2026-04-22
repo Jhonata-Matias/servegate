@@ -1,5 +1,7 @@
 # servegate
 
+> 🌐 **English** | [Português (Brasil)](./README.pt-BR.md)
+
 **FLUX image-generation API — alpha, authenticated, rate-limited.**
 
 > Formerly `gemma4`. Renamed to reflect the generalized gateway-to-serverless-model pattern. The Cloudflare Worker hostname `gemma4-gateway.jhonata-matias.workers.dev` remains unchanged for SDK compatibility.

@@ -1,5 +1,7 @@
 # Developer Onboarding — servegate FLUX API (Alpha)  *(formerly gemma4)*
 
+> 🌐 **English** | [Português (Brasil)](./dev-onboarding.pt-BR.md)
+
 **Status:** Alpha (invite-only)
 **SDK:** `@jhonata-matias/flux-client@0.1.x` (GitHub Packages, private)
 **Gateway:** `https://gemma4-gateway.jhonata-matias.workers.dev` *(live since 2026-04-21)*

@@ -1,10 +1,10 @@
 # Epic 2 — Consumer Integration (Hybrid Pragmatic)
 
-**Status:** In Progress (v0.8 — Story 2.6 Done, alpha publicly accessible; only Story 2.3 web demo remains in-scope)
+**Status:** In Progress (v0.9 — Story 2.7 pt-BR docs MVP added; Story 2.3 web demo + Story 2.7 remain in-scope)
 **Owner:** @pm (Morgan)
 **Created:** 2026-04-21
-**Last Updated:** 2026-04-22 (v0.8)
-**Project:** gemma4
+**Last Updated:** 2026-04-22 (v0.9)
+**Project:** servegate (codename gemma4)
 **Predecessor:** Epic 1 (Pod Inference Stack — Done em 2026-04-21)
 
 ### Changelog
@@ -18,6 +18,7 @@
 | 0.5 | 2026-04-21 | @po Pax | **Batch close 3 stories** (PM-approved): 2.1.1 (QA 9.4/10), 2.1.2 (QA 95/100), 2.2 (QA 92/100, merged PR #1). Stories table updated. Dependency graph repintado para refletir único caminho crítico restante (publish 2.2 → 2.5 → integ smoke → 2.3). New "Tech Debt Backlog" section com 7 items priorizados: TD1 publish (HIGH, @devops imediato), TD2 integ smoke (MEDIUM, @qa), TD3 redeploy v0.1.1 (MEDIUM, @devops), TD4 re-bench cold n≥10 (LOW, @dev pre-2026-05-15), TD5-TD7 SDK refinements (LOW, @dev). Total tech debt budget ~6-9h (HIGH+MEDIUM ~3-4h). |
 | 0.6 | 2026-04-21 | @devops Gage | **TD1 resolution + scope rename** — GitHub Packages requires scope match com repo owner. Repo é `Jhonata-Matias/gemma4` (não org Gemma4). Decision: rename SDK scope `@gemma4/flux-client` → `@jhonata-matias/flux-client` (project codename "gemma4" preserved em description + branding). Files updated: sdk/package.json, sdk/src/{index,errors,types}.ts JSDoc, sdk/README.md, docs/stories/2.3 (4 refs). NÃO atualizado: Story 2.2 Done (historical), QA Gate 2.2 (final), ADR-0001 (final). TD1 resolvido (publish unblocked). |
 | 0.7 | 2026-04-22 | @pm Morgan | **Story 2.6 added** — Alpha Developer Access Distribution. Post Story 2.5 merge (PR #2, commit 9d1f100) + Epic 1 closure, a última milha para devs externos conseguirem `npm install → first call` sem hand-holding manual. Strategic decision: SDK GH Packages → **public visibility** (fricção mínima; zero secret exposure since gateway guarda RUNPOD_API_KEY). Scope: SDK public flip + README raiz + issue templates + owner contact + GH release v0.1.0-alpha + API reference consolidado + smoke externa. 7 preliminary ACs, effort budget 1-2 dev-days. TD8 adicionado: zero CI workflows em `.github/workflows/` (LOW severity). @sm para draft. |
+| 0.9 | 2026-04-22 | @pm Morgan | **Story 2.7 added** — Portuguese (Brazil) Developer Documentation (MVP). Audience research aponta mercado BR como vetor inicial de adoção alpha; dev-onboarding EN-only cria fricção de comprehension + risco legal em TERMS/PRIVACY (CDC exige clareza pt-BR para consumidor BR). Scope MVP: traduzir 4 arquivos da jornada crítica (`README.md`, `docs/usage/dev-onboarding.md`, `docs/legal/TERMS.md`, `docs/legal/PRIVACY.md`) com sufixo `.pt-BR.md` + banner bilíngue no topo. Strategic decisions alinhadas com user (2026-04-22): (a) **ambos canônicos bilíngue** em legal via cláusula de equivalência (prevalece versão do domicílio do usuário), (b) **anglicismos técnicos preservados** (API key, endpoint, rate limit, cold start, deploy) — prosa natural para dev BR. 7 preliminary ACs, effort budget 4-6h dev. Out of scope: API reference + usage secundários + PRD/stories → Epic 3 backlog se demanda BR confirmar. @sm para draft. |
 | 0.8 | 2026-04-22 | @pm Morgan | **Story 2.6 Done** (QA PASS 91/100, merged PR #3, commit `fd1232b`) + **`v0.1.0-alpha` released** (GitHub Release marked Pre-release, tagged em `fd1232b`, 2026-04-22 19:53 UTC). Alpha is **publicly accessible** — external devs can: discover via README → request access via formal `access-request.yml` template → install `@jhonata-matias/flux-client` (public on GH Packages) → first call ~7s warm / ~130s cold. F1 (broken license badge) resolved pre-merge; F2 (issue template public-visibility warning) deferred as follow-up issue (LOW-MEDIUM, non-blocking). External smoke validated end-to-end in Docker `node:20` clean container — auth + rate-limit pipeline proven (architectural auth-before-rate-limit confirmed via 401-not-429 on invalid key when quota=0). Epic 2 status: **80% MVP shipped** (5 of 6 in-scope stories Done) — only Story 2.3 web demo remains; not blocking SDK consumer adoption but required for 30-day review analytics (R4 mitigation). |
 
 ---
@@ -103,9 +104,10 @@ O critério "cold spawn sub-30s" foi invalidado empiricamente pela Story 2.1 (me
 | **2.5** | Gateway Cloudflare Worker + KV pra auth (X-API-Key) + rate-limit 100/dia global | **MUST** | @dev | **Ready** (validada @po 9.75/10) — pode rodar paralela a 2.3 |
 | **2.3** | App demo Next.js + Vercel usando SDK contra gateway URL | **MUST** | @dev (+ @ux opcional) | **Ready** (PO 10/10 — bloqueada por SDK published + 2.5 Done) |
 | **2.6** | Alpha Developer Access Distribution (SDK public + README raiz + issue templates + GH release + API reference) | **MUST** | @dev (+ @devops para release/visibility) | **Done** (QA PASS 91/100, merged PR #3 commit `fd1232b`, `v0.1.0-alpha` released) |
+| **2.7** | Portuguese (Brazil) Developer Documentation MVP (README + dev-onboarding + TERMS + PRIVACY com sufixo `.pt-BR.md` + banner bilíngue) | **SHOULD** | @dev | **Draft** (v0.9 — aguardando `@sm *draft 2.7`) |
 | **2.4** | (Opcional) Custom node n8n integrando o SDK | SHOULD | @dev | **Backlog** opportunistic |
 
-### Dependency graph atualizado (v0.8 — pós Story 2.6 Done + v0.1.0-alpha released)
+### Dependency graph atualizado (v0.9 — Story 2.7 pt-BR docs added in parallel)
 
 ```
 2.1 (Done) → 2.1.1 (Done) → 2.1.2 (Done) → 2.2 (Done, public)
@@ -116,20 +118,24 @@ O critério "cold spawn sub-30s" foi invalidado empiricamente pela Story 2.1 (me
                               │                               │
                               └─────────────┬─────────────────┘
                                             ▼
-                                  2.3 (Ready — UNBLOCKED, optional ship)
+                              ┌─────────────┴─────────────┐
+                              ▼                           ▼
+                     2.3 (Ready — optional ship)   2.7 (Draft — pt-BR docs MVP)
 ```
 
-**Status flow (v0.8):**
+**Status flow (v0.9):**
 - ✅ 2.1 / 2.1.1 / 2.1.2 / 2.2 / 2.5 / 2.6 — all Done
 - 🔓 **2.3 — Ready, fully unblocked** (SDK public ✓, gateway live ✓, contact channel ✓, API reference ✓)
+- 📝 **2.7 — Draft (v0.9)** — independe de 2.3; pode rodar em paralelo ou depois; não bloqueia nada em Epic 2
 - 📊 30-day review (2026-05-21) requires Story 2.3 analytics for full DRI evidence pack — see "30-Day Review Governance"
 
-**Epic 2 status (v0.8):** **80% MVP shipped** (5 of 6 in-scope stories Done) — alpha is publicly accessible to SDK consumers. Story 2.3 web demo remaining; non-blocking for SDK adoption but required for analytics completeness at 30-day review.
+**Epic 2 status (v0.9):** **~71% MVP shipped** (5 of 7 in-scope stories Done). Alpha publicly accessible to SDK consumers. Remaining in-scope: Story 2.3 web demo + Story 2.7 pt-BR docs. Story 2.7 é **SHOULD** (não bloqueia fechamento do MVP técnico) mas **HIGH valor para audiência BR** (owner + alpha invites iniciais).
 
 **Remaining MVP path:**
 1. **`@sm *draft 2.3`** (already drafted — validate Ready state) → @dev develop (2-4h, per PM Addendum 1 budget) → QA gate → push + PR
-2. **Close Epic 2 fully** com declaration after 2.3 ships
-3. **30-day review automation** (optional TD enhancement for Vercel Analytics + RunPod billing cron)
+2. **`@sm *draft 2.7`** (pending — this v0.9 delivery) → @dev develop (4-6h tradução + banners + cláusulas) → QA gate → push + PR. Pode correr paralelo a 2.3.
+3. **Close Epic 2 fully** com declaration after 2.3 + 2.7 shipped
+4. **30-day review automation** (optional TD enhancement for Vercel Analytics + RunPod billing cron)
 
 **Alternatively (deferred Epic 2 close path):** if 2.3 web demo is deprioritized (e.g., SDK consumers are sufficient market validation), Epic 2 can close at 80% with explicit "Story 2.3 → Epic 3 (frontend showcase) or Backlog" decision. Requires @user input.
 
@@ -199,8 +205,41 @@ O critério "cold spawn sub-30s" foi invalidado empiricamente pela Story 2.1 (me
 - CI/CD workflows (`.github/workflows/`) — vai como TD8 (LOW)
 - npm registry público oficial — beta scope
 - Public Discussions / Discord — beta scope (alpha usa GitHub Issues)
-- Status page / health endpoint público — Story 2.7 ou TD futuro
-- Métricas públicas de uso (% quota consumido) — Story 2.7 ou TD futuro
+- Status page / health endpoint público — futuro (não mais referenciado como "Story 2.7" — 2.7 reatribuída a pt-BR docs em v0.9)
+- Métricas públicas de uso (% quota consumido) — futuro
+
+### Story 2.7 — Portuguese (Brazil) Developer Documentation (MVP)
+
+**Rationale:** Story 2.6 estabeleceu discovery pública da alpha com docs EN-only. Owner é BR; alpha invites iniciais são devs BR; dev-onboarding em EN cria fricção de comprehension + risco legal em TERMS/PRIVACY (CDC brasileiro exige clareza em pt-BR para consumidor domiciliado no BR). Scope MVP reduzido aos 4 arquivos da jornada crítica — README raiz, dev-onboarding, TERMS, PRIVACY — mantendo outros docs (API reference, usage secundários, internos) em EN. Effort estimate **4-6h dev** (prosa + banners + cláusulas + cross-link consistency + review).
+
+**Strategic decisions (v0.9, aligned with user 2026-04-22):**
+- **Estrutura:** sufixo `.pt-BR.md` ao lado do arquivo EN canônico (ex: `dev-onboarding.md` + `dev-onboarding.pt-BR.md`). Padrão usado por Vue, Astro, Tailwind — baixo impacto em links existentes, GitHub renderiza bem.
+- **Canonical:** **ambos canônicos (bilíngue)** em legal (TERMS + PRIVACY) via cláusula de equivalência: "em caso de divergência, prevalece a versão correspondente ao domicílio do usuário". dev-onboarding e README também bilíngues (não há divergência possível — são técnico-informativos).
+- **Estilo:** **anglicismos técnicos preservados** — `API key`, `endpoint`, `rate limit`, `cold start`, `deploy`, `request`, `response`, `gateway`, `SDK`, `npm install`, `token`, `header` ficam em EN. Prosa conectiva (artigos, verbos, preposições) em pt-BR natural para dev. Comandos, valores e nomes próprios preservados literalmente.
+
+| AC | Descrição | Source | Acceptance test |
+|---|---|---|---|
+| 2.7-AC1 | **pt-BR files created (4)** — `README.pt-BR.md` (raiz), `docs/usage/dev-onboarding.pt-BR.md`, `docs/legal/TERMS.pt-BR.md`, `docs/legal/PRIVACY.pt-BR.md`. Padrão de nome: `<nome>.pt-BR.md` ao lado do arquivo EN canônico. Encoding UTF-8 sem BOM, line endings LF. | User decision 2026-04-22 (escopo MVP: 4 arquivos) | `ls docs/legal/*.pt-BR.md docs/usage/*.pt-BR.md README.pt-BR.md` retorna os 4 paths; render GitHub funciona; `file <path>` reporta UTF-8 |
+| 2.7-AC2 | **Language switcher banner** — cada um dos 4 arquivos EN + 4 pt-BR recebe banner no topo (logo após H1 título), formato padrão: no EN → `> 🌐 **English** \| [Português (Brasil)](./<nome>.pt-BR.md)`; no pt-BR → `> 🌐 [English](./<nome>.md) \| **Português (Brasil)**`. Link relativo com `./` para funcionar tanto em GitHub quanto em cópia local/raw. README raiz aponta para `./README.pt-BR.md` (não precisa prefixo `docs/`). | User decision 2026-04-22 (estrutura: sufixo + banner topo) | Manual render GitHub: banner visível logo abaixo do H1, link clicável, idioma ativo em **bold**, idioma inativo linkado; 8 arquivos atualizados (4 EN modified + 4 pt-BR new) |
+| 2.7-AC3 | **Anglicismos técnicos preservados** — termos de vocabulário dev cotidiano NÃO são traduzidos: `API key`, `endpoint`, `rate limit`, `cold start`, `deploy`, `request`, `response`, `gateway`, `SDK`, `npm install`, `GitHub`, `header`, `token`, `Pull Request`, `issue`. Comandos, valores, hashes e nomes próprios preservados literalmente (ex: `npm install @jhonata-matias/flux-client`, commit `fd1232b`, `X-API-Key`, `100 requests/dia`). Prosa conectiva em pt-BR natural. | User decision 2026-04-22 (estilo: anglicismos mantidos) | Manual review: `grep -E "\b(instalar\|carregar\|executar\|requisição\|implantação\|ponto de acesso\|chave de API)\b" docs/**/*.pt-BR.md README.pt-BR.md` retorna zero matches para os termos técnicos listados (aceita "requisição" apenas em contextos não-API, se houver) |
+| 2.7-AC4 | **Legal bilingual equivalence clause** — `TERMS.md`, `TERMS.pt-BR.md`, `PRIVACY.md`, `PRIVACY.pt-BR.md` recebem nova seção final "Bilingual Equivalence / Equivalência Bilíngue" com texto espelhado. **EN (TERMS/PRIVACY):** "Both the English and Portuguese (Brazil) versions of these [Terms / this Privacy Statement] are canonical and equally binding. In case of divergence, the version corresponding to the user's country of residence prevails." **pt-BR (TERMS/PRIVACY):** "Ambas as versões em Inglês e Português (Brasil) [destes Termos / desta Declaração de Privacidade] são canônicas e igualmente vinculantes. Em caso de divergência, prevalece a versão correspondente ao país de domicílio do usuário." | User decision 2026-04-22 (canonical: ambos bilíngue) + CDC art. 46-54 (direito à informação clara) | Manual review: cláusula presente em 4 arquivos legais (2 EN + 2 pt-BR); texto EN/pt-BR espelha de fato; encontrada em seção final consistente |
+| 2.7-AC5 | **Structural parity** — cada arquivo `.pt-BR.md` mantém estrutura idêntica ao EN canônico: mesmos headings (H1-H6, mesma ordem + mesmo nível), mesmas listas/tabelas com mesma quantidade de colunas/linhas, mesmas URLs externas (não traduzidas), mesmos code blocks intactos (comandos, JSON, JS/TS, YAML). Nenhuma seção adicionada ou omitida — exceto a cláusula de AC4 que aparece em ambas versões dos legais. | User decision 2026-04-22 (MVP: tradução 1:1 sem reorganização) | Diff estrutural: `diff <(grep -cE '^#+ ' dev-onboarding.md) <(grep -cE '^#+ ' dev-onboarding.pt-BR.md)` retorna 0 (mesma contagem de headings); revisão visual side-by-side confirma ordem preservada |
+| 2.7-AC6 | **Cross-linking integrity** — links internos em `.pt-BR.md` apontam preferencialmente para a versão pt-BR correspondente se ela existir no escopo da story (ex: `README.pt-BR.md` → `docs/usage/dev-onboarding.pt-BR.md` → `docs/legal/TERMS.pt-BR.md`). Links para arquivos que NÃO foram traduzidos nesta story (ex: `docs/api/reference.md`, `docs/usage/gateway-deploy.md`, `docs/usage/monitoring.md`, SDK README) apontam para versão EN acrescidos de marca `(em inglês)` adjacente ao texto do link. | Consistência de jornada BR; evitar leitor BR clicar e cair em EN "surpresa" | Link crawler manual: cada anchor internal em `.pt-BR.md` resolve para arquivo existente; amostra de 10 links EN-only testada mostra marca `(em inglês)` presente |
+| 2.7-AC7 | **Quality review (standalone BR smoke)** — dev executa o onboarding seguindo APENAS `dev-onboarding.pt-BR.md` **sem consultar a versão EN** em momento algum. Smoke inclui: (a) leitura completa dos 4 arquivos pt-BR em GitHub preview, (b) simular abrir issue via template `access-request.yml` (não precisa submeter), (c) ler TERMS + PRIVACY pt-BR end-to-end, (d) simular setup de `.npmrc` e `npm install` (não precisa chave real). Resultado documentado em `docs/qa/2.7-translation-review.md` com: checklist de clareza por arquivo, typos/gramática encontrados+corrigidos na mesma PR, gaps descobertos (não-bloqueantes viram follow-up issue, bloqueantes voltam para @dev fix antes de close). | Story 2.6 external smoke pattern (evidence-based onboarding validation) | `docs/qa/2.7-translation-review.md` mostra 4/4 arquivos reviewed; onboarding pt-BR executável standalone sem consulta EN; gaps listados + triage (fix vs follow-up) |
+
+**Definition of Done (2.7):** 7/7 ACs verificados + 4 arquivos pt-BR criados e renderizando corretamente no GitHub + banner bilíngue presente em 8 arquivos (4 EN updated + 4 pt-BR new) + cláusula de equivalência legal presente em 4 arquivos legais + `docs/qa/2.7-translation-review.md` com smoke BR standalone PASS + Epic 2 PRD updated para v1.0 (ou próxima minor) confirmando Story 2.7 Done.
+
+**Effort budget:** 4-6h dev. **Se exceder 8h, trigger @pm review** (sinal de escopo creeping para i18n framework, automação LLM, múltiplos idiomas — que pertence ao Epic 3 futuro, não a 2.7 MVP).
+
+**Out of scope (Story 2.7):**
+- API reference (`docs/api/reference.md`) tradução → Epic 3 backlog se demanda BR justificar
+- Usage guides secundários (`gateway-deploy.md`, `monitoring.md`, `comfyui-flux-quickstart.md`, `runpod-serverless-deploy.md`) → Epic 3 backlog
+- PRD / stories / ADRs / QA reports tradução → permanecem EN (artefatos internos, não consumer-facing)
+- SDK README (`sdk/README.md`) tradução → Epic 3 se demanda BR justificar (lê-se em npm, não no repo)
+- Colab example README tradução → Epic 3 backlog
+- i18n framework automation (GitHub Action de tradução via LLM, locale detection, CI check de drift EN↔pt-BR) → Epic 3+ backlog
+- Outros idiomas (ES, FR, JA) → não escopado; se demanda surgir, cada idioma = nova story
+- Automated sync check (CI que alerta quando EN update precisa espelho pt-BR) → follow-up opcional, não bloqueia 2.7
 
 ### Cross-story invariants (MUST para 2.2 + 2.3)
 

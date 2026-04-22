@@ -1,5 +1,7 @@
 # Privacy Statement — servegate FLUX API (Alpha)  *(formerly gemma4)*
 
+> 🌐 **English** | [Português (Brasil)](./PRIVACY.pt-BR.md)
+
 **Effective date:** 2026-04-21
 **Version:** 0.1.0-alpha
 
@@ -129,3 +131,11 @@ Privacy Statement may be updated. Material changes will be announced via:
 | Version | Date | Notes |
 |---|---|---|
 | 0.1.0-alpha | 2026-04-21 | Initial alpha Privacy Statement — logs metadata only, no prompt/image retention |
+
+---
+
+## Bilingual Equivalence
+
+Both the English and Portuguese (Brazil) versions of this Privacy Statement are canonical and equally binding. In case of divergence, the version corresponding to the user's country of residence prevails.
+
+See also: [PRIVACY.pt-BR.md](./PRIVACY.pt-BR.md)
