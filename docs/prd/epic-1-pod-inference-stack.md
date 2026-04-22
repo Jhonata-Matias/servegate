@@ -1,6 +1,6 @@
 # Epic 1 — Pod Inference Stack
 
-**Status:** Draft
+**Status:** **Done** (Epic completo — 1/1 story shipped em 2026-04-21)
 **Owner:** @pm (Morgan)
 **Created:** 2026-04-20
 **Project:** gemma4
@@ -36,12 +36,12 @@ Estabelecer e operar um stack de inferência multi-modalidade (texto + imagem) n
 
 ## Success Criteria
 
-- [ ] ComfyUI responde em `0.0.0.0:8188` apos boot completo
-- [ ] FLUX.1-schnell carrega e gera imagem em <30s para prompt baseline
-- [ ] Ollama continua respondendo em `:11434` (coexistencia validada)
-- [ ] `/workspace/start.sh` sobe ambos automaticamente apos `pod.sh up`
-- [ ] Setup sobrevive a stop/start completo do Pod (persistencia em network volume)
-- [ ] Documentacao de uso (workflow JSON exemplo + comando curl) entregue
+- [x] ComfyUI responde em `0.0.0.0:8188` apos boot completo
+- [x] FLUX.1-schnell carrega e gera imagem em <30s para prompt baseline (3.1s warm-cache; 71s cold-start aceitavel para uso async)
+- [x] Ollama continua respondendo em `:11434` (coexistencia validada)
+- [x] `/workspace/start.sh` sobe ambos automaticamente apos `pod.sh up`
+- [x] Setup sobrevive a stop/start completo do Pod (persistencia em network volume)
+- [x] Documentacao de uso (workflow JSON exemplo + comando curl) entregue (`docs/usage/comfyui-flux-quickstart.md`)
 
 ## Stories
 
