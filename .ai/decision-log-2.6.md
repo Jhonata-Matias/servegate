@@ -1,0 +1,62 @@
+# Decision Log — Story 2.6: Alpha Developer Access Distribution
+
+**Mode:** YOLO (autonomous)
+**Started:** 2026-04-22
+**Branch:** `feature/2.6-alpha-access-distribution`
+**Commit before:** `897a90b` (PO validation Draft → Ready)
+**Agent:** Dex (@dev) Opus 4.7 1M context
+
+## Decisions
+
+### D1 — README language: English
+
+- **Decision:** Root README.md written in **English**
+- **Reason:** Outsider-facing landing page; matches `sdk/README.md` predominant tone (EN with PT-BR sections); maximizes international dev reach in alpha
+- **Alternatives:** PT-BR (rejected — international devs target); bilingual (rejected — maintenance overhead, alpha scope)
+- **PO observation reference:** O1
+
+### D2 — Badge approach: shields.io shorthand
+
+- **Decision:** Use `https://img.shields.io/badge/...` static badges (no live data fetching)
+- **Reason:** Simple, no external API dependency; status badges are static facts (alpha, MIT, gateway live URL)
+- **Alternatives:** Custom dynamic shields (rejected — overengineering for static facts); plain emoji (rejected — less recognizable)
+
+### D3 — Commit granularity: bundled single commit (Task 7)
+
+- **Decision:** Tasks 2+3+4+5 ship em **1 commit** `feat(access): Story 2.6 alpha access distribution artifacts`
+- **Reason:** All artifacts serve same goal (access distribution); SIMPLE story doesn't justify split; matches Task 7 plan
+- **Alternatives:** Split em 4 commits (rejected — atomic units para SIMPLE story = overkill); split em 2 (README+contact) e (templates+api-ref) (rejected — same reason)
+- **PO observation reference:** O3
+
+### D4 — Issue templates: GitHub Forms YAML schema
+
+- **Decision:** Use modern **GitHub Forms** (`.yml`) ao invés de legacy markdown templates (`.md`)
+- **Reason:** Forms enforce required fields server-side; better UX para outsider; current GitHub default
+- **Alternatives:** Legacy `.md` (rejected — sem field enforcement); mixed (rejected — inconsistente)
+
+### D5 — API reference structure: single doc + curl-first
+
+- **Decision:** `docs/api/reference.md` único, curl-first quickstart no topo, schemas detalhados depois
+- **Reason:** Devs scannem reference para "como faço X" — curl é universal; schemas/codes vão como reference table
+- **Alternatives:** OpenAPI spec gerada (rejected — overkill alpha, sem swagger UI deployed); split em multiple files (rejected — fragmentation atual já é o problema sendo resolvido)
+
+### D6 — Skip devLoadAlwaysFiles load
+
+- **Decision:** Não carregar `docs/framework/*.md` files (não existem; project não tem framework docs custom)
+- **Reason:** Story 2.6 é zero production code (apenas docs/config/release); coding standards files não são load-bearing aqui
+- **Alternatives:** Criar files vazios (rejected — invention); load fallback `docs/architecture/*` (rejected — irrelevant scope)
+
+## Files Modified
+
+(populated as work progresses)
+
+## Tests Run
+
+(populated as work progresses)
+
+## HALT Items (require user/external action)
+
+- **Task 6:** SDK visibility flip (GitHub UI / @user)
+- **Task 8:** Release v0.1.0-alpha (@devops push tag + gh release create)
+- **Task 9:** External smoke validation (@user with clean env or 2nd account)
+- **Task 10:** Epic 2 PRD closure (@pm post-Task 9 PASS)

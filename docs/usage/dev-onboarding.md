@@ -20,42 +20,17 @@ Access is invite-only during alpha. To request a GATEWAY_API_KEY:
 
 ### Option A: GitHub issue (preferred)
 
-1. Go to https://github.com/Jhonata-Matias/gemma4/issues/new
-2. Use this template:
-
-```markdown
-Title: [Access request] <your name / company>
-
-## Who
-- Name:
-- GitHub username:
-- Contact email (optional, for key delivery):
-
-## Use case
-<describe what you want to generate — helps rate-limit quota allocation>
-
-## Expected volume
-- Imagens/dia estimado:
-- Cenários de uso (dev/prod/demo):
-
-## Agreement
-- [ ] I read and accept the Terms of Use (docs/legal/TERMS.md)
-- [ ] I read and accept the Privacy Statement (docs/legal/PRIVACY.md)
-- [ ] I understand this is alpha — no SLA, breaking changes expected
-
-## Public key for encrypted key delivery (optional)
-<paste GPG/age public key if you want encrypted delivery; otherwise owner sends via secure channel>
-```
-
-3. Owner reviews within 3-7 business days (manual review — it's a personal project)
+1. Go to https://github.com/Jhonata-Matias/gemma4/issues/new/choose
+2. Select **"Alpha Access Request"** template — fill in the required fields (name, GitHub username, use case, expected volume, ToS/Privacy acknowledgements). Optionally paste a GPG or age public key for encrypted `GATEWAY_API_KEY` delivery.
+3. Submit the issue. The owner reviews within **3–7 business days** (manual review — personal project).
 4. Owner responds with:
-   - GATEWAY_API_KEY (via secure channel — Signal, encrypted email, or agreed method)
-   - Your per-key rate limit allocation (default: fair share of 100/day global)
-   - Onboarding confirmation
+   - `GATEWAY_API_KEY` — delivered via GitHub DM by default, or via the encrypted channel you specified.
+   - Your effective rate-limit allocation (default: fair share of 100/day global).
+   - Onboarding confirmation.
 
 ### Option B: Direct contact
 
-For cases where a GitHub issue is inappropriate (e.g., enterprise evaluation with NDA concerns), email the owner at the contact listed in the repo README. Same review process applies.
+For cases where a public issue isn't appropriate (enterprise NDA evaluation, sensitive disclosure), send a GitHub DM to [@Jhonata-Matias](https://github.com/Jhonata-Matias). Same review process applies.
 
 ## Step 2 — Install the SDK
 

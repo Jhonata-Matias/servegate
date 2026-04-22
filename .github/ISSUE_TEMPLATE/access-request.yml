@@ -1,0 +1,76 @@
+name: Alpha Access Request
+description: Request a GATEWAY_API_KEY for alpha access to the gemma4 FLUX API.
+title: "[Access] <your name or organization>"
+labels: ["access-request", "alpha"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for your interest in the gemma4 FLUX API alpha!
+
+        Alpha is **invite-only**, manually reviewed. Expected response time: **3–7 business days**.
+
+        Before submitting, please read:
+        - [Terms of Use](../blob/main/docs/legal/TERMS.md)
+        - [Privacy Statement](../blob/main/docs/legal/PRIVACY.md)
+        - [Developer Onboarding](../blob/main/docs/usage/dev-onboarding.md)
+
+  - type: input
+    id: name
+    attributes:
+      label: Your name (or organization)
+      placeholder: e.g., Jane Doe — Acme Corp
+    validations:
+      required: true
+
+  - type: input
+    id: github_username
+    attributes:
+      label: GitHub username
+      description: Used for attribution and, if needed, secure key delivery via GitHub DM.
+      placeholder: "@your-handle"
+    validations:
+      required: true
+
+  - type: textarea
+    id: use_case
+    attributes:
+      label: Use case
+      description: What do you want to generate? Helps calibrate rate-limit allocation and catch policy concerns early.
+      placeholder: |
+        e.g., Prototype image-generation feature for a photography app; generating thumbnails from text prompts during design exploration.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: expected_volume
+    attributes:
+      label: Expected volume (images per day)
+      options:
+        - "<10/day (prototyping)"
+        - "10–50/day (demo / evaluation)"
+        - "50–100/day (serious evaluation — note 100/day global cap)"
+        - "100+/day (please describe in use case — may not fit alpha)"
+    validations:
+      required: true
+
+  - type: input
+    id: secure_delivery
+    attributes:
+      label: Preferred secure key delivery (optional)
+      description: Paste a GPG or age public key for encrypted delivery, or leave blank to receive via GitHub DM.
+      placeholder: ssh-ed25519 AAAA... / or a GPG key fingerprint
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: agreements
+    attributes:
+      label: Agreements
+      options:
+        - label: I have read and accept the [Terms of Use](../blob/main/docs/legal/TERMS.md).
+          required: true
+        - label: I have read and accept the [Privacy Statement](../blob/main/docs/legal/PRIVACY.md).
+          required: true
+        - label: I understand this is alpha — no SLA, breaking changes expected, support is best-effort.
+          required: true
