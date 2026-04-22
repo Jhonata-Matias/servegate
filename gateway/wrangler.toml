@@ -15,9 +15,10 @@ compatibility_date = "2026-04-01"
 workers_dev = true
 
 # KV namespace for rate-limit counter (key: count:YYYY-MM-DD, TTL 48h)
+# Created via `npm run kv:create` 2026-04-21
 [[kv_namespaces]]
 binding = "RATE_LIMIT_KV"
-id = "KV_NAMESPACE_ID_PLACEHOLDER"
+id = "55bd0b4a7c3c44bb958331ba82035e55"
 
 # Observability — logs visible in `wrangler tail` and Cloudflare dashboard
 [observability]

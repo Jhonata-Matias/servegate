@@ -2,7 +2,7 @@
 
 **Status:** Alpha (invite-only)
 **SDK:** `@jhonata-matias/flux-client@0.1.x` (GitHub Packages, private)
-**Gateway:** `https://gemma4-gateway.<account>.workers.dev` *(replace after deploy)*
+**Gateway:** `https://gemma4-gateway.jhonata-matias.workers.dev` *(live since 2026-04-21)*
 
 Get started generating FLUX images via authenticated API in ~15 minutes.
 
@@ -98,7 +98,7 @@ See `examples/colab/flux_demo.py` for a standalone Python quickstart using `requ
 
 ```typescript
 // .env (gitignored)
-GATEWAY_URL=https://gemma4-gateway.<account>.workers.dev
+GATEWAY_URL=https://gemma4-gateway.jhonata-matias.workers.dev
 GATEWAY_API_KEY=<your-issued-key>
 ```
 

@@ -42,7 +42,7 @@ import { FluxClient, ColdStartError, RateLimitError, AuthError } from '@jhonata-
 
 const client = new FluxClient({
   apiKey: process.env.GATEWAY_API_KEY!,
-  gatewayUrl: 'https://gemma4-gateway.workers.dev',
+  gatewayUrl: 'https://gemma4-gateway.jhonata-matias.workers.dev',
 });
 
 // Pre-warm on app init (background) — evita primeira request pagar 130s

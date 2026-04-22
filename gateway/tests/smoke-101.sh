@@ -3,7 +3,7 @@
 # Run AFTER `wrangler deploy` (HALT user action).
 #
 # Required env vars:
-#   GATEWAY_URL — e.g. https://gemma4-gateway.<account>.workers.dev
+#   GATEWAY_URL — e.g. https://gemma4-gateway.jhonata-matias.workers.dev
 #   GATEWAY_API_KEY — same value used in `wrangler secret put`
 #
 # Expected output:
@@ -15,7 +15,7 @@ set -euo pipefail
 
 if [[ -z "${GATEWAY_URL:-}" || -z "${GATEWAY_API_KEY:-}" ]]; then
   echo "ERROR: set GATEWAY_URL and GATEWAY_API_KEY env vars first" >&2
-  echo "  export GATEWAY_URL=https://gemma4-gateway.<account>.workers.dev" >&2
+  echo "  export GATEWAY_URL=https://gemma4-gateway.jhonata-matias.workers.dev" >&2
   echo "  export GATEWAY_API_KEY=<your-secret>" >&2
   exit 1
 fi

@@ -12,7 +12,7 @@ By using the gemma4 FLUX API (hereafter "the Service"), you agree to these Terms
 
 The Service provides programmatic access to image generation using the FLUX.1-schnell model hosted on RunPod Serverless. It consists of:
 
-- **HTTP Gateway:** `https://gemma4-gateway.<account>.workers.dev` (authenticated)
+- **HTTP Gateway:** `https://gemma4-gateway.jhonata-matias.workers.dev` (authenticated)
 - **TypeScript SDK:** `@jhonata-matias/flux-client` (GitHub Packages)
 - **Single model:** black-forest-labs/FLUX.1-schnell (Apache 2.0)
 
