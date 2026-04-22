@@ -46,3 +46,16 @@ __pycache__/
 
 # Docker smoke test mount residue (AC7 external onboarding validation)
 test-onboarding/
+
+# AIOX framework artifacts (local-only, not for public repo consumers)
+# Owner workflow tooling — not relevant to external SDK/API users
+.ai/
+.agents/
+.antigravity/
+.claude/
+.codex/
+.cursor/
+.gemini/
+.github/agents/
+squads/
+.env.example
