@@ -173,8 +173,9 @@ Stream JSON logs em real-time. Format:
 
 | Symptom | Cause | Fix |
 |---|---|---|
+| **`curl (35) SSL handshake failure` após deploy** | **Cert propagation delay — subdomain recém-criado leva 1-5min para cert wildcard propagar globalmente no Cloudflare edge** | **Aguardar 2-5min e retry. Verificar via `curl -sS -o /dev/null -w "%{http_code}" https://<your-url>` — se retornar 405, TLS propagou. Se persistir >10min, checar Cloudflare dashboard → Workers → seu worker → Settings → Triggers** |
 | 401 every request | GATEWAY_API_KEY mismatch | Re-run `secret:list` + `secret:gateway-key` |
-| 429 imediato após deploy | KV não resetou após day boundary | `kv key delete count:$(date -u +%Y-%m-%d)` |
+| 429 imediato após deploy | KV não resetou após day boundary OU smoke anterior consumiu quota | `npx wrangler kv key delete "count:$(date -u +%Y-%m-%d)" --binding=RATE_LIMIT_KV` |
 | 504 upstream timeout | RunPod cold start (~150s) | Per ADR-0001 Path A, expected; SDK retry handles |
 | 502 upstream_error | RunPod 5xx | Check RunPod dashboard `endpointId={your-id}` health |
 | Counter overshoot 1-2/dia | KV eventual consistency (Risk R7) | Accepted per Epic 2 PRD; escalate to Durable Objects se sustained |
