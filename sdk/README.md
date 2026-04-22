@@ -153,10 +153,20 @@ npm run pack:dry     # validate tarball contents
 
 ## References
 
+- [API Reference](../docs/api/reference.md) — raw HTTP contract
+- [Developer Onboarding](../docs/usage/dev-onboarding.md) — access request + first call
 - Epic 2 PRD: `docs/prd/epic-2-consumer-integration.md`
 - ADR-0001 (Path A cold-start strategy): `docs/architecture/adr-0001-flux-cold-start.md`
 - Gateway (Story 2.5): `docs/stories/2.5.gateway-rate-limit-cloudflare.story.md`
-- This story: `docs/stories/2.2.typescript-sdk-flux-client.story.md`
+- This SDK story: `docs/stories/2.2.typescript-sdk-flux-client.story.md`
+
+## Contact
+
+Primary channel for access requests, bugs, and feature ideas: [open an issue](https://github.com/Jhonata-Matias/gemma4/issues/new/choose).
+
+Response SLA (alpha): 3–7 business days, best-effort. For security issues use [private vulnerability reporting](https://github.com/Jhonata-Matias/gemma4/security/advisories/new).
+
+See the root [README — Contact](../README.md#contact) for the full support policy.
 
 ## License
 

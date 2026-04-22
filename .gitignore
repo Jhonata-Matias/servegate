@@ -43,3 +43,6 @@ serverless/tests/__pycache__/
 serverless/tests/smoke-*.png
 serverless/tests/bench-results-*.json
 __pycache__/
+
+# Docker smoke test mount residue (AC7 external onboarding validation)
+test-onboarding/

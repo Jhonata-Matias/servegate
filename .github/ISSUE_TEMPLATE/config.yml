@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Developer Onboarding Guide
+    url: https://github.com/Jhonata-Matias/gemma4/blob/main/docs/usage/dev-onboarding.md
+    about: Before requesting access, check the 5-step onboarding guide — most setup questions are covered there.
+  - name: Security Vulnerability
+    url: https://github.com/Jhonata-Matias/gemma4/security/advisories/new
+    about: For security issues, please use private vulnerability reporting instead of a public issue.
+  - name: API Reference
+    url: https://github.com/Jhonata-Matias/gemma4/blob/main/docs/api/reference.md
+    about: Request/response schemas, status codes, rate-limit headers, curl examples.
