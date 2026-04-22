@@ -1,9 +1,9 @@
 # Epic 2 — Consumer Integration (Hybrid Pragmatic)
 
-**Status:** In Progress (v0.6 — SDK scope renamed for publish + TD1 resolved)
+**Status:** In Progress (v0.7 — Story 2.6 added for alpha public access)
 **Owner:** @pm (Morgan)
 **Created:** 2026-04-21
-**Last Updated:** 2026-04-21 (v0.6)
+**Last Updated:** 2026-04-22 (v0.7)
 **Project:** gemma4
 **Predecessor:** Epic 1 (Pod Inference Stack — Done em 2026-04-21)
 
@@ -17,6 +17,7 @@
 | 0.4 | 2026-04-21 | @pm Morgan | **Post QA gate 2.1.2 PASS** (95/100) — Added preliminary ACs for Stories 2.2 (SDK) + 2.3 (demo) derived from ADR-0001 Impact + PM Addenda 1+4; @sm can now draft both stories with anchored scope. Risk R4 aligned with ADR "no change Story 2.5" (pre-warm = SDK responsibility, not gateway). New "30-Day Review Governance" section formalizing 4 pivot triggers + 4 stay-course criteria + DRI assignment (**@pm owns data collection until 2026-05-21**: RunPod billing, demo analytics, issue triage). Resolves QA gate observations O2/O3/O4. |
 | 0.5 | 2026-04-21 | @po Pax | **Batch close 3 stories** (PM-approved): 2.1.1 (QA 9.4/10), 2.1.2 (QA 95/100), 2.2 (QA 92/100, merged PR #1). Stories table updated. Dependency graph repintado para refletir único caminho crítico restante (publish 2.2 → 2.5 → integ smoke → 2.3). New "Tech Debt Backlog" section com 7 items priorizados: TD1 publish (HIGH, @devops imediato), TD2 integ smoke (MEDIUM, @qa), TD3 redeploy v0.1.1 (MEDIUM, @devops), TD4 re-bench cold n≥10 (LOW, @dev pre-2026-05-15), TD5-TD7 SDK refinements (LOW, @dev). Total tech debt budget ~6-9h (HIGH+MEDIUM ~3-4h). |
 | 0.6 | 2026-04-21 | @devops Gage | **TD1 resolution + scope rename** — GitHub Packages requires scope match com repo owner. Repo é `Jhonata-Matias/gemma4` (não org Gemma4). Decision: rename SDK scope `@gemma4/flux-client` → `@jhonata-matias/flux-client` (project codename "gemma4" preserved em description + branding). Files updated: sdk/package.json, sdk/src/{index,errors,types}.ts JSDoc, sdk/README.md, docs/stories/2.3 (4 refs). NÃO atualizado: Story 2.2 Done (historical), QA Gate 2.2 (final), ADR-0001 (final). TD1 resolvido (publish unblocked). |
+| 0.7 | 2026-04-22 | @pm Morgan | **Story 2.6 added** — Alpha Developer Access Distribution. Post Story 2.5 merge (PR #2, commit 9d1f100) + Epic 1 closure, a última milha para devs externos conseguirem `npm install → first call` sem hand-holding manual. Strategic decision: SDK GH Packages → **public visibility** (fricção mínima; zero secret exposure since gateway guarda RUNPOD_API_KEY). Scope: SDK public flip + README raiz + issue templates + owner contact + GH release v0.1.0-alpha + API reference consolidado + smoke externa. 7 preliminary ACs, effort budget 1-2 dev-days. TD8 adicionado: zero CI workflows em `.github/workflows/` (LOW severity). @sm para draft. |
 
 ---
 
@@ -99,28 +100,33 @@ O critério "cold spawn sub-30s" foi invalidado empiricamente pela Story 2.1 (me
 | **2.2** | Implementar TypeScript SDK `@gemma4/flux-client` consumindo o endpoint | **MUST** | @dev | **Done** (QA PASS 92/100; merged via PR #1 squash; publish é tech debt HIGH @devops) |
 | **2.5** | Gateway Cloudflare Worker + KV pra auth (X-API-Key) + rate-limit 100/dia global | **MUST** | @dev | **Ready** (validada @po 9.75/10) — pode rodar paralela a 2.3 |
 | **2.3** | App demo Next.js + Vercel usando SDK contra gateway URL | **MUST** | @dev (+ @ux opcional) | **Ready** (PO 10/10 — bloqueada por SDK published + 2.5 Done) |
+| **2.6** | Alpha Developer Access Distribution (SDK public + README raiz + issue templates + GH release + API reference) | **MUST** | @dev (+ @devops para release/visibility) | **Draft pending** (@sm to draft from PRD v0.7 ACs) |
 | **2.4** | (Opcional) Custom node n8n integrando o SDK | SHOULD | @dev | **Backlog** opportunistic |
 
-### Dependency graph atualizado (v0.5 — pós-batch close 2.1.1+2.1.2+2.2)
+### Dependency graph atualizado (v0.7 — pós Story 2.5 merge + Story 2.6 add)
 
 ```
-2.1 (Done)
- ├── 2.1.1 (Done — redeploy = tech debt)
- ├── 2.1.2 (Done — Path A formalizado em ADR-0001 + PRD v0.4)
- ├── 2.2 (Done — SDK merged; publish = tech debt HIGH)
- │    └── publish → desbloqueia 2.3 install
- ├── 2.5 (Ready — gateway, paralelo)
- │    └── + integration smoke 2.2 → desbloqueia 2.3 dev
- └── 2.3 (Ready — bloqueada por: SDK published + 2.5 Done)
+2.1 (Done) → 2.1.1 (Done) → 2.1.2 (Done) → 2.2 (Done, published private)
+                                              │
+                              ┌───────────────┴───────────────┐
+                              ▼                               ▼
+                       2.5 (Done — merged PR #2)     2.6 (Draft pending — @sm)
+                              │                               │
+                              └─────────────┬─────────────────┘
+                                            ▼
+                                  2.3 (Ready — desbloqueia após 2.6 Done)
 ```
 
-**MVP path remaining (post-batch close):**
-1. **`*publish`** SDK 2.2 → GitHub Packages (~15min @devops, resolve AC8 deferred) — desbloqueia install em 2.3
-2. **`*develop 2.5`** gateway (3-5h @dev) — paralelo, independente
-3. Após 2.5 Done: **integration smoke 2.2 vs 2.5** (~30min @qa fecha tech debt) — desbloqueia 2.3 dev
-4. **`*develop 2.3`** demo Next.js + Vercel (2-4h @dev)
-5. **Close 2.5 + 2.3** + Epic 2 Done declaration
-6. Handoff para 30-day review tracking (DRI: @pm)
+**Status flow (v0.7):**
+- ✅ 2.1 / 2.1.1 / 2.1.2 / 2.2 / 2.5 — all Done
+- 🔄 **2.6 — Draft pending** (next active story)
+- 🔓 2.3 — Ready, mas só faz sentido shippear **após 2.6** (demo precisa apontar para SDK public + ter contact channel para usuários reportarem bugs)
+
+**MVP path remaining (post 2.5 merge):**
+1. **`*draft 2.6`** @sm → @po validate → @dev develop (1-2 days) → @qa gate → @devops *push + *create-pr
+2. **Após 2.6 Done:** Optional handoff para 2.3 (web demo, 2-4h dev) ou pular para Epic 2 closure
+3. **Close Epic 2** com declaração formal (gateway + SDK + access distribution = MVP complete)
+4. Handoff para 30-day review tracking (DRI: @pm — target 2026-05-21)
 
 ## Preliminary ACs — Stories 2.2 & 2.3 (derived from ADR-0001, v0.4)
 
@@ -163,6 +169,33 @@ O critério "cold spawn sub-30s" foi invalidado empiricamente pela Story 2.1 (me
 **Definition of Done (2.3):** 8/8 ACs verificados + Lighthouse Accessibility >=90 + deploy em Vercel (preview URL) + analytics dashboard mostrando >=1 sessão de teste completa.
 
 **Effort budget:** 2-4h (Addendum 1). **Se exceder 6h, trigger @pm review** (UX complexity pode justificar Path B pivot antecipado).
+
+### Story 2.6 — Alpha Developer Access Distribution
+
+**Rationale:** Epic 2 entregou gateway (2.5) + SDK (2.2) + docs (dev-onboarding, legal, monitoring), mas faltam as últimas peças de distribuição e discovery pública. Story 2.6 fecha o gap "repo encontrado → primeira chamada funcionando" sem hand-holding manual do owner a cada onboarding. Effort estimate **1-2 dev-days** (sem código novo — config, docs, release hygiene).
+
+**Strategic decision (PRD v0.7):** SDK GitHub Packages → **public visibility**. Justificativa: zero secret no SDK (gateway guarda RUNPOD_API_KEY); fricção mínima para alpha (3-5 devs target); modelo invite-only do GATEWAY_API_KEY mantém controle de quota. Beta futuro pode migrar para npm público oficial.
+
+| AC | Descrição | Source | Acceptance test |
+|---|---|---|---|
+| 2.6-AC1 | **SDK public visibility** — `@jhonata-matias/flux-client` mudado de `private` → `public` em GitHub Packages. README e dev-onboarding atualizados removendo step "owner adiciona collaborator" se aplicável. | PRD v0.7 strategic decision | `npm view @jhonata-matias/flux-client --registry=https://npm.pkg.github.com` retorna metadata **sem auth**; em VM/container limpa, `.npmrc` + `npm install` funciona com qualquer GITHUB_TOKEN tendo `read:packages` |
+| 2.6-AC2 | **Root README.md** — landing page do repo com: project name + tagline alpha, status badge, 3-bullet "what is this / for whom / status", quickstart link → `docs/usage/dev-onboarding.md`, links legal (TERMS/PRIVACY), Contact section, license badge. Render check via GitHub. | Gap análise PM 2026-04-22 (zero README raiz hoje) | GitHub repo landing mostra README renderizado; outsider lê em <2min e sabe próximo passo |
+| 2.6-AC3 | **Issue templates** — `.github/ISSUE_TEMPLATE/` com 3 YAML forms: `access-request.yml` (campos required: name, GH username, use case, expected volume, ToS+Privacy checkboxes — espelha dev-onboarding step 1), `bug-report.yml` (env, repro, expected vs actual), `feature-request.yml` + `config.yml` para opcional Discussions link | dev-onboarding step 1 documentou template textual, faltava formalizar | Botão "New Issue" no GitHub mostra 3 opções selecionáveis; submit de access-request bloqueia sem campos required preenchidos |
+| 2.6-AC4 | **Owner contact public** — seção "Contact" no README raiz + mirror em `sdk/README.md`: canal preferido (GitHub issue), fallback (email opcional ou GitHub DM), SLA alpha (3-7 business days), expectativa "personal project — best effort" | dev-onboarding menciona "Signal/encrypted email" mas owner contact nunca foi documentado público | Outsider acha "como contatar owner" em <30s da landing; método de entrega de API key documentado |
+| 2.6-AC5 | **GitHub Release v0.1.0-alpha** — tag git `v0.1.0-alpha` em commit `9d1f100` (merge Story 2.5) + GitHub Release com notes: resumo Epic 1 + 2 deliverables, links para SDK CHANGELOG, dev-onboarding, ToS/Privacy. Marked "Pre-release". | Versionamento + linha de base para breaking change tracking; primeira release pública | Release visível em `https://github.com/Jhonata-Matias/gemma4/releases/tag/v0.1.0-alpha`; tag presente em `git tag -l` |
+| 2.6-AC6 | **API reference consolidado** — `docs/api/reference.md` único doc cobrindo: gateway base URL, endpoint `POST /` + body schema, headers (`X-API-Key`, `Content-Type`), response codes (200/401/405/429/502/504) com payloads exemplo, rate-limit headers (`X-RateLimit-Limit/Remaining/Reset`, `Retry-After`), curl quickstart end-to-end, link cruzado para SDK README (TS) + Colab example (Python). | Hoje fragmentado entre SDK README + gateway-deploy.md + Story 2.5 — sem single source of truth para API contract | Curl example da reference, copy-paste no terminal, gera imagem real contra gateway live; reviewer externo (não-owner) executa sem dúvidas |
+| 2.6-AC7 | **External smoke validation** — todos os 5 steps do `docs/usage/dev-onboarding.md` executados **em ambiente limpo por perfil diferente do owner** (segunda conta GitHub, colaborador, ou container Docker zerado): request key → instalar SDK → configurar → primeira imagem → handle de erros. Documentar em `docs/qa/2.6-external-smoke.md` com timing de cada step + gaps descobertos. | Validation real de "external dev journey" — único sinal honesto de que onboarding funciona end-to-end | Smoke doc mostra 5/5 steps PASS com imagem PNG gerada; gaps descobertos viram follow-up issues (não bloqueiam 2.6 close se onboarding completou) |
+
+**Definition of Done (2.6):** 7/7 ACs verificados + SDK package mostra `public` em GitHub UI + Release tag v0.1.0-alpha visível + smoke externa documentada em `docs/qa/2.6-external-smoke.md` + Epic 2 PRD updated para v0.8 com Story 2.6 closure note.
+
+**Effort budget:** 1-2 dev-days. **Se exceder 3 days, trigger @pm review** (provável que esteja escopo creeping para CI/Release automation que pertence a TD8).
+
+**Out of scope (Story 2.6):**
+- CI/CD workflows (`.github/workflows/`) — vai como TD8 (LOW)
+- npm registry público oficial — beta scope
+- Public Discussions / Discord — beta scope (alpha usa GitHub Issues)
+- Status page / health endpoint público — Story 2.7 ou TD futuro
+- Métricas públicas de uso (% quota consumido) — Story 2.7 ou TD futuro
 
 ### Cross-story invariants (MUST para 2.2 + 2.3)
 
@@ -251,8 +284,9 @@ Com 100 imgs/dia globais + pior caso cold-dominated:
 | **TD5** | LOW | Gate 2.2 O1-O4 | SDK coverage refinements (NetworkError, warmup timeout, linear backoff, safeReadJson) | @dev | Sprint próximo | 4 testes adicionais em `sdk/tests/`; total tests >=41; vitest pass |
 | **TD6** | LOW | Gate 2.2 O5-O6 | SDK v0.2: warmup error classification + input upper bounds | @dev | v0.2 release | `sdk/CHANGELOG.md` documenta breaking changes; `MAX_STEPS`/`MAX_DIMENSION` constants |
 | **TD7** | LOW | Gate 2.2 O7 | Add `@vitest/coverage-v8` devDep + npm script | @dev | Junto com TD5 | `npm run coverage` gera report; CI integration opcional |
+| **TD8** | LOW | PM gap analysis v0.7 (2026-04-22) | `.github/workflows/` vazio — zero CI/CD. Criar `pr-checks.yml` rodando typecheck + vitest em changes de `gateway/` e `sdk/` (paths filter). Prevenção de regression em PRs futuros. Opcionalmente: `release.yml` auto-trigger em push de tag `v*` publicando SDK. | @devops | Sprint pós-2.6 (não bloqueia 2.6) | PR test valida: mudança em `sdk/src/` dispara workflow; typecheck + tests rodam e fail bloqueia merge via branch protection |
 
-**Tech debt budget (effort estimate):** ~6-9h total (HIGH+MEDIUM apenas: ~3-4h). Não bloqueia MVP delivery.
+**Tech debt budget (effort estimate):** ~6-9h total (HIGH+MEDIUM apenas: ~3-4h; TD8 adiciona ~2-3h LOW). Não bloqueia MVP delivery.
 
 **Tracking convention:** quando @dev/@qa pegar item, criar nota em PR description "Resolves Epic 2 TD<N>". @pm reviews TD board mensalmente.
 
