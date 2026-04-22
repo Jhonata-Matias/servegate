@@ -1,10 +1,10 @@
-# Terms of Use — gemma4 FLUX API (Alpha)
+# Terms of Use — servegate FLUX API (Alpha)  *(formerly gemma4)*
 
 **Effective date:** 2026-04-21
 **Version:** 0.1.0-alpha
 **Status:** ⚠️ **ALPHA — no uptime SLA, no stability guarantees, breaking changes expected**
 
-By using the gemma4 FLUX API (hereafter "the Service"), you agree to these Terms. If you don't agree, don't use the Service.
+By using the servegate FLUX API (hereafter "the Service"; formerly distributed as "gemma4 FLUX API"), you agree to these Terms. If you don't agree, don't use the Service.
 
 ---
 
@@ -130,7 +130,7 @@ These Terms are governed by the laws of Brazil. Disputes will be resolved in the
 
 ## 14. Contact
 
-- Issues/abuse reports: GitHub issues at `Jhonata-Matias/gemma4` (tag: `security-incident` or `abuse-report`)
+- Issues/abuse reports: GitHub issues at `Jhonata-Matias/servegate` (tag: `security-incident` or `abuse-report`)
 - Key requests: see `docs/usage/dev-onboarding.md`
 
 ---

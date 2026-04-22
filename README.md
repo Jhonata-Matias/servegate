@@ -1,6 +1,8 @@
-# gemma4
+# servegate
 
 **FLUX image-generation API — alpha, authenticated, rate-limited.**
+
+> Formerly `gemma4`. Renamed to reflect the generalized gateway-to-serverless-model pattern. The Cloudflare Worker hostname `gemma4-gateway.jhonata-matias.workers.dev` remains unchanged for SDK compatibility.
 
 [![status: alpha](https://img.shields.io/badge/status-alpha-orange)](./docs/legal/TERMS.md)
 [![license: MIT](https://img.shields.io/badge/license-MIT-blue)](./sdk/LICENSE)
@@ -43,7 +45,7 @@ curl -X POST https://gemma4-gateway.jhonata-matias.workers.dev \
 
 ## Contact
 
-**Primary channel (access requests, bugs, feature ideas):** [open an issue](https://github.com/Jhonata-Matias/gemma4/issues/new/choose) using one of the templates.
+**Primary channel (access requests, bugs, feature ideas):** [open an issue](https://github.com/Jhonata-Matias/servegate/issues/new/choose) using one of the templates.
 
 **Response SLA (alpha):** 3–7 business days, best-effort. This is a personal project — no enterprise support guarantees during alpha.
 
@@ -51,7 +53,7 @@ curl -X POST https://gemma4-gateway.jhonata-matias.workers.dev \
 
 **Fallback:** GitHub DM to [@Jhonata-Matias](https://github.com/Jhonata-Matias) — reserved for cases where a public issue isn't appropriate (enterprise NDA concerns, sensitive disclosure).
 
-**Security issues:** please use [private vulnerability reporting](https://github.com/Jhonata-Matias/gemma4/security/advisories/new) rather than a public issue.
+**Security issues:** please use [private vulnerability reporting](https://github.com/Jhonata-Matias/servegate/security/advisories/new) rather than a public issue.
 
 ## Legal + alpha expectations
 

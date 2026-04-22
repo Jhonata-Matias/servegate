@@ -2,7 +2,7 @@
 
 [![alpha](https://img.shields.io/badge/status-alpha-orange)](../docs/legal/TERMS.md) [![license MIT](https://img.shields.io/badge/license-MIT-blue)](./LICENSE)
 
-TypeScript SDK para o gateway de geração de imagens FLUX do projeto **gemma4**. Encapsula chamadas ao gateway autenticado (Story 2.5), trata cold-start realista (~130s, ADR-0001 Path A) via `warmup()` + retry-with-backoff, e expõe error classes tipadas para UX flows diferenciados.
+TypeScript SDK para o gateway de geração de imagens FLUX do projeto **servegate** (ex-gemma4). Encapsula chamadas ao gateway autenticado (Story 2.5), trata cold-start realista (~130s, ADR-0001 Path A) via `warmup()` + retry-with-backoff, e expõe error classes tipadas para UX flows diferenciados.
 
 ## ⚠️ ALPHA STATUS
 
@@ -16,7 +16,7 @@ This SDK is in **alpha** (v0.x). Breaking changes expected. Do not use in produc
 
 For onboarding (API key request), see [dev-onboarding.md](../docs/usage/dev-onboarding.md).
 
-> **Note:** Scope `@jhonata-matias` matches GitHub Packages owner do repo `Jhonata-Matias/gemma4`. Project codename remains "gemma4".
+> **Note:** Scope `@jhonata-matias` matches GitHub Packages owner do repo `Jhonata-Matias/servegate` (renamed from `gemma4` on 2026-04-22; old URLs auto-redirect via GitHub).
 
 ## Install
 
@@ -162,9 +162,9 @@ npm run pack:dry     # validate tarball contents
 
 ## Contact
 
-Primary channel for access requests, bugs, and feature ideas: [open an issue](https://github.com/Jhonata-Matias/gemma4/issues/new/choose).
+Primary channel for access requests, bugs, and feature ideas: [open an issue](https://github.com/Jhonata-Matias/servegate/issues/new/choose).
 
-Response SLA (alpha): 3–7 business days, best-effort. For security issues use [private vulnerability reporting](https://github.com/Jhonata-Matias/gemma4/security/advisories/new).
+Response SLA (alpha): 3–7 business days, best-effort. For security issues use [private vulnerability reporting](https://github.com/Jhonata-Matias/servegate/security/advisories/new).
 
 See the root [README — Contact](../README.md#contact) for the full support policy.
 

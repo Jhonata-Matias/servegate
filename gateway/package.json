@@ -1,7 +1,7 @@
 {
   "name": "@jhonata-matias/gemma4-gateway",
   "version": "0.1.0",
-  "description": "Cloudflare Worker gateway for gemma4 FLUX endpoint — auth (X-API-Key) + rate-limit 100/day global + RunPod proxy. Story 2.5 implementation.",
+  "description": "Cloudflare Worker gateway for servegate (ex-gemma4) FLUX endpoint — auth (X-API-Key) + rate-limit 100/day global + RunPod proxy. Story 2.5 implementation.",
   "private": true,
   "type": "module",
   "scripts": {

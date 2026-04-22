@@ -1,5 +1,5 @@
 /**
- * Cloudflare Worker bindings for gemma4 gateway (Story 2.5).
+ * Cloudflare Worker bindings for servegate gateway (Story 2.5, formerly gemma4).
  * Bindings configured in wrangler.toml + secrets via `wrangler secret put`.
  */
 

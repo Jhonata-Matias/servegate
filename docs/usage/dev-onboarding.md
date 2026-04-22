@@ -1,4 +1,4 @@
-# Developer Onboarding — gemma4 FLUX API (Alpha)
+# Developer Onboarding — servegate FLUX API (Alpha)  *(formerly gemma4)*
 
 **Status:** Alpha (invite-only)
 **SDK:** `@jhonata-matias/flux-client@0.1.x` (GitHub Packages, private)
@@ -20,7 +20,7 @@ Access is invite-only during alpha. To request a GATEWAY_API_KEY:
 
 ### Option A: GitHub issue (preferred)
 
-1. Go to https://github.com/Jhonata-Matias/gemma4/issues/new/choose
+1. Go to https://github.com/Jhonata-Matias/servegate/issues/new/choose
 2. Select **"Alpha Access Request"** template — fill in the required fields (name, GitHub username, use case, expected volume, ToS/Privacy acknowledgements). Optionally paste a GPG or age public key for encrypted `GATEWAY_API_KEY` delivery.
 3. Submit the issue. The owner reviews within **3–7 business days** (manual review — personal project).
 4. Owner responds with:
@@ -151,7 +151,7 @@ Invalid input throws `ValidationError` pre-network — no cost, immediate feedba
 
 ### Production deployment checklist
 
-Before deploying your app using gemma4 FLUX API to production:
+Before deploying your app using servegate FLUX API to production:
 
 - [ ] GATEWAY_API_KEY in server-side environment only (not client bundle)
 - [ ] Warmup called on app init OR before first expected user request

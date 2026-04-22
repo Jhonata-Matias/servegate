@@ -1,4 +1,4 @@
-# Privacy Statement — gemma4 FLUX API (Alpha)
+# Privacy Statement — servegate FLUX API (Alpha)  *(formerly gemma4)*
 
 **Effective date:** 2026-04-21
 **Version:** 0.1.0-alpha
