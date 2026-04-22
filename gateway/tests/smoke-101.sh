@@ -42,14 +42,15 @@ for i in $(seq 1 101); do
     200) count_200=$((count_200 + 1)) ;;
     429)
       count_429=$((count_429 + 1))
-      # Capture Retry-After on first 429
+      # Capture Retry-After on first 429 using -i (include headers in output).
+      # Avoid -I which forces HEAD method — gateway rejects HEAD with 405.
       if [[ -z "$last_retry_after" ]]; then
-        last_retry_after=$(curl -sS -I \
+        last_retry_after=$(curl -sS -i \
           -X POST \
           -H "X-API-Key: $GATEWAY_API_KEY" \
           -H "Content-Type: application/json" \
           -d "{\"input\":{\"prompt\":\"check\",\"steps\":1,\"width\":256,\"height\":256}}" \
-          "$GATEWAY_URL" | grep -i 'retry-after' | awk '{print $2}' | tr -d '\r\n' || true)
+          "$GATEWAY_URL" 2>/dev/null | grep -i '^retry-after:' | head -1 | awk '{print $2}' | tr -d '\r\n' || true)
       fi
       ;;
     *)
@@ -72,14 +73,25 @@ echo "Other:             $count_other"
 echo "Retry-After (429): $last_retry_after seconds"
 echo ""
 
-# Validation
-if [[ "$count_200" -eq 100 && "$count_429" -eq 1 ]]; then
-  echo "✅ AC7 PASS — 100 success + 1 rate-limited as expected"
+# Validation with R7 tolerance — KV eventual consistency may cause ±2 off
+# Per Epic 2 PRD Risk R7 + gateway/src/rate-limit.ts JSDoc.
+total=$((count_200 + count_429))
+if (( total != 101 )); then
+  echo "❌ AC7 FAIL — total responses $total != 101 (some requests lost; upstream/network?)"
+  exit 1
+fi
+
+if (( count_200 >= 98 && count_200 <= 100 && count_429 >= 1 && count_429 <= 3 )); then
+  if (( count_200 == 100 && count_429 == 1 )); then
+    echo "✅ AC7 PASS — exact 100+1 (no KV consistency skew observed)"
+  else
+    echo "✅ AC7 PASS — ${count_200}×200 + ${count_429}×429 (within R7 KV eventual consistency tolerance ±2)"
+  fi
   exit 0
-elif [[ "$count_200" -lt 100 ]]; then
-  echo "❌ AC7 FAIL — fewer than 100 success (upstream/auth issue?)"
+elif (( count_200 < 98 )); then
+  echo "❌ AC7 FAIL — only ${count_200} successes (expected 98-100, possible upstream issue)"
   exit 1
 else
-  echo "❌ AC7 FAIL — unexpected counts (check counts above)"
+  echo "❌ AC7 FAIL — unexpected pattern ${count_200}×200 + ${count_429}×429 (investigate)"
   exit 1
 fi
