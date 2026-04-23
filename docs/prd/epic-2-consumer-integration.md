@@ -301,7 +301,7 @@ O critério "cold spawn sub-30s" foi invalidado empiricamente pela Story 2.1 (me
 ## Constraints (cross-story — v0.2 updated)
 
 - **Latência warm:** target <10s p95 — **CONFIRMED atingível** (Story 2.1 mediu p95=7.0s com n=100 em 2026-04-20). SLA primário pro Epic 2.
-- **Latência cold:** target original <30s p95 **INVALIDADO empiricamente**. Story 2.1 mediu ~1-3min cold start true cold com Opção A (network volume). **ADR-0001 em Story 2.1.2** decidirá path: accept-as-is (SDK tem retry UX), bake-in image (cold ~15-25s, +~25GB image), workersMin=1 standby (~$16-45/mês). **Até ADR decidir, SDK deve assumir cold ~2min worst-case.**
+- **Latência cold:** target original <30s p95 **INVALIDADO empiricamente**. Story 2.1 mediu ~1-3min cold start true cold com Opção A (network volume). **ADR-0001 em Story 2.1.2** decidirá path: accept-as-is (SDK tem retry UX), bake-in image (cold ~15-25s, +~25GB image), workersMin=1 standby (<standby cost range>). **Até ADR decidir, SDK deve assumir cold ~2min worst-case.**
 - **Custo inferência:** **<$0.01/img warm** (calibrado Story 2.1 — ~$0.0003/s measured × ~5s/img). Originalmente projetado <$0.01/img warm (legacy projection) (2.5x otimista). Novo orçamento base ver Cost Projection v0.2 abaixo.
 - **Custo MVP:** orçamento **~<<cost threshold> alpha budget** (revisado de <vendor upgrade cost>) por causa da calibração. Ainda DRAMATICAMENTE abaixo de Pod 24/7 ($500/mo). Trigger pra escalar: <high-volume escalation threshold> sustentado (revisado de 20k).
 - **Licença:** FLUX.1-schnell = Apache 2.0 (commercial OK). Manter.
@@ -342,12 +342,12 @@ Com Opção A (network volume) cold é ~<$0.05/img cold worst case (100s × ~$0.
 ### Cap de custo via rate-limit
 
 Com 100 imgs/dia globais + pior caso cold-dominated:
-- 100 × <$0.05/img cold worst case = **$3/dia máximo = $90/mês** (worst case matemático)
+- 100 × <$0.05/img cold worst case = **<worst case daily cap> = <worst case sustained>** (worst case matemático)
 - Realista (mix 20% cold + 80% warm): ~$0.12 × 100 = $12/dia × 30 = **<worst case sustained> SE todos os dias maxed out** (unrealistic — rate-limit pressupõe ocasional abuse, não sustained max)
 
 **Nova proposta cap operacional:** além de 100/dia hard cap, adicionar monitoring de **$10/dia alert** via RunPod billing email.
 
-**Trigger de revisão:** >$30/mês sustentado por 2 semanas = repensar (pivot cold strategy? rate-limit mais tight? Pod dedicated warm?).
+**Trigger de revisão:** <cost threshold sustained 2 weeks> = repensar (pivot cold strategy? rate-limit mais tight? Pod dedicated warm?).
 
 ## Risk Register (v0.2 — realidade medida)
 
