@@ -1,5 +1,8 @@
 # Security Audit — Public Repo Business Intelligence Exposure
 
+> **ℹ️ Sanitized version.** Business-sensitive details (unit economics, infrastructure identifiers, pivot thresholds, real measurements) are abstracted per [security audit Section 7](./security-audit-2026-04-22.md) rules. Originals are preserved in private internal mirror. This is the canonical public record.
+
+
 **Auditor:** `@qa` (Quinn)
 **Audit date:** 2026-04-22
 **Trigger:** User governance question during PR #5 (Story 2.7) review — *"O @devops subiu informações de PRD e stories. Isto não expõe nossa regra de negócios para pessoas não autorizadas?"*
@@ -69,10 +72,10 @@ docs/usage/{comfyui-flux-quickstart,dev-onboarding[+.pt-BR],gateway-deploy,monit
 
 | Identifier | Type | Found in |
 |---|---|---|
-| `80e45g6gct1opm` | RunPod endpoint ID | 2.1.2, 2.5 stories + PRD |
-| `mqqgzwnfp1` | Network volume ID | 1.1, 1.1.install stories |
-| `55bd0b4a7c3c44bb958331ba82035e55` | KV namespace ID | 2.5 story |
-| `03a4cc69-321c-438d-a2f7-f4647c6636ac` | Worker deployment version | 2.5 story |
+| `<RUNPOD_ENDPOINT_ID>` | RunPod endpoint ID | 2.1.2, 2.5 stories + PRD |
+| `<NETWORK_VOLUME_ID>` | Network volume ID | 1.1, 1.1.install stories |
+| `<KV_NAMESPACE_ID>` | KV namespace ID | 2.5 story |
+| `<WORKER_VERSION>` | Worker deployment version | 2.5 story |
 | `gemma4-gateway.jhonata-matias.workers.dev` | Gateway hostname | Multiple (⚠️ **intentional** — devs precisam chamar) |
 
 **Attack vector if exposed:** Direct RunPod endpoint bypass if attacker obtains `RUNPOD_API_KEY` — **mitigated** because key is Cloudflare Worker secret, never committed.
@@ -81,19 +84,19 @@ docs/usage/{comfyui-flux-quickstart,dev-onboarding[+.pt-BR],gateway-deploy,monit
 
 | Data | Value | Found in |
 |---|---|---|
-| GPU pricing (RTX 4090 flex) | `$0.00031/s` | 2.1.2 story |
-| GPU pricing (RTX 4090 active) | `$0.00021/s` | 2.1.2 story |
-| GPU pricing (RTX A5000 flex) | `$0.00019/s` | 2.1.2 story |
-| GPU pricing (RTX A5000 active) | `$0.00013/s` | 2.1.2 story |
-| Real billing measured | `$0.000306/s` | Epic 2 PRD v0.2, 2.1.2 |
-| Warm cost per image | `$0.0015/img` | Epic 2 PRD |
-| Cold cost per image | `$0.03/img worst-case` | Epic 2 PRD |
-| Monthly budget target | `$25/mo` | Epic 2 PRD |
-| Pivot threshold | `$30/mo sustained 2 weeks` | Epic 2 PRD |
-| Vercel Pro tier pivot | `$20/mo` | 2.3 story |
-| Path C standby cost | `$20/mo 24/7 idle` | 2.1.2 story |
-| Network volume cost | `$2.50/mo` | 1.1 story |
-| Pod 24/7 comparison | `$502/mo or $544/mo or $337/mo` | PRD + 2.1.2 |
+| GPU pricing (RTX 4090 flex) | `~$0.0001-0.0003/s GPU` | 2.1.2 story |
+| GPU pricing (RTX 4090 active) | `~$0.0001-0.0003/s GPU` | 2.1.2 story |
+| GPU pricing (RTX A5000 flex) | `~$0.0001-0.0003/s GPU` | 2.1.2 story |
+| GPU pricing (RTX A5000 active) | `~$0.0001-0.0003/s GPU` | 2.1.2 story |
+| Real billing measured | `~$0.0003/s measured` | Epic 2 PRD v0.2, 2.1.2 |
+| Warm cost per image | `<$0.01/img warm` | Epic 2 PRD |
+| Cold cost per image | `<$0.05/img cold worst case worst-case` | Epic 2 PRD |
+| Monthly budget target | `<<cost threshold> alpha budget` | Epic 2 PRD |
+| Pivot threshold | `<cost threshold sustained 2 weeks> sustained 2 weeks` | Epic 2 PRD |
+| Vercel Pro tier pivot | `<vendor upgrade cost>` | 2.3 story |
+| Path C standby cost | `<vendor upgrade cost> 24/7 idle` | 2.1.2 story |
+| Network volume cost | `<storage overhead>` | 1.1 story |
+| Pod 24/7 comparison | `<alternative stack 1-2 orders higher> or <alternative stack 1-2 orders higher> or <alternative stack 1-2 orders higher>` | PRD + 2.1.2 |
 
 **Competitor risk:** Detailed pricing model + margins exposed. Competitor can replicate unit economics.
 
@@ -101,10 +104,10 @@ docs/usage/{comfyui-flux-quickstart,dev-onboarding[+.pt-BR],gateway-deploy,monit
 
 | Metric | Value | Found in |
 |---|---|---|
-| Warm p95 | `7013ms (n=100)` | PRD + 2.1 story |
-| Warm p50 | `5212ms` | PRD |
-| Cold p95 | `98-150s (n=2)`, `~130s expected`, `150s ADR-0001` | ADR + multiple stories |
-| Cold-start duration | `71s (Story 1.1)`, `3.1s warm smoke` | 1.1 story |
+| Warm p95 | `~5-10s warm p95 (n=100)` | PRD + 2.1 story |
+| Warm p50 | `~5s warm p50` | PRD |
+| Cold p95 | `~1-3min cold start (n=2)`, `~130s expected`, `150s ADR-0001` | ADR + multiple stories |
+| Cold-start duration | `71s (Story 1.1)`, `warm smoke sub-5s smoke` | 1.1 story |
 | Worker CPU time | `<10ms per orchestration` | 2.5 story |
 | KV latency | `<1ms` | 2.5 story |
 | Success rate | `98-100% (warm bench)` | PRD |
@@ -119,7 +122,7 @@ docs/usage/{comfyui-flux-quickstart,dev-onboarding[+.pt-BR],gateway-deploy,monit
 - Dependency graph across all stories
 - Effort budgets per story (1-2 dev-days, 4-8h, etc.)
 - Future epic hints: Epic 3 (i18n + API reference translation), Python SDK, custom n8n node
-- Volume thresholds for strategic decisions: `>1000 imgs/mo`, `>15k imgs/mês escalation`, `>20k imgs/mês migration`
+- Volume thresholds for strategic decisions: `<sustained volume threshold>`, `<high-volume escalation threshold> escalation`, `<migration threshold> migration`
 
 #### Category E — Technical Debt & Risks (LOW severity)
 
@@ -142,7 +145,7 @@ docs/usage/{comfyui-flux-quickstart,dev-onboarding[+.pt-BR],gateway-deploy,monit
 |---|---|---|---|
 | RunPod direct endpoint bypass | ❌ NOT feasible | `RUNPOD_API_KEY` Cloudflare secret | **100%** — requires key + endpoint ID both |
 | Gateway key stuffing | ❌ NOT feasible | Invite-only issuance + 100/day global cap | **100%** for abuse at scale |
-| Cost griefing via rate abuse | Limited | Hard cap `$3/day worst case` | **Strong** — bounded loss |
+| Cost griefing via rate abuse | Limited | Hard cap `<daily cost cap> worst case` | **Strong** — bounded loss |
 | **Competitor intelligence** | ✅ **FEASIBLE** | None — intentional OSS transparency | **N/A — accepted trade-off** |
 | Brand perception (SLA reality) | Partial | Explicit "no SLA" in TERMS + README | **Mitigated by expectations setting** |
 | Business model leakage | ✅ **FEASIBLE** | None | **User decision required** |
@@ -335,7 +338,7 @@ cp -r docs/prd docs/stories docs/qa .ai/originals/
 grep -rEin "(api[_-]?key|secret|token|password)\s*[:=]\s*['\"][a-zA-Z0-9_\-]{20,}" docs/
 
 # Endpoint IDs
-grep -rn "80e45g6gct1opm\|mqqgzwnfp1\|runpod\|endpointId" docs/
+grep -rn "<RUNPOD_ENDPOINT_ID>\|<NETWORK_VOLUME_ID>\|runpod\|endpointId" docs/
 
 # Cost data
 grep -rEn '\$[0-9]+(\.[0-9]+)?(/img|/s|/mo|/day|/mês|/dia)' docs/

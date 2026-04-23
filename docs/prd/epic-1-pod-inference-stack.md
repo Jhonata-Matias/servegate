@@ -1,5 +1,8 @@
 # Epic 1 — Pod Inference Stack
 
+> **ℹ️ Sanitized version.** Business-sensitive details (unit economics, infrastructure identifiers, pivot thresholds, real measurements) are abstracted per [security audit Section 7](../qa/security-audit-2026-04-22.md) rules. Originals are preserved in private internal mirror. This is the canonical public record.
+
+
 **Status:** **Done** (Epic completo — 1/1 story shipped em 2026-04-21)
 **Owner:** @pm (Morgan)
 **Created:** 2026-04-20
@@ -37,7 +40,7 @@ Estabelecer e operar um stack de inferência multi-modalidade (texto + imagem) n
 ## Success Criteria
 
 - [x] ComfyUI responde em `0.0.0.0:8188` apos boot completo
-- [x] FLUX.1-schnell carrega e gera imagem em <30s para prompt baseline (3.1s warm-cache; 71s cold-start aceitavel para uso async)
+- [x] FLUX.1-schnell carrega e gera imagem em <30s para prompt baseline (warm smoke sub-5s-cache; cold start varies-start aceitavel para uso async)
 - [x] Ollama continua respondendo em `:11434` (coexistencia validada)
 - [x] `/workspace/start.sh` sobe ambos automaticamente apos `pod.sh up`
 - [x] Setup sobrevive a stop/start completo do Pod (persistencia em network volume)

@@ -1,5 +1,8 @@
 # Epic 2 — Consumer Integration (Hybrid Pragmatic)
 
+> **ℹ️ Sanitized version.** Business-sensitive details (unit economics, infrastructure identifiers, pivot thresholds, real measurements) are abstracted per [security audit Section 7](../qa/security-audit-2026-04-22.md) rules. Originals are preserved in private internal mirror. This is the canonical public record.
+
+
 **Status:** In Progress (v1.0 — Story 2.7 Done + Story 2.8 Sanitize Public Docs added; Story 2.3 web demo + Story 2.8 remain in-scope)
 **Owner:** @pm (Morgan)
 **Created:** 2026-04-21
@@ -32,7 +35,7 @@ Habilitar consumo da capacidade de geração de imagem (Story 1.1) por aplicaç�
 
 - Mid-Story 1.1 o usuário perguntou: *"quero fazer chamadas do modelo em TypeScript. Preciso de Vercel?"* — pergunta abriu Epic 2.
 - Discovery PM (2026-04-21) revelou tensão entre stack atual (1 Pod self-hosted, on/off) e os requisitos declarados (web frontend síncrono <10s, escalável, produção, volume incerto).
-- Análise econômica: 1 Pod 24/7 = ~$502/mo idle vs RunPod Serverless = $0.0006/imagem ($0.60 por 1.000 imgs). Pra volume incerto (MVP), serverless vence em 1+ ordem de magnitude até ~20.000 imgs/mês.
+- Análise econômica: 1 Pod 24/7 = ~<alternative stack 1-2 orders higher> idle vs RunPod Serverless = $0.0006/imagem ($0.60 por 1.000 imgs). Pra volume incerto (MVP), serverless vence em 1+ ordem de magnitude até ~20.000 imgs/mês.
 - Auth + port mapping são bloqueadores reais — não dá pra "TS chamar API" sem resolvê-los.
 
 ## Strategic Decision: Hybrid Pragmatic
@@ -59,14 +62,14 @@ Habilitar consumo da capacidade de geração de imagem (Story 1.1) por aplicaç�
 - CDN para imagens geradas (Cloudflare R2, S3)
 - Rate-limiting avançado por usuário
 - Observabilidade de produção (Datadog, Sentry, custom metrics)
-- Migração do Pod self-hosted pra produção (não justificado economicamente até >20k imgs/mês)
+- Migração do Pod self-hosted pra produção (não justificado economicamente até <migration threshold>)
 - Integração com n8n-master (story candidata 2.4 opcional)
 - Custom UI workflow builder
 - Fine-tuning ou modelos custom (Pod self-hosted continua sendo o lab pra isso)
 
 ## Success Criteria
 
-- [x] **RunPod Serverless endpoint funcional** (Story 2.1 Done) — warm p95 ~7s ✅; cold p95 ~150s ⚠️ (target <30s não atingível com Opção A network volume; decisão em ADR-0001 — Story 2.1.2)
+- [x] **RunPod Serverless endpoint funcional** (Story 2.1 Done) — warm p95 ~7s ✅; cold p95 ~1-3min ⚠️ (target <30s não atingível com Opção A network volume; decisão em ADR-0001 — Story 2.1.2)
 - [x] **TypeScript SDK publicado** com tipagem completa — Story 2.2 Done (QA 92/100); Story 2.6 v0.8 flipped visibility para **public** em GitHub Packages
 - [ ] App demo deployada em Vercel mostrando: input prompt → image em <10s — **Story 2.3 (Ready, unblocked, not yet shipped)**
 - [x] **Auth via X-API-Key bloqueia requests sem header válido (HTTP 401)** — Story 2.5 Done (QA 88/100); validated end-to-end via Story 2.6 external smoke (architectural auth-before-rate-limit proof)
@@ -77,7 +80,7 @@ Habilitar consumo da capacidade de geração de imagem (Story 1.1) por aplicaç�
 
 ### Calibration note (v0.2)
 
-O critério "cold spawn sub-30s" foi invalidado empiricamente pela Story 2.1 (medido 98-150s true cold). **Decisão de SLA cold-start deferida** para ADR-0001 em Story 2.1.2 (architectural spike). Warm p95 <10s mantido como SLA primário para consumers Epic 2 (2.2 SDK / 2.3 demo).
+O critério "cold spawn sub-30s" foi invalidado empiricamente pela Story 2.1 (medido ~1-3min cold start true cold). **Decisão de SLA cold-start deferida** para ADR-0001 em Story 2.1.2 (architectural spike). Warm p95 <10s mantido como SLA primário para consumers Epic 2 (2.2 SDK / 2.3 demo).
 
 ### SLA decision post-ADR-0001 (v0.3 — 2026-04-21)
 
@@ -298,9 +301,9 @@ O critério "cold spawn sub-30s" foi invalidado empiricamente pela Story 2.1 (me
 ## Constraints (cross-story — v0.2 updated)
 
 - **Latência warm:** target <10s p95 — **CONFIRMED atingível** (Story 2.1 mediu p95=7.0s com n=100 em 2026-04-20). SLA primário pro Epic 2.
-- **Latência cold:** target original <30s p95 **INVALIDADO empiricamente**. Story 2.1 mediu 98-150s true cold com Opção A (network volume). **ADR-0001 em Story 2.1.2** decidirá path: accept-as-is (SDK tem retry UX), bake-in image (cold ~15-25s, +~25GB image), workersMin=1 standby (~$16-45/mês). **Até ADR decidir, SDK deve assumir cold ~2min worst-case.**
-- **Custo inferência:** **$0.0015/img warm** (calibrado Story 2.1 — $0.000306/s × ~5s/img). Originalmente projetado $0.0006/img (2.5x otimista). Novo orçamento base ver Cost Projection v0.2 abaixo.
-- **Custo MVP:** orçamento **~$25/mo** (revisado de $20/mo) por causa da calibração. Ainda DRAMATICAMENTE abaixo de Pod 24/7 ($500/mo). Trigger pra escalar: >15.000 imgs/mês sustentado (revisado de 20k).
+- **Latência cold:** target original <30s p95 **INVALIDADO empiricamente**. Story 2.1 mediu ~1-3min cold start true cold com Opção A (network volume). **ADR-0001 em Story 2.1.2** decidirá path: accept-as-is (SDK tem retry UX), bake-in image (cold ~15-25s, +~25GB image), workersMin=1 standby (~$16-45/mês). **Até ADR decidir, SDK deve assumir cold ~2min worst-case.**
+- **Custo inferência:** **<$0.01/img warm** (calibrado Story 2.1 — ~$0.0003/s measured × ~5s/img). Originalmente projetado <$0.01/img warm (legacy projection) (2.5x otimista). Novo orçamento base ver Cost Projection v0.2 abaixo.
+- **Custo MVP:** orçamento **~<<cost threshold> alpha budget** (revisado de <vendor upgrade cost>) por causa da calibração. Ainda DRAMATICAMENTE abaixo de Pod 24/7 ($500/mo). Trigger pra escalar: <high-volume escalation threshold> sustentado (revisado de 20k).
 - **Licença:** FLUX.1-schnell = Apache 2.0 (commercial OK). Manter.
 - **Auth:** API key fixa via header X-API-Key no MVP. Validada no gateway (Story 2.5), NÃO no endpoint serverless direto.
 - **Rate Limit:** 100 imagens/dia GLOBAL no gateway. HTTP 429 + Retry-After. Reset 00:00 UTC. SDK interpreta 429.
@@ -321,15 +324,15 @@ Assumindo SDK faz retry inteligente em cold (primeira request fica slow; subsequ
 | RunPod Serverless inferência (10.000 imgs/mês) | **$15** | $6 |
 | Cold-spawn overhead (estimativa ~5% das requests hitting cold × ~$0.03 each = $1.50/1k) | **+$1.50** (em 1k imgs) | não contabilizado |
 | Vercel free tier (frontend demo) | $0 | $0 |
-| Network volume `mqqgzwnfp1` (100GB US-IL-1) | ~$5 | ~$5 |
+| Network volume `<NETWORK_VOLUME_ID>` (100GB US-IL-1) | ~$5 | ~$5 |
 | Pod self-hosted GPU (on-demand dev/treino) | $0.69/h × usage | mesmo |
 | Cloudflare Worker + KV (gateway) | $0 (free tier) | $0 |
-| **Total MVP COM rate-limit 100/dia (~3k imgs/mês max)** | **~$10/mo** ($4.50 inferência worst-case + $5 storage Pod) | ~$10/mo (otimista) |
-| **Total scaled 10k/mês** | **~$25/mo** | ~$20/mo |
+| **Total MVP COM rate-limit 100/dia (~3k imgs/mês max)** | **~<within budget>** ($4.50 inferência worst-case + $5 storage Pod) | ~<within budget> (otimista) |
+| **Total scaled 10k/mês** | **~<<cost threshold> alpha budget** | ~<vendor upgrade cost> |
 
 ### Cold-start cost detail (se muitos idle periods)
 
-Com Opção A (network volume) cold é ~$0.03/cold (100s × $0.000306/s). Cada idle >5s depois nova request vira cold. Em traffic padrão esporádico:
+Com Opção A (network volume) cold é ~<$0.05/img cold worst case (100s × ~$0.0003/s measured). Cada idle >5s depois nova request vira cold. Em traffic padrão esporádico:
 - **Low traffic** (10 req/dia spaced): 10 × $0.03 cold + 0 warm + ~$0 otras = ~$0.30/dia = **$9/mês só inferência** (cold-dominated)
 - **Medium traffic** (50 req/dia): 5-10 colds + 40-45 warm = $0.20 + $0.07 = ~$0.27/dia = **$8/mês**
 - **High traffic** (100 req/dia cap): 1-2 colds + 98 warm = ~$0.15/dia = **$4.50/mês**
@@ -339,7 +342,7 @@ Com Opção A (network volume) cold é ~$0.03/cold (100s × $0.000306/s). Cada i
 ### Cap de custo via rate-limit
 
 Com 100 imgs/dia globais + pior caso cold-dominated:
-- 100 × $0.03/cold = **$3/dia máximo = $90/mês** (worst case matemático)
+- 100 × <$0.05/img cold worst case = **$3/dia máximo = $90/mês** (worst case matemático)
 - Realista (mix 20% cold + 80% warm): ~$0.12 × 100 = $12/dia × 30 = **$360/mês SE todos os dias maxed out** (unrealistic — rate-limit pressupõe ocasional abuse, não sustained max)
 
 **Nova proposta cap operacional:** além de 100/dia hard cap, adicionar monitoring de **$10/dia alert** via RunPod billing email.
@@ -350,11 +353,11 @@ Com 100 imgs/dia globais + pior caso cold-dominated:
 
 | ID | Risco | Status v0.2 | Mitigação |
 |---|---|---|---|
-| R1 | ~~RunPod Serverless cold start >30s arruína UX~~ | **🔴 REALIZED** (medido 98-150s) | **Ativa em Story 2.1.2 ADR-0001** — 3 paths: accept+SDK-retry / bake-in / standby |
+| R1 | ~~RunPod Serverless cold start >30s arruína UX~~ | **🔴 REALIZED** (medido ~1-3min cold start) | **Ativa em Story 2.1.2 ADR-0001** — 3 paths: accept+SDK-retry / bake-in / standby |
 | R2 | API key vazada → custo descontrolado | Ativa | Rotação documentada + monitoring de spike (Story 2.5 ou ops debt) |
 | R3 | RunPod Serverless deprecates FLUX template | Ativa | SDK abstraído permite swap pra Replicate em <1 dia |
-| R4 | Vercel tem timeout 60s edge → não combina com cold spawn de ~150s | Mitigado por ADR-0001 Path A (v0.4) | **Story 2.2** SDK implementa retry-with-backoff + `warmup()` helper (2.2-AC2/AC3). **Story 2.3** demo chama `warmup()` on page visit + configura route handler com `runtime = 'nodejs'` (2.3-AC1/AC6). **Pre-warm é responsibility do SDK/demo, NÃO do gateway** — Story 2.5 "no change required" per ADR-0001 Impact on Downstream Stories. |
-| R5 | Custo escala mais rápido que receita | Ativa | Volume threshold **$30/mo** (revisado de $50 pra refletir projeção calibrada) dispara review |
+| R4 | Vercel tem timeout 60s edge → não combina com cold spawn de ~1-3min | Mitigado por ADR-0001 Path A (v0.4) | **Story 2.2** SDK implementa retry-with-backoff + `warmup()` helper (2.2-AC2/AC3). **Story 2.3** demo chama `warmup()` on page visit + configura route handler com `runtime = 'nodejs'` (2.3-AC1/AC6). **Pre-warm é responsibility do SDK/demo, NÃO do gateway** — Story 2.5 "no change required" per ADR-0001 Impact on Downstream Stories. |
+| R5 | Custo escala mais rápido que receita | Ativa | Volume threshold **<cost threshold sustained 2 weeks>** (revisado de $50 pra refletir projeção calibrada) dispara review |
 | R6 | Gateway down → endpoint serverless inacessível (single point of failure) | Ativa | Cloudflare 99.99% SLA; fallback documentado |
 | R7 | KV counter race condition em pico (2 requests no mesmo ms) | Ativa (baixa prob) | Aceitar overshoot de 1-2 imgs/dia |
 | R8 | Rate limit bypass se atacante descobre endpoint serverless URL direto | Ativa | RUNPOD_API_KEY como secret do Worker |
@@ -401,7 +404,7 @@ Trigger Path B (bake-in image) pivot **se ANY dos 4 criteria forem satisfeitos**
 
 | # | Métrica | Threshold pivot | Data source | DRI coleta |
 |---|---|---|---|---|
-| **PT1** | Volume sustentado | >1000 imgs/mo por 2+ semanas consecutivas | RunPod billing API `GET /billing/endpoints?endpointId=80e45g6gct1opm` | @pm (semanal export) |
+| **PT1** | Volume sustentado | <sustained volume threshold> por 2+ semanas consecutivas | RunPod billing API `GET /billing/endpoints?endpointId=<RUNPOD_ENDPOINT_ID>` | @pm (semanal export) |
 | **PT2** | Bounce rate web demo | >40% em sessions que entraram em pagina demo | Story 2.3 analytics event `bounce` (AC 2.3-AC4) | @pm (via Vercel Analytics dashboard) |
 | **PT3** | Cold latency sustained | p95 >180s em re-bench n≥10 executado pré-review | `serverless/tests/bench-cold-2026-05-21.json` (novo; resolve QA Gate O1) | @dev (script automation) |
 | **PT4** | Customer complaints | >3 issues explícitos sobre first-use latency em 30 dias | GitHub Issues triage + Linear (se ativo) + direct feedback | @pm (issue triage semanal) |
@@ -415,7 +418,7 @@ Manter Path A **se TODOS os 4 criteria forem satisfeitos**:
 | **SC1** | Volume | <500 imgs/mo sustentado | RunPod billing (mesmo source PT1) |
 | **SC2** | SDK retry success | >95% das requests que hit cold eventualmente succeed via retry (dentro do SLA 180s) | SDK analytics ou gateway logs (implementar instrumentation em Story 2.5 ou como append para 2.2) |
 | **SC3** | Demo UX acceptance | User testing qualitativo (≥3 sessões observadas) aceita first-load-to-interactive | @pm + @ux-design-expert review session pré-2026-05-21 |
-| **SC4** | Cost trending | <$15/mo em inferência + storage combined | RunPod billing mensal + network volume monthly fee |
+| **SC4** | Cost trending | <<within budget> em inferência + storage combined | RunPod billing mensal + network volume monthly fee |
 
 ### Outcome Matrix
 
@@ -459,11 +462,11 @@ Dados reais de Story 2.1 que calibraram esta PRD:
 
 | Métrica | Projetado v0.1 | Medido (Story 2.1) | Source |
 |---|---|---|---|
-| Warm p95 | <10s | **7013ms** (n=100, 2026-04-20) ✅ | `bench-results-1776789792.json` + Dev Agent Record |
-| Warm p50 | — | 5212ms | idem |
-| Cold p95 | <30s | **~150s** (n=2 true cold) ❌ | idem |
+| Warm p95 | <10s | **~5-10s warm p95** (n=100, 2026-04-20) ✅ | `bench-results-1776789792.json` + Dev Agent Record |
+| Warm p50 | — | ~5s warm p50 | idem |
+| Cold p95 | <30s | **~1-3min** (n=2 true cold) ❌ | idem |
 | Image size | <15GB | 7.75GB ✅ | `docker inspect` |
-| Rate efetivo GPU | $0.0006/img | **$0.000306/s × ~5s = $0.0015/img** (2.5x) | RunPod billing API GET /billing/endpoints |
+| Rate efetivo GPU | <$0.01/img warm (legacy projection) | **~$0.0003/s measured × ~5s = <$0.01/img warm** (2.5x) | RunPod billing API GET /billing/endpoints |
 | Success rate (warm) | — | 98-100% | bench |
 
 **Evidence files:**
@@ -488,6 +491,6 @@ Dados reais de Story 2.1 que calibraram esta PRD:
 
 ## Quality Gates
 
-- Article IV (No Invention): cada decisão técnica neste PRD trace pra discovery answer ou métrica observada (smoke test 3.1s warm de Story 1.1, etc.)
+- Article IV (No Invention): cada decisão técnica neste PRD trace pra discovery answer ou métrica observada (smoke test warm smoke sub-5s de Story 1.1, etc.)
 - Article V (Quality First): success criteria mensuráveis (latência, custo, presença de auth) — não vagas
 - CodeRabbit: integração disabled em core-config (esperado dado escopo greenfield); revisar pré-Story 2.3 se virar codebase relevante

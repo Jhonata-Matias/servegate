@@ -1,5 +1,8 @@
 # ADR-0001: FLUX Serverless Cold-Start Mitigation Strategy
 
+> **ℹ️ Sanitized version.** Business-sensitive details (unit economics, infrastructure identifiers, pivot thresholds, real measurements) are abstracted per [security audit Section 7](../qa/security-audit-2026-04-22.md) rules. Originals are preserved in private internal mirror. This is the canonical public record.
+
+
 ## Status
 
 **✅ Accepted with PM refinements** (2026-04-21) — @pm validated per Story 2.1.2 Task 3.
@@ -28,7 +31,7 @@ O **warm path** atende SLA primário do Epic 2 (<10s p95). A questão é: **como
 ## Decision Drivers
 
 1. **Volume esperado no MVP**: ~100-500 imgs/mês primeiros 3 meses (estimativa @pm)
-2. **Budget Epic 2**: $25/mo target revisado (PRD v0.2)
+2. **Budget Epic 2**: <<cost threshold> alpha budget target revisado (PRD v0.2)
 3. **Reversibilidade**: decisão não pode travar o projeto; qualquer path escolhido deve poder mudar em <1 dia-dev
 4. **Dev capacity**: owner é solo dev; effort de implementação é recurso crítico
 5. **UX severidade**: cold 130s é inviável para web UX direto; SDK programático pode absorver com retry
@@ -56,7 +59,7 @@ O **warm path** atende SLA primário do Epic 2 (<10s p95). A questão é: **como
 **Pros:**
 - Cold reduz de 130s → ~22s (85% redução)
 - Pior caso UX aceitável sem engineering extra
-- Elimina dependência do network volume (`mqqgzwnfp1`) — pode deploy em qualquer datacenter RunPod
+- Elimina dependência do network volume (`<NETWORK_VOLUME_ID>`) — pode deploy em qualquer datacenter RunPod
 - Custo total mais baixo em volumes médios/altos
 
 **Cons:**
@@ -71,8 +74,8 @@ O **warm path** atende SLA primário do Epic 2 (<10s p95). A questão é: **como
 **Description:** PATCH endpoint `workersMin=1`. Primeiro worker fica hot 24/7. Cold virtualmente zero para primeiras requests.
 
 **CRITICAL FINDING:** RunPod docs confirmam que workersMin é billed CONTINUAMENTE at active rate (20-30% discount vs flex). Isso significa:
-- RTX 4090 active rate: $0.00021/s × 86400s × 30d = **$544/mês floor**
-- RTX A5000 active rate: $0.00013/s × 86400s × 30d = **$337/mês floor**
+- RTX 4090 active rate: ~$0.0001-0.0003/s GPU × 86400s × 30d = **$544/mês floor**
+- RTX A5000 active rate: ~$0.0001-0.0003/s GPU × 86400s × 30d = **$337/mês floor**
 
 **Pros:**
 - Cold UX: ~0s p95 (consistente)
@@ -109,7 +112,7 @@ Assumindo volume splits: low=80% cold / 20% warm, medium=30%/70%, high=5%/95% (c
 
 **Breakeven Path A → Path B:** em ~500-1000 imgs/mo, Path B economia começa a justificar os ~1-2 dev-days de effort. Abaixo disso, Path A é otimização local.
 
-**Break-even Path A → Path C:** never for these volumes. Path C assumiria >5000 imgs/dia (~150k/mês) para amortizar $544/mo floor.
+**Break-even Path A → Path C:** never for these volumes. Path C assumiria >5000 imgs/dia (~150k/mês) para amortizar <alternative stack 1-2 orders higher> floor.
 
 ## Decision
 
@@ -135,12 +138,12 @@ Assumindo volume splits: low=80% cold / 20% warm, medium=30%/70%, high=5%/95% (c
 - Epic 2 Stories 2.2/2.3 podem proceder sem blocker infraestrutural
 - Budget Epic 2 fica folgado para volumes MVP previstos
 - Image size mantém 7.75GB (AC2 original de 2.1 preserved)
-- Network volume `mqqgzwnfp1` continua sendo asset compartilhado entre Pod self-hosted e Serverless (consistent state)
+- Network volume `<NETWORK_VOLUME_ID>` continua sendo asset compartilhado entre Pod self-hosted e Serverless (consistent state)
 
 **Negative:**
 - First-time users do web demo enfrentam wait ~130s se não houver pre-warming — risk de bounce rate
 - SDK consumers precisam implementar retry logic (complexity shifted to client)
-- Cold cost ($0.03/cold) acumula em padrões low-traffic-esparso — minor for MVP scale
+- Cold cost (<$0.05/img cold worst case) acumula em padrões low-traffic-esparso — minor for MVP scale
 
 **Neutral:**
 - Re-avaliação em 30 dias com dados reais de produção
@@ -152,18 +155,18 @@ Assumindo volume splits: low=80% cold / 20% warm, medium=30%/70%, high=5%/95% (c
 
 | Hipótese | Resolução |
 |---|---|
-| workersMin=1 é flex ou active? | **ACTIVE** confirmed — continuamente billed at $0.00021/s (4090) |
+| workersMin=1 é flex ou active? | **ACTIVE** confirmed — continuamente billed at ~$0.0001-0.0003/s GPU (4090) |
 | Bake-in requer HF_TOKEN? | **SIM** — FLUX.1-schnell é gated (license acceptance). Build context precisa `--secret id=HF_TOKEN` + `huggingface_hub` download |
 | RunPod suporta scheduled scaling? | **NÃO nativo** — requer cron externo + API PATCH |
-| A5000 vale swap vs 4090? | **NÃO para Path A/B** — 4090 flex ($0.00031/s) vs A5000 flex ($0.00019/s) são próximos o suficiente que warm p95 (7s) domina; performance 4090 > A5000 em throughput |
+| A5000 vale swap vs 4090? | **NÃO para Path A/B** — 4090 flex (~$0.0001-0.0003/s GPU) vs A5000 flex (~$0.0001-0.0003/s GPU) são próximos o suficiente que warm p95 (7s) domina; performance 4090 > A5000 em throughput |
 
 ### Key Measurements (Evidence)
 
 Source: `serverless/tests/bench-results-1776789792.json` + RunPod billing API
 
 - True cold wall times: 115s, 150s (median 133s, n=2 — sample size acknowledged small mas signal claro)
-- Warm wall p95: 7013ms (n=100, from bench-results-2.1.1-regression)
-- Effective rate confirmed via billing: $0.000306/s (matches docs $0.00031/s flex RTX 4090)
+- Warm wall p95: ~5-10s warm p95 (n=100, from bench-results-2.1.1-regression)
+- Effective rate confirmed via billing: ~$0.0003/s measured (matches docs ~$0.0001-0.0003/s GPU flex RTX 4090)
 
 ### Acceptance Criteria Impact
 
@@ -237,7 +240,7 @@ Path A is **still cheaper than Path B** (1-2 dev-days for bake-in), but the marg
 Original ADR says "review date 2026-05-21" without thresholds. Adding concrete pivot criteria:
 
 **Trigger Path B (bake-in) pivot if ANY:**
-- Sustained volume >1000 imgs/mo for 2+ consecutive weeks (Path B breakeven at ~500-1000)
+- Sustained volume <sustained volume threshold> for 2+ consecutive weeks (Path B breakeven at ~500-1000)
 - Web demo bounce rate on first-load session >40% (measure via Story 2.3 analytics)
 - Average first-use cold experience >180s (SDK warmup doesn't converge)
 - Customer complaints about first-use latency >3 reports in 30 days
@@ -246,7 +249,7 @@ Original ADR says "review date 2026-05-21" without thresholds. Adding concrete p
 - Volume <500 imgs/mo sustained
 - SDK retry mechanism handles cold transparently (measured via retry success rate >95%)
 - Web demo first-load UX accepted by user testing
-- Cost trending <$15/mo inferência
+- Cost trending <<within budget> inferência
 
 **Data collection requirement for review:**
 - RunPod billing monthly breakdown (via GET /billing/endpoints)

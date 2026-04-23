@@ -1,3 +1,5 @@
+# ℹ️ Sanitized version. Business-sensitive details are abstracted per ../security-audit-2026-04-22.md Section 7 rules. Originals preserved in private internal mirror. Canonical public record.
+
 schema: 1
 story: '2.1.2'
 story_title: 'Decide Cold-Start Mitigation Strategy for FLUX Serverless Endpoint'
