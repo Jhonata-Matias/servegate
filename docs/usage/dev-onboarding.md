@@ -213,7 +213,7 @@ A: Yes. Gateway source is in `gateway/` — deploy to your own Cloudflare accoun
 A: No fixed timeline. Beta transition will include: stable SDK v1.0.0, formal SLA, public signup (no invite), potential cost model.
 
 **Q: Can I help / contribute?**
-A: Yes! PRs welcome. Open a GitHub issue with the feature-request template to propose work. Especially useful: Python SDK port, alternative provider integrations, content moderation middleware.
+A: Yes! PRs welcome. See existing stories in `docs/stories/` for planned work. Especially useful: Python SDK port, alternative provider integrations, content moderation middleware.
 
 ## References
 
@@ -221,6 +221,7 @@ A: Yes! PRs welcome. Open a GitHub issue with the feature-request template to pr
 - [Privacy Statement](../legal/PRIVACY.md)
 - [Monitoring & abuse reporting](./monitoring.md)
 - [Gateway deploy guide (self-host)](./gateway-deploy.md)
+- [ADR-0001: Cold-start strategy](../architecture/adr-0001-flux-cold-start.md)
 - [SDK CHANGELOG](../../sdk/CHANGELOG.md)
 
 ---

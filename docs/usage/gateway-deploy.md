@@ -62,7 +62,7 @@ npm run secret:gateway-key
 # Cole RUNPOD_API_KEY (mesmo valor de serverless/.env, Story 2.1)
 npm run secret:runpod-key
 
-# Cole RUNPOD_ENDPOINT_ID (output do deploy Story 2.1, e.g. 80e45g6gct1opm)
+# Cole RUNPOD_ENDPOINT_ID (output do deploy Story 2.1, e.g. <RUNPOD_ENDPOINT_ID>)
 npm run secret:runpod-endpoint
 ```
 
@@ -195,4 +195,6 @@ Confortável até ~10x do volume MVP.
 
 - Worker source: `gateway/src/`
 - Tests: `gateway/tests/` (vitest unit + smoke shell)
-- API reference: `docs/api/reference.md`
+- Story: `docs/stories/2.5.gateway-rate-limit-cloudflare.story.md`
+- Epic 2 PRD: `docs/prd/epic-2-consumer-integration.md`
+- ADR-0001 (cold strategy): `docs/architecture/adr-0001-flux-cold-start.md`

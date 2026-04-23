@@ -213,7 +213,7 @@ R: Sim. O código-fonte do gateway está em `gateway/` — faça deploy na sua p
 R: Sem timeline fixo. A transição para beta vai incluir: SDK estável v1.0.0, SLA formal, signup público (sem invite), potencial modelo de custo.
 
 **P: Posso ajudar / contribuir?**
-R: Sim! PRs são bem-vindos. Abra uma issue no GitHub usando o template feature-request para propor trabalho. Especialmente úteis: port do SDK para Python, integrações com providers alternativos, middleware de content moderation.
+R: Sim! PRs são bem-vindos. Veja as stories existentes em `docs/stories/` (em inglês) para trabalho planejado. Especialmente úteis: port do SDK para Python, integrações com providers alternativos, middleware de content moderation.
 
 ## Referências
 
@@ -221,6 +221,7 @@ R: Sim! PRs são bem-vindos. Abra uma issue no GitHub usando o template feature-
 - [Declaração de Privacidade](../legal/PRIVACY.pt-BR.md)
 - [Monitoring & abuse reporting](./monitoring.md) (em inglês)
 - [Gateway deploy guide (self-host)](./gateway-deploy.md) (em inglês)
+- [ADR-0001: Cold-start strategy](../architecture/adr-0001-flux-cold-start.md) (em inglês)
 - [SDK CHANGELOG](../../sdk/CHANGELOG.md) (em inglês)
 
 ---
