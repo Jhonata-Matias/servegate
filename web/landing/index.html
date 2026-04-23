@@ -7,6 +7,7 @@
 
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://code.iconify.design/iconify-icon/1.0.7/iconify-icon.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked@11.2.0/marked.min.js" integrity="sha384-NaAKv9p4Ly57IbYsP5QFHMY4QNtb0RonIRJK1cRbsejGZSkvcwVHeuTSLM2bHxak" crossorigin="anonymous"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 
     <script>
@@ -76,6 +77,33 @@
         pre.code-block { background: rgba(0,0,0,0.5); padding: 1.5rem; border-radius: 0.5rem; border: 1px solid rgba(255,255,255,0.05); overflow-x: auto; color: #a1a1aa; font-family: 'JetBrains Mono', monospace; font-size: 0.875rem; line-height: 1.6; }
         .keyword { color: #1d7fe5; }
         .string { color: #00cc66; }
+
+        /* Doc preview modal */
+        .modal-backdrop { background: rgba(0, 0, 0, 0.85); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+        .modal-container { box-shadow: 0 25px 80px -20px rgba(0,0,0,0.8); animation: modalSlideIn 0.25s cubic-bezier(0.16, 1, 0.3, 1); }
+        @keyframes modalSlideIn { from { opacity: 0; transform: translateY(20px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
+
+        /* Rendered markdown (prose) */
+        .prose-container { color: #a1a1aa; font-size: 0.95rem; line-height: 1.7; }
+        .prose-container h1 { font-size: 1.75rem; font-weight: 600; color: #ffffff; margin: 0 0 1rem 0; letter-spacing: -0.01em; }
+        .prose-container h2 { font-size: 1.35rem; font-weight: 500; color: #ffffff; margin: 1.75rem 0 0.75rem 0; padding-bottom: 0.35rem; border-bottom: 1px solid rgba(255,255,255,0.08); }
+        .prose-container h3 { font-size: 1.1rem; font-weight: 500; color: #ffffff; margin: 1.25rem 0 0.5rem 0; }
+        .prose-container h4, .prose-container h5, .prose-container h6 { font-size: 1rem; font-weight: 500; color: #ffffff; margin: 1rem 0 0.5rem 0; }
+        .prose-container p { margin: 0 0 1rem 0; }
+        .prose-container a { color: #4da3ff; text-decoration: none; border-bottom: 1px dashed rgba(77,163,255,0.4); transition: border-color 0.2s; }
+        .prose-container a:hover { border-bottom-color: #4da3ff; }
+        .prose-container code { font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; color: #4da3ff; background: rgba(29,127,229,0.08); padding: 0.15rem 0.35rem; border-radius: 3px; border: 1px solid rgba(29,127,229,0.15); }
+        .prose-container pre { background: rgba(0,0,0,0.5); padding: 1rem 1.25rem; border-radius: 0.5rem; border: 1px solid rgba(255,255,255,0.05); overflow-x: auto; margin: 0 0 1rem 0; }
+        .prose-container pre code { font-size: 0.8rem; color: #a1a1aa; background: none; padding: 0; border: none; border-radius: 0; }
+        .prose-container ul, .prose-container ol { margin: 0 0 1rem 0; padding-left: 1.75rem; }
+        .prose-container li { margin-bottom: 0.35rem; }
+        .prose-container table { border-collapse: collapse; width: 100%; margin: 0 0 1rem 0; font-size: 0.85rem; display: block; overflow-x: auto; }
+        .prose-container th, .prose-container td { border: 1px solid rgba(255,255,255,0.08); padding: 0.5rem 0.75rem; text-align: left; white-space: nowrap; }
+        .prose-container th { background: rgba(0,0,0,0.3); color: #ffffff; font-weight: 500; }
+        .prose-container blockquote { border-left: 3px solid #1d7fe5; padding: 0.25rem 0 0.25rem 1rem; margin: 0 0 1rem 0; color: #a1a1aa; font-style: italic; }
+        .prose-container hr { border: 0; border-top: 1px solid rgba(255,255,255,0.08); margin: 1.75rem 0; }
+        .prose-container strong { color: #ffffff; font-weight: 600; }
+        .prose-container img { max-width: 100%; border-radius: 0.5rem; margin: 1rem 0; }
     </style>
 </head>
 
@@ -454,7 +482,7 @@ Retry-After: 5
             </div>
 
             <div class="px-8 md:px-12 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                <a href="https://github.com/Jhonata-Matias/servegate" target="_blank" rel="noopener" class="group glass-card p-6 rounded-xl block transition-all hover:border-accent/30">
+                <a href="https://github.com/Jhonata-Matias/servegate" target="_blank" rel="noopener" data-resource="repo" class="group glass-card p-6 rounded-xl block transition-all hover:border-accent/30 cursor-pointer">
                     <div class="flex items-start gap-4">
                         <iconify-icon class="text-3xl text-accent" icon="mdi:github"></iconify-icon>
                         <div class="flex-1">
@@ -465,7 +493,7 @@ Retry-After: 5
                     </div>
                 </a>
 
-                <a href="https://github.com/Jhonata-Matias/servegate/releases/tag/v0.2.0-alpha" target="_blank" rel="noopener" class="group glass-card p-6 rounded-xl block transition-all hover:border-accent/30">
+                <a href="https://github.com/Jhonata-Matias/servegate/releases/tag/v0.2.0-alpha" target="_blank" rel="noopener" data-resource="release" class="group glass-card p-6 rounded-xl block transition-all hover:border-accent/30 cursor-pointer">
                     <div class="flex items-start gap-4">
                         <iconify-icon class="text-3xl text-accent" icon="solar:tag-horizontal-bold-duotone"></iconify-icon>
                         <div class="flex-1">
@@ -476,7 +504,7 @@ Retry-After: 5
                     </div>
                 </a>
 
-                <a href="https://github.com/Jhonata-Matias/servegate/blob/main/docs/api/migration-async.md" target="_blank" rel="noopener" class="group glass-card p-6 rounded-xl block transition-all hover:border-accent/30">
+                <a href="https://github.com/Jhonata-Matias/servegate/blob/main/docs/api/migration-async.md" target="_blank" rel="noopener" data-resource="migration" class="group glass-card p-6 rounded-xl block transition-all hover:border-accent/30 cursor-pointer">
                     <div class="flex items-start gap-4">
                         <iconify-icon class="text-3xl text-warning" icon="solar:arrow-right-up-bold-duotone"></iconify-icon>
                         <div class="flex-1">
@@ -487,7 +515,7 @@ Retry-After: 5
                     </div>
                 </a>
 
-                <a href="https://github.com/Jhonata-Matias/servegate/blob/main/docs/usage/dev-onboarding.md" target="_blank" rel="noopener" class="group glass-card p-6 rounded-xl block transition-all hover:border-accent/30">
+                <a href="https://github.com/Jhonata-Matias/servegate/blob/main/docs/usage/dev-onboarding.md" target="_blank" rel="noopener" data-resource="onboarding" class="group glass-card p-6 rounded-xl block transition-all hover:border-accent/30 cursor-pointer">
                     <div class="flex items-start gap-4">
                         <iconify-icon class="text-3xl text-success" icon="solar:book-bold-duotone"></iconify-icon>
                         <div class="flex-1">
@@ -498,7 +526,7 @@ Retry-After: 5
                     </div>
                 </a>
 
-                <a href="https://github.com/Jhonata-Matias/servegate/blob/main/sdk/CHANGELOG.md" target="_blank" rel="noopener" class="group glass-card p-6 rounded-xl block transition-all hover:border-accent/30">
+                <a href="https://github.com/Jhonata-Matias/servegate/blob/main/sdk/CHANGELOG.md" target="_blank" rel="noopener" data-resource="changelog" class="group glass-card p-6 rounded-xl block transition-all hover:border-accent/30 cursor-pointer">
                     <div class="flex items-start gap-4">
                         <iconify-icon class="text-3xl text-info" icon="solar:clipboard-list-bold-duotone"></iconify-icon>
                         <div class="flex-1">
@@ -509,7 +537,7 @@ Retry-After: 5
                     </div>
                 </a>
 
-                <a href="https://github.com/Jhonata-Matias/servegate/blob/main/docs/architecture/adr-0002-async-gateway-pattern.md" target="_blank" rel="noopener" class="group glass-card p-6 rounded-xl block transition-all hover:border-accent/30">
+                <a href="https://github.com/Jhonata-Matias/servegate/blob/main/docs/architecture/adr-0002-async-gateway-pattern.md" target="_blank" rel="noopener" data-resource="adr" class="group glass-card p-6 rounded-xl block transition-all hover:border-accent/30 cursor-pointer">
                     <div class="flex items-start gap-4">
                         <iconify-icon class="text-3xl text-pink-500" icon="solar:diagram-down-bold-duotone"></iconify-icon>
                         <div class="flex-1">
@@ -533,6 +561,33 @@ Retry-After: 5
 
     </div>
 
+    <!-- DOC PREVIEW MODAL -->
+    <div id="doc-modal" class="hidden fixed inset-0 z-[100]" aria-hidden="true" role="dialog" aria-labelledby="doc-modal-title" aria-modal="true">
+        <div id="doc-modal-backdrop" class="modal-backdrop absolute inset-0 cursor-pointer"></div>
+        <div class="relative z-10 flex items-center justify-center min-h-screen p-4 md:p-8 pointer-events-none">
+            <div class="modal-container glass-panel max-w-4xl w-full flex flex-col rounded-xl border border-white/10 pointer-events-auto" style="max-height: 90vh;">
+                <div class="flex items-center justify-between px-6 py-4 border-b border-white/10 flex-shrink-0 gap-4">
+                    <h3 id="doc-modal-title" class="text-lg md:text-xl font-medium text-white truncate">—</h3>
+                    <button id="doc-modal-close" aria-label="Fechar modal" class="flex-shrink-0 text-muted hover:text-white transition-colors">
+                        <iconify-icon class="text-2xl block" icon="solar:close-circle-bold-duotone"></iconify-icon>
+                    </button>
+                </div>
+                <div id="doc-modal-content" class="prose-container flex-1 overflow-y-auto px-6 py-6" tabindex="-1">
+                    <div class="text-muted text-sm font-mono">—</div>
+                </div>
+                <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 px-6 py-4 border-t border-white/10 flex-shrink-0 bg-black/20">
+                    <a id="doc-modal-github" href="#" target="_blank" rel="noopener" class="inline-flex items-center justify-center sm:justify-start gap-2 text-sm font-mono text-accent hover:underline">
+                        <iconify-icon icon="mdi:github"></iconify-icon>
+                        <span>Ver no GitHub →</span>
+                    </a>
+                    <button id="doc-modal-close-footer" class="text-xs font-mono uppercase tracking-widest text-muted hover:text-white transition-colors border-b border-transparent hover:border-white pb-1">
+                        Fechar e voltar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>
         const observerOptions = {
             root: null,
@@ -552,6 +607,138 @@ Retry-After: 5
         document.querySelectorAll('.reveal, .text-reveal-wrapper').forEach(el => {
             observer.observe(el);
         });
+    </script>
+
+    <script>
+        // Doc preview modal — fetches raw markdown (or GitHub Release API) and renders inline
+        (function() {
+            const REPO = 'Jhonata-Matias/servegate';
+            const BRANCH = 'main';
+            const raw = (p) => `https://raw.githubusercontent.com/${REPO}/${BRANCH}/${p}`;
+            const blob = (p) => `https://github.com/${REPO}/blob/${BRANCH}/${p}`;
+
+            const resources = {
+                repo: {
+                    title: 'Repositório · servegate',
+                    rawUrl: raw('README.md'),
+                    githubUrl: `https://github.com/${REPO}`,
+                    resolveBase: blob('README.md'),
+                },
+                release: {
+                    title: 'Release v0.2.0-alpha',
+                    type: 'release',
+                    tag: 'v0.2.0-alpha',
+                    githubUrl: `https://github.com/${REPO}/releases/tag/v0.2.0-alpha`,
+                    resolveBase: `https://github.com/${REPO}/blob/${BRANCH}/`,
+                },
+                migration: {
+                    title: 'Migration Guide v0.1 → v0.2',
+                    rawUrl: raw('docs/api/migration-async.md'),
+                    githubUrl: blob('docs/api/migration-async.md'),
+                },
+                onboarding: {
+                    title: 'Developer Onboarding',
+                    rawUrl: raw('docs/usage/dev-onboarding.md'),
+                    githubUrl: blob('docs/usage/dev-onboarding.md'),
+                },
+                changelog: {
+                    title: 'SDK CHANGELOG · @jhonata-matias/flux-client',
+                    rawUrl: raw('sdk/CHANGELOG.md'),
+                    githubUrl: blob('sdk/CHANGELOG.md'),
+                },
+                adr: {
+                    title: 'ADR-0002 — Async Gateway Pattern',
+                    rawUrl: raw('docs/architecture/adr-0002-async-gateway-pattern.md'),
+                    githubUrl: blob('docs/architecture/adr-0002-async-gateway-pattern.md'),
+                },
+            };
+
+            const modal = document.getElementById('doc-modal');
+            const modalContent = document.getElementById('doc-modal-content');
+            const modalTitle = document.getElementById('doc-modal-title');
+            const modalGithub = document.getElementById('doc-modal-github');
+            const btnHeader = document.getElementById('doc-modal-close');
+            const btnFooter = document.getElementById('doc-modal-close-footer');
+            const backdrop = document.getElementById('doc-modal-backdrop');
+            let previousFocus = null;
+
+            async function openModal(resourceId) {
+                const res = resources[resourceId];
+                if (!res) return;
+                previousFocus = document.activeElement;
+                modalTitle.textContent = res.title;
+                modalGithub.href = res.githubUrl;
+                modalContent.innerHTML = '<div class="text-muted text-sm font-mono animate-pulse">Carregando conteúdo…</div>';
+                modal.classList.remove('hidden');
+                modal.setAttribute('aria-hidden', 'false');
+                document.body.style.overflow = 'hidden';
+                btnHeader.focus();
+
+                try {
+                    let md;
+                    if (res.type === 'release') {
+                        const api = `https://api.github.com/repos/${REPO}/releases/tags/${res.tag}`;
+                        const resp = await fetch(api);
+                        if (!resp.ok) throw new Error(`GitHub API ${resp.status}`);
+                        const data = await resp.json();
+                        const label = data.prerelease ? 'Pre-release' : 'Release';
+                        const when = data.published_at ? new Date(data.published_at).toLocaleString('pt-BR') : '—';
+                        md = `# ${data.name || data.tag_name}\n\n_${label} · publicado ${when}_\n\n---\n\n${data.body || '_(sem descrição)_'}`;
+                    } else {
+                        const resp = await fetch(res.rawUrl);
+                        if (!resp.ok) throw new Error(`Raw URL ${resp.status}`);
+                        md = await resp.text();
+                    }
+
+                    if (typeof marked === 'undefined') {
+                        modalContent.innerHTML = '<div class="text-danger text-sm">Biblioteca marked.js não carregou. Recarregue a página.</div>';
+                        return;
+                    }
+
+                    const html = marked.parse(md, { gfm: true, breaks: false });
+                    const tmp = document.createElement('div');
+                    tmp.innerHTML = html;
+
+                    // Rewrite links: external → new tab; relative → absolute GitHub URL
+                    const base = res.resolveBase || res.githubUrl;
+                    tmp.querySelectorAll('a').forEach(a => {
+                        let href = a.getAttribute('href') || '';
+                        if (!href || href.startsWith('#')) return;
+                        if (!/^https?:/.test(href)) {
+                            try { href = new URL(href, base).href; } catch (e) { /* keep as-is */ }
+                            a.setAttribute('href', href);
+                        }
+                        a.setAttribute('target', '_blank');
+                        a.setAttribute('rel', 'noopener');
+                    });
+
+                    modalContent.innerHTML = tmp.innerHTML;
+                    modalContent.scrollTop = 0;
+                } catch (e) {
+                    modalContent.innerHTML = `<div class="text-danger text-sm font-mono">Erro ao carregar: ${e.message}.<br/>Tente <a href="${res.githubUrl}" target="_blank" rel="noopener" class="text-accent underline">visualizar direto no GitHub →</a></div>`;
+                }
+            }
+
+            function closeModal() {
+                modal.classList.add('hidden');
+                modal.setAttribute('aria-hidden', 'true');
+                document.body.style.overflow = '';
+                if (previousFocus && typeof previousFocus.focus === 'function') previousFocus.focus();
+            }
+
+            document.querySelectorAll('[data-resource]').forEach(el => {
+                el.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    openModal(el.dataset.resource);
+                });
+            });
+            btnHeader.addEventListener('click', closeModal);
+            btnFooter.addEventListener('click', closeModal);
+            backdrop.addEventListener('click', closeModal);
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape' && !modal.classList.contains('hidden')) closeModal();
+            });
+        })();
     </script>
 </body>
 </html>
