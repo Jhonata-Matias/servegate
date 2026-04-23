@@ -1,9 +1,9 @@
 # Epic 2 — Consumer Integration (Hybrid Pragmatic)
 
-**Status:** In Progress (v0.9 — Story 2.7 pt-BR docs MVP added; Story 2.3 web demo + Story 2.7 remain in-scope)
+**Status:** In Progress (v1.0 — Story 2.7 Done + Story 2.8 Sanitize Public Docs added; Story 2.3 web demo + Story 2.8 remain in-scope)
 **Owner:** @pm (Morgan)
 **Created:** 2026-04-21
-**Last Updated:** 2026-04-22 (v0.9)
+**Last Updated:** 2026-04-23 (v1.0)
 **Project:** servegate (codename gemma4)
 **Predecessor:** Epic 1 (Pod Inference Stack — Done em 2026-04-21)
 
@@ -18,8 +18,9 @@
 | 0.5 | 2026-04-21 | @po Pax | **Batch close 3 stories** (PM-approved): 2.1.1 (QA 9.4/10), 2.1.2 (QA 95/100), 2.2 (QA 92/100, merged PR #1). Stories table updated. Dependency graph repintado para refletir único caminho crítico restante (publish 2.2 → 2.5 → integ smoke → 2.3). New "Tech Debt Backlog" section com 7 items priorizados: TD1 publish (HIGH, @devops imediato), TD2 integ smoke (MEDIUM, @qa), TD3 redeploy v0.1.1 (MEDIUM, @devops), TD4 re-bench cold n≥10 (LOW, @dev pre-2026-05-15), TD5-TD7 SDK refinements (LOW, @dev). Total tech debt budget ~6-9h (HIGH+MEDIUM ~3-4h). |
 | 0.6 | 2026-04-21 | @devops Gage | **TD1 resolution + scope rename** — GitHub Packages requires scope match com repo owner. Repo é `Jhonata-Matias/gemma4` (não org Gemma4). Decision: rename SDK scope `@gemma4/flux-client` → `@jhonata-matias/flux-client` (project codename "gemma4" preserved em description + branding). Files updated: sdk/package.json, sdk/src/{index,errors,types}.ts JSDoc, sdk/README.md, docs/stories/2.3 (4 refs). NÃO atualizado: Story 2.2 Done (historical), QA Gate 2.2 (final), ADR-0001 (final). TD1 resolvido (publish unblocked). |
 | 0.7 | 2026-04-22 | @pm Morgan | **Story 2.6 added** — Alpha Developer Access Distribution. Post Story 2.5 merge (PR #2, commit 9d1f100) + Epic 1 closure, a última milha para devs externos conseguirem `npm install → first call` sem hand-holding manual. Strategic decision: SDK GH Packages → **public visibility** (fricção mínima; zero secret exposure since gateway guarda RUNPOD_API_KEY). Scope: SDK public flip + README raiz + issue templates + owner contact + GH release v0.1.0-alpha + API reference consolidado + smoke externa. 7 preliminary ACs, effort budget 1-2 dev-days. TD8 adicionado: zero CI workflows em `.github/workflows/` (LOW severity). @sm para draft. |
-| 0.9 | 2026-04-22 | @pm Morgan | **Story 2.7 added** — Portuguese (Brazil) Developer Documentation (MVP). Audience research aponta mercado BR como vetor inicial de adoção alpha; dev-onboarding EN-only cria fricção de comprehension + risco legal em TERMS/PRIVACY (CDC exige clareza pt-BR para consumidor BR). Scope MVP: traduzir 4 arquivos da jornada crítica (`README.md`, `docs/usage/dev-onboarding.md`, `docs/legal/TERMS.md`, `docs/legal/PRIVACY.md`) com sufixo `.pt-BR.md` + banner bilíngue no topo. Strategic decisions alinhadas com user (2026-04-22): (a) **ambos canônicos bilíngue** em legal via cláusula de equivalência (prevalece versão do domicílio do usuário), (b) **anglicismos técnicos preservados** (API key, endpoint, rate limit, cold start, deploy) — prosa natural para dev BR. 7 preliminary ACs, effort budget 4-6h dev. Out of scope: API reference + usage secundários + PRD/stories → Epic 3 backlog se demanda BR confirmar. @sm para draft. |
 | 0.8 | 2026-04-22 | @pm Morgan | **Story 2.6 Done** (QA PASS 91/100, merged PR #3, commit `fd1232b`) + **`v0.1.0-alpha` released** (GitHub Release marked Pre-release, tagged em `fd1232b`, 2026-04-22 19:53 UTC). Alpha is **publicly accessible** — external devs can: discover via README → request access via formal `access-request.yml` template → install `@jhonata-matias/flux-client` (public on GH Packages) → first call ~7s warm / ~130s cold. F1 (broken license badge) resolved pre-merge; F2 (issue template public-visibility warning) deferred as follow-up issue (LOW-MEDIUM, non-blocking). External smoke validated end-to-end in Docker `node:20` clean container — auth + rate-limit pipeline proven (architectural auth-before-rate-limit confirmed via 401-not-429 on invalid key when quota=0). Epic 2 status: **80% MVP shipped** (5 of 6 in-scope stories Done) — only Story 2.3 web demo remains; not blocking SDK consumer adoption but required for 30-day review analytics (R4 mitigation). |
+| 0.9 | 2026-04-22 | @pm Morgan | **Story 2.7 added** — Portuguese (Brazil) Developer Documentation (MVP). Audience research aponta mercado BR como vetor inicial de adoção alpha; dev-onboarding EN-only cria fricção de comprehension + risco legal em TERMS/PRIVACY (CDC exige clareza pt-BR para consumidor BR). Scope MVP: traduzir 4 arquivos da jornada crítica (`README.md`, `docs/usage/dev-onboarding.md`, `docs/legal/TERMS.md`, `docs/legal/PRIVACY.md`) com sufixo `.pt-BR.md` + banner bilíngue no topo. Strategic decisions alinhadas com user (2026-04-22): (a) **ambos canônicos bilíngue** em legal via cláusula de equivalência (prevalece versão do domicílio do usuário), (b) **anglicismos técnicos preservados** (API key, endpoint, rate limit, cold start, deploy) — prosa natural para dev BR. 7 preliminary ACs, effort budget 4-6h dev. Out of scope: API reference + usage secundários + PRD/stories → Epic 3 backlog se demanda BR confirmar. @sm para draft. |
+| 1.0 | 2026-04-23 | @pm Morgan | **Story 2.7 Done** (QA PASS 95/100, merged PR #5, commit `6a3508d`) + **Story 2.8 added** — Sanitize Public Docs per Security Audit. Post-merge governance review revealed significant **business intelligence exposure** in public repo (unit economics, infra IDs, pivot thresholds, real measurements) que estava visível desde 2026-04-22 (public flip na Story 2.6). User-triggered security audit (`docs/qa/security-audit-2026-04-22.md` no planning repo) documentou gap: pre-public audit (#3535) focou só em secret leakage (PASS — zero leaks) mas não em business intel. Remediação decidida: **L1+L2 combined** — emergency remove internal docs do público (commit `e290bcd` 2026-04-23) + Story 2.8 reintroduz versões sanitizadas per 7 regras definidas em Section 7 do audit. Two-repo architecture introduzida: `Jhonata-Matias/servegate` (public, sanitized post-2.8) + `Jhonata-Matias/servegate-planning` (private, preserva originais pre-sanitização). Story 2.8: 7 preliminary ACs, effort budget 4-6h, @dev reads originals from planning remote, writes sanitized to public. Epic 2 status: **6 of 8 in-scope stories Done** (~75% — 2.7 fechou, 2.3 web demo + 2.8 sanitize pendentes). |
 
 ---
 
@@ -104,10 +105,11 @@ O critério "cold spawn sub-30s" foi invalidado empiricamente pela Story 2.1 (me
 | **2.5** | Gateway Cloudflare Worker + KV pra auth (X-API-Key) + rate-limit 100/dia global | **MUST** | @dev | **Ready** (validada @po 9.75/10) — pode rodar paralela a 2.3 |
 | **2.3** | App demo Next.js + Vercel usando SDK contra gateway URL | **MUST** | @dev (+ @ux opcional) | **Ready** (PO 10/10 — bloqueada por SDK published + 2.5 Done) |
 | **2.6** | Alpha Developer Access Distribution (SDK public + README raiz + issue templates + GH release + API reference) | **MUST** | @dev (+ @devops para release/visibility) | **Done** (QA PASS 91/100, merged PR #3 commit `fd1232b`, `v0.1.0-alpha` released) |
-| **2.7** | Portuguese (Brazil) Developer Documentation MVP (README + dev-onboarding + TERMS + PRIVACY com sufixo `.pt-BR.md` + banner bilíngue) | **SHOULD** | @dev | **Draft** (v0.9 — aguardando `@sm *draft 2.7`) |
+| **2.7** | Portuguese (Brazil) Developer Documentation MVP (README + dev-onboarding + TERMS + PRIVACY com sufixo `.pt-BR.md` + banner bilíngue) | **SHOULD** | @dev | **Done** (QA PASS 95/100, merged PR #5 commit `6a3508d`) |
+| **2.8** | Sanitize Public Docs per Security Audit (reintroduzir PRDs/stories/QA gates/ADR com business intel sanitized: endpoint IDs → placeholders, unit costs → ranges, pivot thresholds → qualitativos) | **HIGH** | @dev | **Draft** (v1.0 — aguardando `@sm *draft 2.8`) |
 | **2.4** | (Opcional) Custom node n8n integrando o SDK | SHOULD | @dev | **Backlog** opportunistic |
 
-### Dependency graph atualizado (v0.9 — Story 2.7 pt-BR docs added in parallel)
+### Dependency graph atualizado (v1.0 — Story 2.7 Done + Story 2.8 Sanitize added)
 
 ```
 2.1 (Done) → 2.1.1 (Done) → 2.1.2 (Done) → 2.2 (Done, public)
@@ -120,21 +122,31 @@ O critério "cold spawn sub-30s" foi invalidado empiricamente pela Story 2.1 (me
                                             ▼
                               ┌─────────────┴─────────────┐
                               ▼                           ▼
-                     2.3 (Ready — optional ship)   2.7 (Draft — pt-BR docs MVP)
+                     2.3 (Ready — optional ship)   2.7 (Done — PR #5 pt-BR MVP)
+                              │                           │
+                              │                           ▼
+                              │                    [security audit trigger]
+                              │                           │
+                              │                           ▼
+                              │                    2.8 (Draft — Sanitize)
+                              │                           │
+                              └─────────────┬─────────────┘
+                                            ▼
+                                   Epic 2 Close candidate
 ```
 
-**Status flow (v0.9):**
-- ✅ 2.1 / 2.1.1 / 2.1.2 / 2.2 / 2.5 / 2.6 — all Done
-- 🔓 **2.3 — Ready, fully unblocked** (SDK public ✓, gateway live ✓, contact channel ✓, API reference ✓)
-- 📝 **2.7 — Draft (v0.9)** — independe de 2.3; pode rodar em paralelo ou depois; não bloqueia nada em Epic 2
+**Status flow (v1.0):**
+- ✅ 2.1 / 2.1.1 / 2.1.2 / 2.2 / 2.5 / 2.6 / 2.7 — all Done (7 stories)
+- 🔓 **2.3 — Ready, fully unblocked** (SDK public ✓, gateway live ✓, contact channel ✓, API reference ✓) — not blocking Epic 2 close per alternative path
+- 🔴 **2.8 — Draft (v1.0) — HIGH priority** — triggered by security audit post-2.7 merge; sanitization of internal docs that currently exist only in private `servegate-planning` mirror; re-introduce to public with business intel replaced per 7 rules
 - 📊 30-day review (2026-05-21) requires Story 2.3 analytics for full DRI evidence pack — see "30-Day Review Governance"
 
-**Epic 2 status (v0.9):** **~71% MVP shipped** (5 of 7 in-scope stories Done). Alpha publicly accessible to SDK consumers. Remaining in-scope: Story 2.3 web demo + Story 2.7 pt-BR docs. Story 2.7 é **SHOULD** (não bloqueia fechamento do MVP técnico) mas **HIGH valor para audiência BR** (owner + alpha invites iniciais).
+**Epic 2 status (v1.0):** **~75% MVP shipped** (6 of 8 in-scope stories Done — 2.1/2.1.1/2.1.2/2.2/2.5/2.6/2.7). Alpha publicly accessible to SDK consumers. Remaining in-scope: Story 2.3 web demo + Story 2.8 Sanitize Public Docs. Story 2.8 é **HIGH priority** (reduces competitor intel exposure in public repo) e bloqueia "Epic 2 full close" mesmo se 2.3 ship separadamente.
 
-**Remaining MVP path:**
-1. **`@sm *draft 2.3`** (already drafted — validate Ready state) → @dev develop (2-4h, per PM Addendum 1 budget) → QA gate → push + PR
-2. **`@sm *draft 2.7`** (pending — this v0.9 delivery) → @dev develop (4-6h tradução + banners + cláusulas) → QA gate → push + PR. Pode correr paralelo a 2.3.
-3. **Close Epic 2 fully** com declaration after 2.3 + 2.7 shipped
+**Remaining MVP path (v1.0):**
+1. **`@sm *draft 2.8`** (this v1.0 delivery) → `@po *validate` → `@dev *develop` (reads originals from `planning` remote, writes sanitized to `origin`) → `@qa *qa-gate` → `@devops *push + *create-pr` (4-6h total per security audit effort estimate)
+2. **`@sm *draft 2.3`** (already drafted — validate Ready state) → @dev develop (2-4h) → QA gate → push + PR. Pode correr paralelo a 2.8.
+3. **Close Epic 2 fully** com declaration after 2.3 + 2.8 shipped. Optional **L3 history rewrite** post-2.8 for total pre-sanitization removal from public git history (viable given 0 forks verified 2026-04-23).
 4. **30-day review automation** (optional TD enhancement for Vercel Analytics + RunPod billing cron)
 
 **Alternatively (deferred Epic 2 close path):** if 2.3 web demo is deprioritized (e.g., SDK consumers are sufficient market validation), Epic 2 can close at 80% with explicit "Story 2.3 → Epic 3 (frontend showcase) or Backlog" decision. Requires @user input.
@@ -240,6 +252,41 @@ O critério "cold spawn sub-30s" foi invalidado empiricamente pela Story 2.1 (me
 - i18n framework automation (GitHub Action de tradução via LLM, locale detection, CI check de drift EN↔pt-BR) → Epic 3+ backlog
 - Outros idiomas (ES, FR, JA) → não escopado; se demanda surgir, cada idioma = nova story
 - Automated sync check (CI que alerta quando EN update precisa espelho pt-BR) → follow-up opcional, não bloqueia 2.7
+
+### Story 2.8 — Sanitize Public Docs per Security Audit
+
+**Rationale:** Post-merge governance review da Story 2.7 (PR #5) revelou que o repo público `Jhonata-Matias/servegate` expõe significant business intelligence em 23 arquivos internos (PRDs, stories, QA gates, ADR). Security audit formal documentou o gap: pre-public flip audit (#3535 em 2026-04-22) focou apenas em secret leakage (PASS — zero leaks) mas não avaliou exposição de unit economics (`$0.000306/s GPU`, `$25/mo budget`, `$30/mo pivot threshold`), infrastructure identifiers (RunPod endpoint ID, KV namespace, network volume), strategic roadmap (pivot triggers, stay-course criteria), nem real operational metrics (warm p95 `7013ms`, cold `98-150s`). User decisão (2026-04-23) foi **L1+L2 combined**: emergency remove internal docs do público IMEDIATAMENTE (executado via commit `e290bcd`) + Story 2.8 reintroduz versões sanitizadas per 7 regras definidas na Section 7 do security audit.
+
+**Architecture decision (v1.0):** Introdução de **two-repo model** — `Jhonata-Matias/servegate` (public, HEAD sanitized post-2.8) + `Jhonata-Matias/servegate-planning` (PRIVATE, preserva originais pré-sanitização com full business intel). Planning repo é source-of-truth interno; public é "rendered sanitized view". Fork count verificado = 0 (2026-04-23), tornando L3 history rewrite viável como addendum opcional post-2.8 se user quiser eliminar pre-sanitization do git history público.
+
+**Strategic decisions (v1.0, aligned with user 2026-04-23):**
+- **Balanced approach:** manter docs visible (build-in-public posture) mas remover competitive intel (unit economics, infra IDs, pivot thresholds)
+- **Sanitization rules verbatim** do security audit Section 7: substituições de-fato, não paraphrasing (reduz risk de re-exposição acidental por interpretação dev)
+- **@dev reads from planning remote** durante develop — garante source pre-sanitized não sai do contexto de trabalho
+- **Risk Register + Tech Debt Backlog KEEP public** — transparência OSS saudável, não é competitive intel
+
+| AC | Descrição | Source | Acceptance test |
+|---|---|---|---|
+| 2.8-AC1 | **23 arquivos internos reintroduzidos sanitized** no repo público: 2 PRDs (Epic 1 + Epic 2 v1.0), 9 stories (1.1, 2.1, 2.1.1, 2.1.2, 2.2, 2.3, 2.5, 2.6, 2.7), 5 QA gates (2.1.2, 2.2, 2.5, 2.6, 2.7), 4 QA reports (1.1-closure, 1.1-qa-report, 2.6-external-smoke, security-audit self-ref), 1 ADR (adr-0001-flux-cold-start) + 2 QA reports preservados da fase pt-BR (2.7-translation-review OK mantido). Total 23 files. | Security audit Section 2.1 (file inventory) | `find docs/prd docs/stories docs/qa/gates docs/architecture -type f \| wc -l` retorna 17+ no HEAD público; `diff` vs planning/main mostra apenas substituições de regex per AC2 (zero adição/omissão de seções) |
+| 2.8-AC2 | **7 regras de sanitização aplicadas literalmente** per security audit Section 7: (1) Infrastructure IDs → placeholders (`80e45g6gct1opm` → `<RUNPOD_ENDPOINT_ID>`, `mqqgzwnfp1` → `<NETWORK_VOLUME_ID>`, `55bd0b4a...` → `<KV_NAMESPACE_ID>`, Worker version UUIDs → `<WORKER_VERSION>`); (2) Unit costs → ranges (`$0.00031/s` etc → `~$0.0001-0.0003/s`, `$0.000306/s` → `~$0.0003/s measured`, `$0.0015/img warm` → `<$0.01/img warm`, `$0.03/img cold` → `<$0.05/img cold worst case`); (3) Budgets → qualitativos (`$25/mo` → `<$50/mo alpha budget`, `$30/mo threshold` → `<cost threshold sustained 2 weeks>`); (4) Volume thresholds → qualitativos (`>1000 imgs/mo` → `<sustained volume threshold>`, `>15k escalation` → `<high-volume escalation>`, `100 imgs/dia` KEEP é public SLA); (5) Real measurements → ranges (`7013ms p95` → `~5-10s warm p95`, `98-150s cold` → `~1-3min cold start`, `71s cold smoke`/`3.1s warm smoke` → remove ou qualitativo); (6) Strategic thresholds → qualitativos (4 pivot triggers exact thresholds → `<qualitative trigger>`); (7) KEEP público: Risk Register R1-R11, Tech Debt TD1-TD8, QA gate scores, AIOX framework references, story lifecycle phases, gateway hostname, `100/dia`, `<10s warm target`, `~130s cold documented`. | Security audit Section 7 (Sanitization Rules) | Grep post-sanitization retorna zero matches para: `\b80e45g6gct1opm\b`, `\bmqqgzwnfp1\b`, `\b55bd0b4a7c3c44bb958331ba82035e55\b`, `\$0\.(00031\|00021\|00019\|00013\|000306)/s`, `\$0\.0015/img`, `\$25/mo`, `\$30/mo`, `7013ms`, `98-150s`, `>1000 imgs` |
+| 2.8-AC3 | **Structural parity maintained** — cada arquivo sanitized tem mesma estrutura do original no planning: mesmos headings (H1-H6 ordem + level), mesmas tabelas (colunas + linhas preserved), mesmas numbered lists (itens preservados substantivamente — só valores nas células mudam), mesmos code blocks (intactos exceto por identifier substitution em string literals). Nenhuma seção adicionada ou omitida exceto "Sanitization Note" top-of-file (ver AC4). | Padrão replicado de Story 2.7-AC5 + security audit methodology | `diff <(grep -cE '^#+ ' planning/<file>) <(grep -cE '^#+ ' sanitized/<file>)` retorna 0 para 23 pares |
+| 2.8-AC4 | **"Sanitization Note" banner** adicionado no topo de cada um dos 23 arquivos públicos sanitized, logo após H1 e antes do conteúdo. Formato exato: `> **ℹ️ Sanitized version.** Business-sensitive details (unit economics, infrastructure identifiers, pivot thresholds, real measurements) are abstracted per [security audit Section 7](../qa/security-audit-2026-04-22.md) rules. Originals are preserved in private internal mirror. This is the canonical public record.` Link to security-audit doc (which ALSO is sanitized + re-introduced per AC1, without the literal IDs/values it originally used as examples). | Transparência sobre sanitização (build-in-public meta-posture) | 23/23 arquivos contêm o banner; link `../qa/security-audit-2026-04-22.md` resolves to existing file |
+| 2.8-AC5 | **Security audit doc self-sanitization** — `docs/qa/security-audit-2026-04-22.md` ALSO passa pelas 7 regras (é o arquivo que mais expõe, ironicamente). Values literais em examples (ex: "`80e45g6gct1opm` | RunPod endpoint ID") substituídos por placeholders. Content do audit como methodology + decision record permanece. Seção 7 (as regras mesmas) mantidas verbatim porque descrevem padrão de substituição, não expõem data específica. | Security audit Section 5 (self-referential gap identified by @qa) | `grep -E "80e45g6gct1opm\|mqqgzwnfp1\|55bd0b4a...\|0\.000306/s\|7013ms\|\$25/mo" docs/qa/security-audit-2026-04-22.md` retorna zero matches |
+| 2.8-AC6 | **Cross-link integrity restored** — links em docs públicos que foram temporariamente removidos na commit `e290bcd` (README.md row ADR, dev-onboarding "See existing stories", gateway-deploy.md references) são restored apontando para os arquivos reintroduzidos sanitized. README + dev-onboarding + gateway-deploy atualizados para incluir references funcionais. | Commit `e290bcd` removeu 7 refs durante emergency L2; agora precisam voltar | Link crawler: 100% dos links internos em README.md, README.pt-BR.md, docs/usage/*.md resolvem para arquivos existentes em HEAD público |
+| 2.8-AC7 | **QA validation via comparative grep** — `@qa` executa grep suite completa contra HEAD público sanitized + compara com planning/main (originals). Relatório em `docs/qa/2.8-sanitization-review.md` com: lista de substituições aplicadas por arquivo (sampling), grep results confirmando zero matches para identifiers/costs/measurements prohibited, delta structural (heading counts match), banner presence em 23/23, link integrity. Verdict PASS/CONCERNS/FAIL padrão. | Evidence-based validation pattern from Story 2.6/2.7 QA gates | `docs/qa/2.8-sanitization-review.md` comprehensive; gate file `docs/qa/gates/2.8-sanitize-public-docs.yml` com verdict |
+
+**Definition of Done (2.8):** 7/7 ACs verificados + 23 arquivos sanitized commitados no público + banner AC4 em 23/23 + security audit self-sanitized (AC5) + cross-links restaurados (AC6) + `docs/qa/2.8-sanitization-review.md` PASS + `docs/qa/gates/2.8-sanitize-public-docs.yml` PASS + Epic 2 PRD (planning repo) bump para v1.1 com Story 2.8 Done note.
+
+**Effort budget:** 4-6h @dev (23 files × ~10-15min/file sanitization per rules + cross-link fixes + QA evidence). **Se exceder 8h, trigger @pm review** (sinal de regras ambíguas que precisam refinement — stop e revisar Section 7 do audit).
+
+**Out of scope (Story 2.8):**
+- L3 history rewrite (`git filter-repo` + force push) — viable per 0-fork verification mas **separate decision** post-2.8 merge se user quiser eliminar pre-sanitization do git log completamente
+- Sanitization de `docs/api/reference.md` ou `docs/usage/*.md` — consumer-facing docs NÃO removed em L2 (commit `e290bcd`), se contêm business intel isso é tech debt follow-up, não Story 2.8 scope
+- Automação de sync planning↔public (CI drift check) — Epic 3+ backlog se demanda
+- Revisar security audit em si para melhorar methodology — meta-work fora de scope
+- Atualizar `@devops` pre-public checklist (business intel scan) — memory update já feito, formalizar em rule/doc futuro
+
+**Special execution note:** `@dev` durante `*develop 2.8` deve trabalhar em branch `feature/2.8-sanitize-public-docs` derivada de `planning/main` (não `origin/main`), porque originals estão só no planning repo. Após sanitization + commits, `@devops` push da branch para `origin/main` (public). Planning repo permanece source-of-truth inalterado. Esse workflow híbrido (dev from planning, push to origin) está documentado como Special Execution Note para evitar confusion.
 
 ### Cross-story invariants (MUST para 2.2 + 2.3)
 
