@@ -43,7 +43,6 @@ curl -X POST https://gemma4-gateway.jhonata-matias.workers.dev \
 | Terms of Use | [docs/legal/TERMS.md](./docs/legal/TERMS.md) |
 | Privacy Statement | [docs/legal/PRIVACY.md](./docs/legal/PRIVACY.md) |
 | Monitoring runbook | [docs/usage/monitoring.md](./docs/usage/monitoring.md) |
-| Architecture (ADR) | [docs/architecture/adr-0001-flux-cold-start.md](./docs/architecture/adr-0001-flux-cold-start.md) |
 
 ## Contact
 

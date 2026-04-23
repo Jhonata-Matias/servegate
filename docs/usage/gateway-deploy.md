@@ -195,6 +195,4 @@ Confortável até ~10x do volume MVP.
 
 - Worker source: `gateway/src/`
 - Tests: `gateway/tests/` (vitest unit + smoke shell)
-- Story: `docs/stories/2.5.gateway-rate-limit-cloudflare.story.md`
-- Epic 2 PRD: `docs/prd/epic-2-consumer-integration.md`
-- ADR-0001 (cold strategy): `docs/architecture/adr-0001-flux-cold-start.md`
+- API reference: `docs/api/reference.md`
