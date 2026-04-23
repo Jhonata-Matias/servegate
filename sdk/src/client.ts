@@ -1,21 +1,26 @@
 import {
   AuthError,
-  ColdStartError,
   NetworkError,
   RateLimitError,
+  TimeoutError,
 } from './errors.js';
 import {
+  DEFAULT_POLL_TIMEOUT_MS,
   DEFAULT_RETRY_CONFIG,
   DEFAULT_WARM_THRESHOLD_MS,
   type ClientConstructorArgs,
   type GenerateInput,
   type GenerateOutput,
+  type PollPendingResponse,
   type RetryConfig,
+  type SubmitJobResponse,
   type WarmupResult,
 } from './types.js';
 import { validateGenerateInput } from './validate.js';
 
 const COLD_HEURISTIC_THRESHOLD_MS = 30_000;
+const DEFAULT_RETRY_AFTER_SECONDS = 5;
+const MAX_NOT_FOUND_RETRIES = 3;
 
 interface RateLimitErrorBody {
   error?: string;
@@ -27,10 +32,20 @@ interface AuthErrorBody {
   error?: string;
 }
 
+interface TimeoutErrorBody {
+  error?: string;
+}
+
+interface TerminalPollErrorBody {
+  error?: string;
+  status?: string;
+}
+
 export class FluxClient {
   readonly #apiKey: string;
   readonly #gatewayUrl: string;
   readonly #retryConfig: RetryConfig;
+  readonly #warmTimeoutMs: number;
   readonly #warmThresholdMs: number;
   readonly #fetch: typeof fetch;
   #lastWarmTimestamp: number | null = null;
@@ -45,17 +60,17 @@ export class FluxClient {
     this.#apiKey = args.apiKey;
     this.#gatewayUrl = args.gatewayUrl.replace(/\/$/, '');
     this.#retryConfig = { ...DEFAULT_RETRY_CONFIG, ...args.options?.retry };
+    this.#warmTimeoutMs = args.options?.warmTimeoutMs ?? DEFAULT_POLL_TIMEOUT_MS;
     this.#warmThresholdMs = args.options?.warmThresholdMs ?? DEFAULT_WARM_THRESHOLD_MS;
     this.#fetch = args.options?.fetchImpl ?? fetch.bind(globalThis);
   }
 
   /**
-   * Pre-warm the gateway/worker by firing a minimal dummy request.
-   * Returns timing info; sets `lastWarmTimestamp` if successful.
-   * Default timeout: 180s (cold SLA per ADR-0001 Path A).
+   * Pre-warm the gateway/worker by submitting a minimal async job.
+   * Returns timing info for the submit request; sets `lastWarmTimestamp` if accepted.
    */
   async warmup(options?: { timeout?: number }): Promise<WarmupResult> {
-    const timeout = options?.timeout ?? this.#retryConfig.coldTimeoutMs;
+    const timeout = options?.timeout ?? this.#warmTimeoutMs;
     const start = Date.now();
 
     const dummyInput: GenerateInput = {
@@ -65,41 +80,19 @@ export class FluxClient {
       height: 512,
     };
 
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeout);
-
     try {
-      const response = await this.#fetch(`${this.#gatewayUrl}/`, {
-        method: 'POST',
-        headers: this.#headers(),
-        body: JSON.stringify({ input: dummyInput }),
-        signal: controller.signal,
-      });
-
+      const submitResponse = await this.#submitWithRetry(dummyInput);
+      await this.#pollSubmittedJob(submitResponse, start, timeout, true);
       const duration_ms = Date.now() - start;
-
-      if (response.ok) {
-        this.#lastWarmTimestamp = Date.now();
-        return {
-          duration_ms,
-          was_cold: duration_ms > COLD_HEURISTIC_THRESHOLD_MS,
-        };
-      }
-
-      // Non-OK: treat as warmup failure but still return timing info; don't update warm timestamp
-      throw new Error(`warmup gateway returned status ${response.status}`);
+      return {
+        duration_ms,
+        was_cold: duration_ms > COLD_HEURISTIC_THRESHOLD_MS,
+      };
     } catch (err) {
-      const duration_ms = Date.now() - start;
-      if (err instanceof Error && err.name === 'AbortError') {
-        throw new ColdStartError({
-          duration_ms,
-          retry_count: 0,
-          message: `Warmup timed out after ${timeout}ms`,
-        });
+      if (err instanceof TimeoutError || err instanceof AuthError || err instanceof RateLimitError || err instanceof NetworkError) {
+        throw err;
       }
       throw err;
-    } finally {
-      clearTimeout(timer);
     }
   }
 
@@ -117,104 +110,119 @@ export class FluxClient {
   }
 
   /**
-   * Generate an image via the gateway. Validates input strictly, then runs retry-with-backoff loop.
+   * Generate an image via the async gateway contract.
    *
-   * Behavior:
-   * - 200 → returns parsed `GenerateOutput`
-   * - 401 → throws `AuthError` immediately (no retry)
-   * - 429 → throws `RateLimitError` immediately (consumer decides retry timing)
-   * - 5xx / network error / timeout → retries up to `maxRetries` with backoff
-   * - All retries exhausted → throws `ColdStartError`
-   * - First attempt timeout: `coldTimeoutMs` (default 180s); subsequent: `warmTimeoutMs` (default 30s)
+   * Flow:
+   * - POST /jobs submits in <2s and returns 202 + Location + Retry-After
+   * - GET /jobs/{id} is polled until 200 or terminal timeout
+   * - Polling respects Retry-After and is bounded by options.warmTimeoutMs
    */
   async generate(input: unknown): Promise<GenerateOutput> {
     validateGenerateInput(input);
 
     const start = Date.now();
-    let lastHttpStatus: number | undefined;
-
-    for (let attempt = 0; attempt <= this.#retryConfig.maxRetries; attempt++) {
-      const isFirstAttempt = attempt === 0;
-      const timeout = isFirstAttempt
-        ? this.#retryConfig.coldTimeoutMs
-        : this.#retryConfig.warmTimeoutMs;
-
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), timeout);
-
-      try {
-        const response = await this.#fetch(`${this.#gatewayUrl}/`, {
-          method: 'POST',
-          headers: this.#headers(),
-          body: JSON.stringify({ input }),
-          signal: controller.signal,
-        });
-
-        lastHttpStatus = response.status;
-
-        if (response.status === 401) {
-          const body = await this.#safeReadJson<AuthErrorBody>(response);
-          throw new AuthError({
-            http_status: 401,
-            ...(body?.error ? { message: body.error } : {}),
-          });
-        }
-
-        if (response.status === 429) {
-          const body = await this.#safeReadJson<RateLimitErrorBody>(response);
-          const retryAfterHeader = response.headers.get('Retry-After');
-          const retry_after_seconds = retryAfterHeader
-            ? Math.max(0, Number.parseInt(retryAfterHeader, 10) || 60)
-            : 60;
-          throw new RateLimitError({
-            retry_after_seconds,
-            reset_at: body?.reset_at ?? new Date(Date.now() + retry_after_seconds * 1000).toISOString(),
-            ...(body?.limit !== undefined ? { limit: body.limit } : {}),
-          });
-        }
-
-        if (response.ok) {
-          const parsed = (await response.json()) as GenerateOutput;
-          this.#lastWarmTimestamp = Date.now();
-          return parsed;
-        }
-
-        // 5xx upstream — retryable; fall through to retry
-      } catch (err) {
-        // Re-throw non-retryable errors immediately
-        if (err instanceof AuthError || err instanceof RateLimitError) {
-          throw err;
-        }
-        if (err instanceof TypeError) {
-          // fetch network failure (DNS, connection refused) before any HTTP status
-          if (attempt === this.#retryConfig.maxRetries) {
-            throw new NetworkError({ cause: err });
-          }
-        } else if (err instanceof Error && err.name === 'AbortError') {
-          // timeout — retryable; fall through
-        } else {
-          // unknown — retryable up to maxRetries
-        }
-      } finally {
-        clearTimeout(timer);
-      }
-
-      // Backoff before next attempt (except on last)
-      if (attempt < this.#retryConfig.maxRetries) {
-        const delay = this.#computeBackoffMs(attempt);
-        await this.#sleep(delay);
-      }
-    }
-
-    // Exhausted retries
-    throw new ColdStartError({
-      duration_ms: Date.now() - start,
-      retry_count: this.#retryConfig.maxRetries,
-      ...(lastHttpStatus !== undefined ? { last_http_status: lastHttpStatus } : {}),
-    });
+    const submitResponse = await this.#submitWithRetry(input as GenerateInput);
+    return this.#pollSubmittedJob(submitResponse, start, this.#warmTimeoutMs, true);
   }
 
   // ---------- private helpers ----------
+
+  async #pollSubmittedJob(
+    submitResponse: Response,
+    start: number,
+    pollTimeoutMs: number,
+    markWarmOnSuccess: boolean,
+  ): Promise<GenerateOutput> {
+    const submitBody = await this.#safeReadJson<SubmitJobResponse>(submitResponse);
+    if (!submitBody?.job_id || !submitBody.status_url) {
+      throw new Error('Gateway submit response missing job_id or status_url');
+    }
+
+    const pollUrl = this.#absoluteStatusUrl(
+      submitResponse.headers.get('Location') ?? submitBody.status_url,
+    );
+
+    let retryAfterSeconds = this.#parseRetryAfterSeconds(submitResponse.headers.get('Retry-After'));
+    let notFoundRetries = 0;
+
+    while (Date.now() - start < pollTimeoutMs) {
+      const response = await this.#request(pollUrl, {
+        method: 'GET',
+        headers: this.#headers(),
+      });
+
+      if (response.status === 200) {
+        const parsed = await this.#safeReadJson<GenerateOutput>(response);
+        if (!parsed?.output?.image_b64) {
+          throw new Error('Gateway completion response missing output.image_b64');
+        }
+        if (markWarmOnSuccess) {
+          this.#lastWarmTimestamp = Date.now();
+        }
+        return parsed;
+      }
+
+      if (response.status === 202) {
+        const body = await this.#safeReadJson<PollPendingResponse>(response);
+        if (body?.status !== 'queued' && body?.status !== 'running') {
+          throw new Error('Gateway poll response returned unexpected pending body');
+        }
+        retryAfterSeconds = this.#parseRetryAfterSeconds(response.headers.get('Retry-After'));
+        await this.#sleep(retryAfterSeconds * 1000);
+        continue;
+      }
+
+      if (response.status === 404) {
+        if (notFoundRetries < MAX_NOT_FOUND_RETRIES) {
+          await this.#sleep(this.#computeBackoffMs(notFoundRetries));
+          notFoundRetries++;
+          continue;
+        }
+        throw new Error('job_not_found_or_expired');
+      }
+
+      if (response.status === 504) {
+        const body = await this.#safeReadJson<TimeoutErrorBody>(response);
+        throw new TimeoutError({
+          elapsed_ms: Date.now() - start,
+          cause: body?.error === 'generation_timeout' ? 'runpod_timeout' : 'gateway_504',
+        });
+      }
+
+      if (response.status === 401) {
+        const body = await this.#safeReadJson<AuthErrorBody>(response);
+        throw new AuthError({
+          http_status: 401,
+          ...(body?.error ? { message: body.error } : {}),
+        });
+      }
+
+      if (response.status === 429) {
+        throw await this.#buildRateLimitError(response);
+      }
+
+      if (response.status === 500) {
+        const body = await this.#safeReadJson<TerminalPollErrorBody>(response);
+        throw new Error(
+          body?.error
+            ? `${body.error}${body.status ? `:${body.status}` : ''}`
+            : 'generation_error',
+        );
+      }
+
+      if (response.status >= 502) {
+        retryAfterSeconds = this.#parseRetryAfterSeconds(response.headers.get('Retry-After'));
+        continue;
+      }
+
+      throw new Error(`Unexpected poll status ${response.status}`);
+    }
+
+    throw new TimeoutError({
+      elapsed_ms: Date.now() - start,
+      cause: 'poll_exhausted',
+    });
+  }
 
   #headers(): Record<string, string> {
     return {
@@ -228,6 +236,99 @@ export class FluxClient {
       return this.#retryConfig.initialDelayMs * (attempt + 1);
     }
     return this.#retryConfig.initialDelayMs * Math.pow(2, attempt);
+  }
+
+  async #submitWithRetry(input: GenerateInput): Promise<Response> {
+    for (let attempt = 0; attempt <= this.#retryConfig.maxRetries; attempt++) {
+      try {
+        const response = await this.#request(`${this.#gatewayUrl}/jobs`, {
+          method: 'POST',
+          headers: this.#headers(),
+          body: JSON.stringify(input),
+        });
+
+        if (response.status === 202) {
+          return response;
+        }
+        if (response.status === 401) {
+          const body = await this.#safeReadJson<AuthErrorBody>(response);
+          throw new AuthError({
+            http_status: 401,
+            ...(body?.error ? { message: body.error } : {}),
+          });
+        }
+        if (response.status === 429) {
+          throw await this.#buildRateLimitError(response);
+        }
+        if (response.status >= 500 && attempt < this.#retryConfig.maxRetries) {
+          await this.#sleep(this.#computeBackoffMs(attempt));
+          continue;
+        }
+        if (response.status >= 500) {
+          throw new NetworkError({ cause: new Error(`Gateway submit failed with ${response.status}`) });
+        }
+        throw new Error(`Unexpected submit status ${response.status}`);
+      } catch (err) {
+        if (err instanceof AuthError || err instanceof RateLimitError) {
+          throw err;
+        }
+        if (attempt === this.#retryConfig.maxRetries) {
+          if (err instanceof TimeoutError) {
+            throw err;
+          }
+          if (err instanceof Error) {
+            throw new NetworkError({ cause: err });
+          }
+          throw new Error('Unknown submit failure');
+        }
+        await this.#sleep(this.#computeBackoffMs(attempt));
+      }
+    }
+
+    throw new Error('submit retry loop exhausted unexpectedly');
+  }
+
+  async #request(url: string, init: RequestInit): Promise<Response> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), this.#retryConfig.requestTimeoutMs);
+    try {
+      return await this.#fetch(url, {
+        ...init,
+        signal: controller.signal,
+      });
+    } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') {
+        throw new NetworkError({
+          cause: new Error(`Request timed out after ${this.#retryConfig.requestTimeoutMs}ms`),
+        });
+      }
+      if (err instanceof Error) {
+        throw err;
+      }
+      throw new Error('Unknown request failure');
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  async #buildRateLimitError(response: Response): Promise<RateLimitError> {
+    const body = await this.#safeReadJson<RateLimitErrorBody>(response);
+    const retry_after_seconds = this.#parseRetryAfterSeconds(response.headers.get('Retry-After'), 60);
+    return new RateLimitError({
+      retry_after_seconds,
+      reset_at: body?.reset_at ?? new Date(Date.now() + retry_after_seconds * 1000).toISOString(),
+      ...(body?.limit !== undefined ? { limit: body.limit } : {}),
+    });
+  }
+
+  #parseRetryAfterSeconds(headerValue: string | null, fallback = DEFAULT_RETRY_AFTER_SECONDS): number {
+    if (!headerValue) return fallback;
+    return Math.max(1, Number.parseInt(headerValue, 10) || fallback);
+  }
+
+  #absoluteStatusUrl(path: string): string {
+    if (/^https?:\/\//.test(path)) return path;
+    return `${this.#gatewayUrl}${path.startsWith('/') ? path : `/${path}`}`;
   }
 
   #sleep(ms: number): Promise<void> {

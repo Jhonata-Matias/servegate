@@ -22,6 +22,28 @@ workers_dev = true
 binding = "RATE_LIMIT_KV"
 id = "55bd0b4a7c3c44bb958331ba82035e55"
 
+# KV namespace for async job mapping (key: <job_id_uuid>, value: JobMapping, TTL
+# completion+30min OR submit+6h). Added 2026-04-23 for INC-2026-04-23-gateway-504
+# async submit/poll refactor (FR-3).
+# Namespace criado em 2026-04-23 (`wrangler kv namespace create JOBS_KV`).
+[[kv_namespaces]]
+binding = "JOBS_KV"
+id = "b3799bff71cc4d9c8e28bcf27d963eab"
+
+# Preview worker (Phase 5.6 INC-2026-04-23-gateway-504). KV bindings must be repeated
+# per env (not inherited). Secrets are per-script: `wrangler secret put <NAME> --env preview`.
+[env.preview]
+name = "gemma4-gateway-preview"
+workers_dev = true
+
+[[env.preview.kv_namespaces]]
+binding = "RATE_LIMIT_KV"
+id = "55bd0b4a7c3c44bb958331ba82035e55"
+
+[[env.preview.kv_namespaces]]
+binding = "JOBS_KV"
+id = "b3799bff71cc4d9c8e28bcf27d963eab"
+
 # Observability — logs visible in `wrangler tail` and Cloudflare dashboard
 [observability]
 enabled = true

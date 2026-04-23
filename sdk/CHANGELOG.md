@@ -22,6 +22,42 @@ During alpha (v0.x), the following applies:
 - Add 4 missing coverage tests (NetworkError direct, warmup timeout, linear backoff, safeReadJson failure)
 - Add `@vitest/coverage-v8` devDep
 
+## [0.2.0] — 2026-04-23
+
+### ⚠️ BREAKING
+
+- Removed `ColdStartError`. Cold-start is no longer a terminal error; `generate()` now absorbs it via the async submit/poll flow.
+- Added `TimeoutError` with `cause: 'poll_exhausted' | 'gateway_504' | 'runpod_timeout'`.
+
+**Migration**
+
+```ts
+// v0.1.x
+try {
+  await client.generate(input);
+} catch (e) {
+  if (e instanceof ColdStartError) {
+    // old handling
+  }
+}
+
+// v0.2.0
+try {
+  await client.generate(input);
+} catch (e) {
+  if (e instanceof TimeoutError) {
+    // new handling
+  }
+}
+```
+
+### Changed
+
+- `generate(input)` preserves its public signature but now submits via `POST /jobs` and polls `GET /jobs/{id}` internally.
+- Poll cadence now respects gateway `Retry-After` headers.
+- Polling is bounded by `ClientOptions.warmTimeoutMs` (default `180000` ms).
+- `warmup()` now submits a minimal async job to `/jobs` instead of calling the removed legacy `POST /`.
+
 ## [0.1.0] — 2026-04-21
 
 ### Added

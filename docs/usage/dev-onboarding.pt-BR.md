@@ -3,10 +3,12 @@
 > 🌐 [English](./dev-onboarding.md) | **Português (Brasil)**
 
 **Status:** Alpha (invite-only)
-**SDK:** `@jhonata-matias/flux-client@0.1.x` (GitHub Packages, privado)
-**Gateway:** `https://gemma4-gateway.jhonata-matias.workers.dev` *(live desde 2026-04-21)*
+**SDK:** `@jhonata-matias/flux-client@0.2.x` (GitHub Packages, **público** desde 2026-04-22)
+**Gateway:** `https://gemma4-gateway.jhonata-matias.workers.dev` *(async submit/poll desde 2026-04-23)*
 
 Comece a gerar imagens FLUX via API autenticada em ~15 minutos.
+
+> ⚠️ **Upgrading a partir da v0.1.x?** O gateway mudou para async submit/poll em 2026-04-23 (INC-2026-04-23-gateway-504). O endpoint legado `POST /` agora retorna 404. O SDK `v0.2.0` cuida do novo contrato de forma transparente — só atualize o install. O `ColdStartError` foi removido em favor de `TimeoutError` (com discriminador `.cause`). Notas completas de migração: [`docs/api/migration-async.md`](../api/migration-async.md) (em inglês).
 
 ## Antes de começar
 
@@ -81,7 +83,7 @@ GATEWAY_API_KEY=<sua-key-emitida>
 
 ```typescript
 // server code (ex.: Next.js API route, Express handler, Lambda)
-import { FluxClient, ColdStartError, RateLimitError, AuthError } from '@jhonata-matias/flux-client';
+import { FluxClient, TimeoutError, RateLimitError, AuthError } from '@jhonata-matias/flux-client';
 
 const client = new FluxClient({
   apiKey: process.env.GATEWAY_API_KEY!,
@@ -114,10 +116,11 @@ try {
   const buf = Buffer.from(result.output.image_b64, 'base64');
   // fs.writeFileSync('out.png', buf);
 } catch (e) {
-  if (e instanceof ColdStartError) {
-    // Cold start excedeu o retry budget — geralmente significa que o worker está levando >180s
+  if (e instanceof TimeoutError) {
+    // Poll budget esgotado, gateway retornou 504, OU RunPod TIMED_OUT
+    // e.cause ∈ { 'poll_exhausted' | 'gateway_504' | 'runpod_timeout' }
     // Recomendado: mostrar UX de "servidor demorando mais que o normal", retry depois
-    console.error(`cold timeout after ${e.retry_count} retries (${e.duration_ms}ms)`);
+    console.error(`timeout (${e.cause})${e.elapsedMs ? ` após ${e.elapsedMs}ms` : ''}`);
   } else if (e instanceof RateLimitError) {
     // Limite diário global atingido (100/dia no alpha)
     console.error(`rate limit. retry in ${e.retry_after_seconds}s (resets at ${e.reset_at})`);
@@ -157,7 +160,7 @@ Antes de fazer deploy do seu app usando a servegate FLUX API em produção:
 
 - [ ] `GATEWAY_API_KEY` apenas no ambiente server-side (não no bundle client)
 - [ ] Warmup chamado no init do app OU antes da primeira request esperada do usuário
-- [ ] Tratamento de erros tipado para `ColdStartError`, `RateLimitError`, `AuthError`
+- [ ] Tratamento de erros tipado para `TimeoutError` (com discriminador `.cause`), `RateLimitError`, `AuthError`, `NetworkError`
 - [ ] UI graceful para espera de cold start (até 180s na primeira vez)
 - [ ] Monitoring: track warmup latency, generate latency, error rates
 - [ ] Budget alert: se o uso se aproximar do cap diário, implemente queueing
@@ -193,7 +196,7 @@ Se a key foi comprometida **agora**:
 |---|---|---|
 | 401 Unauthorized | Key errada ou revogada | Verifique `GATEWAY_API_KEY` no env; contate o owner |
 | 429 Too Many Requests | Limite global de 100/dia atingido | Aguarde até `reset_at` (próximo 00:00 UTC); planeje dentro da quota |
-| 504 Gateway Timeout | Cold persistente (>180s) | Retry em 5 min; se continuar, reporte via issue |
+| 504 Gateway Timeout | Job RunPod expirou (>280s `COMFY_GENERATION_TIMEOUT`) | SDK captura como `TimeoutError({cause: 'gateway_504'})`; retry em 5 min |
 | 502 Upstream Error | Endpoint RunPod com 5xx | Reporte via issue — owner investiga |
 | Erros de tipo no `import` | `.npmrc` mal configurado | Verifique a linha `@jhonata-matias:registry=...` + token |
 | `npm install` 404 | Token sem scope `read:packages` | Regenere o GitHub token com o scope correto |

@@ -1,27 +1,21 @@
 import { describe, it, expect } from 'vitest';
 import {
   AuthError,
-  ColdStartError,
   NetworkError,
   RateLimitError,
+  TimeoutError,
   ValidationError,
 } from '../src/errors.js';
 
 describe('error classes', () => {
-  it('ColdStartError instanceof Error and ColdStartError', () => {
-    const e = new ColdStartError({ duration_ms: 180000, retry_count: 3, last_http_status: 504 });
+  it('TimeoutError instanceof Error and TimeoutError', () => {
+    const e = new TimeoutError({ elapsed_ms: 180000, cause: 'poll_exhausted' });
     expect(e).toBeInstanceOf(Error);
-    expect(e).toBeInstanceOf(ColdStartError);
-    expect(e.name).toBe('ColdStartError');
-    expect(e.duration_ms).toBe(180000);
-    expect(e.retry_count).toBe(3);
-    expect(e.last_http_status).toBe(504);
+    expect(e).toBeInstanceOf(TimeoutError);
+    expect(e.name).toBe('TimeoutError');
+    expect(e.elapsed_ms).toBe(180000);
+    expect(e.cause).toBe('poll_exhausted');
     expect(e.message).toContain('180000ms');
-  });
-
-  it('ColdStartError works without optional last_http_status', () => {
-    const e = new ColdStartError({ duration_ms: 100000, retry_count: 2 });
-    expect(e.last_http_status).toBeUndefined();
   });
 
   it('RateLimitError exposes retry_after_seconds and reset_at', () => {
@@ -67,10 +61,10 @@ describe('error classes', () => {
   });
 
   it('errors are NOT instanceof each other', () => {
-    const cold = new ColdStartError({ duration_ms: 1, retry_count: 1 });
+    const timeout = new TimeoutError({ elapsed_ms: 1, cause: 'gateway_504' });
     const auth = new AuthError();
-    expect(cold).not.toBeInstanceOf(AuthError);
-    expect(auth).not.toBeInstanceOf(ColdStartError);
+    expect(timeout).not.toBeInstanceOf(AuthError);
+    expect(auth).not.toBeInstanceOf(TimeoutError);
     expect(auth).not.toBeInstanceOf(RateLimitError);
   });
 });

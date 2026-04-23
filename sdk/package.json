@@ -1,7 +1,7 @@
 {
   "name": "@jhonata-matias/flux-client",
-  "version": "0.1.0",
-  "description": "TypeScript SDK for the servegate (ex-gemma4) FLUX image-generation gateway (Story 2.5). Handles cold-start (~130s) via warmup() + retry-with-backoff, exposes typed errors (ColdStartError, RateLimitError, ValidationError, AuthError, NetworkError). Repo: Jhonata-Matias/servegate.",
+  "version": "0.2.0",
+  "description": "TypeScript SDK for the servegate FLUX image-generation gateway. Uses async submit/poll under the hood and exposes typed errors (TimeoutError, RateLimitError, ValidationError, AuthError, NetworkError). Repo: Jhonata-Matias/servegate.",
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",

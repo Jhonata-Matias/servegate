@@ -9,7 +9,8 @@
 [![status: alpha](https://img.shields.io/badge/status-alpha-orange)](./docs/legal/TERMS.pt-BR.md)
 [![license: MIT](https://img.shields.io/badge/license-MIT-blue)](./sdk/LICENSE)
 [![gateway: live](https://img.shields.io/badge/gateway-live-green)](https://gemma4-gateway.jhonata-matias.workers.dev)
-[![SDK: v0.1.0](https://img.shields.io/badge/sdk-v0.1.0-brightgreen)](./sdk/README.md)
+[![SDK: v0.2.0](https://img.shields.io/badge/sdk-v0.2.0-brightgreen)](./sdk/README.md)
+[![API: async submit/poll](https://img.shields.io/badge/api-async%20submit%2Fpoll-blue)](./docs/api/migration-async.md)
 
 ---
 
@@ -23,14 +24,24 @@
 
 **Quer fazer sua primeira chamada na API?** Vá para o [Guia de Onboarding do Dev](./docs/usage/dev-onboarding.pt-BR.md) — 5 passos, ~15 minutos do pedido de acesso até a primeira imagem.
 
+A API usa um contrato **async submit/poll** (desde 2026-04-23, INC-2026-04-23-gateway-504). O submit retorna `202 + job_id`; você faz poll até o job ficar `COMPLETED`. O SDK TypeScript cuida do polling de forma transparente; o HTTP raw fica assim:
+
 ```bash
-# Quando tiver sua GATEWAY_API_KEY (veja o onboarding)
-curl -X POST https://gemma4-gateway.jhonata-matias.workers.dev \
+# 1. Submit do job → 202 + {job_id, status_url, est_wait_seconds: "unknown"}
+JOB=$(curl -sX POST https://gemma4-gateway.jhonata-matias.workers.dev/jobs \
   -H "X-API-Key: $GATEWAY_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"input":{"prompt":"a zen garden, photorealistic","steps":4,"width":1024,"height":1024,"seed":42}}' \
-  | jq -r '.output.image_b64' | base64 -d > out.png
+  -d '{"prompt":"a zen garden, photorealistic","steps":4,"width":1024,"height":1024,"seed":42}' \
+  | jq -r '.job_id')
+
+# 2. Poll a cada 5s até 200 + {output: {image_b64, ...}} (cold start pode levar ~130s)
+until OUT=$(curl -sf https://gemma4-gateway.jhonata-matias.workers.dev/jobs/$JOB \
+  -H "X-API-Key: $GATEWAY_API_KEY" | jq -e '.output.image_b64' 2>/dev/null); do sleep 5; done
+
+echo "$OUT" | tr -d '"' | base64 -d > out.png
 ```
+
+Para o caminho TypeScript (recomendado): `npm install @jhonata-matias/flux-client@^0.2.0` e depois `client.generate(...)` — o polling é interno. Veja [Onboarding do Dev](./docs/usage/dev-onboarding.pt-BR.md).
 
 ## Links
 
@@ -38,6 +49,7 @@ curl -X POST https://gemma4-gateway.jhonata-matias.workers.dev \
 |---|---|
 | Onboarding do Dev | [docs/usage/dev-onboarding.pt-BR.md](./docs/usage/dev-onboarding.pt-BR.md) |
 | API Reference | [docs/api/reference.md](./docs/api/reference.md) (em inglês) |
+| Async Migration Guide | [docs/api/migration-async.md](./docs/api/migration-async.md) (em inglês) |
 | TypeScript SDK | [sdk/README.md](./sdk/README.md) (em inglês) |
 | Exemplo Python / Colab | [examples/colab/README.md](./examples/colab/README.md) (em inglês) |
 | Termos de Uso | [docs/legal/TERMS.pt-BR.md](./docs/legal/TERMS.pt-BR.md) |
@@ -61,7 +73,7 @@ curl -X POST https://gemma4-gateway.jhonata-matias.workers.dev \
 
 - **Alpha = invite-only**: o acesso é controlado por emissão de `GATEWAY_API_KEY` (revisão manual, 3–7 dias).
 - **Rate limit**: 100 imagens/dia globalmente entre todos os usuários — previne custo descontrolado durante o alpha.
-- **Cold start**: a primeira chamada após um período idle pode levar ~130 segundos. O SDK lida com isso via `warmup()` + retry-with-backoff.
+- **Cold start**: a primeira chamada após um período idle pode levar ~130 segundos. O SDK lida com isso via `warmup()` + polling assíncrono transparente (desde v0.2.0).
 - **Sem SLA**: projeto pessoal, uptime best-effort. Cloudflare Workers + RunPod Serverless fornecem os SLAs de plataforma subjacentes.
 - **Breaking changes esperadas** em bumps de versão minor (pre-1.0). Siga [sdk/CHANGELOG.md](./sdk/CHANGELOG.md) (em inglês).
 
