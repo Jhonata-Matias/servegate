@@ -2,7 +2,19 @@
 
 [![alpha](https://img.shields.io/badge/status-alpha-orange)](../docs/legal/TERMS.md) [![license MIT](https://img.shields.io/badge/license-MIT-blue)](./LICENSE)
 
-TypeScript SDK para o gateway de geração de imagens FLUX do projeto **servegate** (ex-gemma4). Encapsula chamadas ao gateway autenticado (Story 2.5), trata cold-start realista (~130s, ADR-0001 Path A) via `warmup()` + retry-with-backoff, e expõe error classes tipadas para UX flows diferenciados.
+TypeScript SDK para o gateway de geração de imagens FLUX do projeto **servegate** (ex-gemma4). Encapsula chamadas ao gateway autenticado (Story 2.5), trata cold-start realista (~130s, ADR-0001 Path A) via `warmup()` + polling assíncrono transparente, e expõe error classes tipadas para UX flows diferenciados.
+
+## ⚠️ v0.2.0 — Breaking change (2026-04-23)
+
+`v0.2.0` migra o SDK para o contrato **async submit/poll** do gateway (`POST /jobs` + `GET /jobs/{id}`). Consumers do `v0.1.x` precisam atualizar — o gateway não responde mais no endpoint legado `POST /`.
+
+**Principais mudanças:**
+
+- `generate()` mantém a mesma assinatura pública, mas internamente submete e polla até completar (`Retry-After` respeitado)
+- `ColdStartError` foi **removido** — cold-start deixou de ser um erro terminal
+- `TimeoutError` novo expõe `cause: 'poll_exhausted' | 'gateway_504' | 'runpod_timeout'` e `elapsedMs?`
+
+Guia completo de migração: [`docs/api/migration-async.md`](../docs/api/migration-async.md). Raw HTTP contract: [`docs/api/reference.md`](../docs/api/reference.md).
 
 ## ⚠️ ALPHA STATUS
 
@@ -38,7 +50,7 @@ npm install @jhonata-matias/flux-client
 ## Quickstart
 
 ```typescript
-import { FluxClient, ColdStartError, RateLimitError, AuthError } from '@jhonata-matias/flux-client';
+import { FluxClient, TimeoutError, RateLimitError, AuthError } from '@jhonata-matias/flux-client';
 
 const client = new FluxClient({
   apiKey: process.env.GATEWAY_API_KEY!,
@@ -58,8 +70,8 @@ try {
   console.log('image_b64 length:', result.output.image_b64.length);
   console.log('elapsed_ms:', result.output.metadata.elapsed_ms);
 } catch (e) {
-  if (e instanceof ColdStartError) {
-    console.error(`Server taking too long (${e.duration_ms}ms across ${e.retry_count} retries)`);
+  if (e instanceof TimeoutError) {
+    console.error(`Generation timed out (cause: ${e.cause}${e.elapsedMs ? `, after ${e.elapsedMs}ms` : ''})`);
   } else if (e instanceof RateLimitError) {
     console.error(`Rate limit. Retry in ${e.retry_after_seconds}s (resets at ${e.reset_at})`);
   } else if (e instanceof AuthError) {
@@ -116,7 +128,7 @@ Timestamp do último success (warmup ou generate); `null` se nunca aqueceu.
 
 | Class | Quando | Propriedades |
 |---|---|---|
-| `ColdStartError` | Cold timeout esgotou retries | `duration_ms`, `retry_count`, `last_http_status?` |
+| `TimeoutError` | Poll budget esgotado, gateway 504, ou RunPod `TIMED_OUT` | `cause: 'poll_exhausted' \| 'gateway_504' \| 'runpod_timeout'`, `elapsedMs?` |
 | `RateLimitError` | HTTP 429 (sem retry automático) | `retry_after_seconds`, `reset_at`, `limit?` |
 | `AuthError` | HTTP 401 (sem retry) | `http_status` |
 | `ValidationError` | Input inválido (pre-network) | `field`, `reason` |
