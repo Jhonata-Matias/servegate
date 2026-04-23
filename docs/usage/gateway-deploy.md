@@ -62,7 +62,7 @@ npm run secret:gateway-key
 # Cole RUNPOD_API_KEY (mesmo valor de serverless/.env, Story 2.1)
 npm run secret:runpod-key
 
-# Cole RUNPOD_ENDPOINT_ID (output do deploy Story 2.1, e.g. 80e45g6gct1opm)
+# Cole RUNPOD_ENDPOINT_ID (output do deploy Story 2.1, e.g. <RUNPOD_ENDPOINT_ID>)
 npm run secret:runpod-endpoint
 ```
 

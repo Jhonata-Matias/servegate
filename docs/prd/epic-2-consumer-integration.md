@@ -73,7 +73,7 @@ Habilitar consumo da capacidade de geração de imagem (Story 1.1) por aplicaç�
 - [x] **TypeScript SDK publicado** com tipagem completa — Story 2.2 Done (QA 92/100); Story 2.6 v0.8 flipped visibility para **public** em GitHub Packages
 - [ ] App demo deployada em Vercel mostrando: input prompt → image em <10s — **Story 2.3 (Ready, unblocked, not yet shipped)**
 - [x] **Auth via X-API-Key bloqueia requests sem header válido (HTTP 401)** — Story 2.5 Done (QA 88/100); validated end-to-end via Story 2.6 external smoke (architectural auth-before-rate-limit proof)
-- [ ] **Custo MVP <$20/mês** — pendente medição real pós-volume (target 30-day review 2026-05-21); cap operacional via 100/dia rate-limit já em vigor
+- [ ] **Custo MVP <<standby cost>** — pendente medição real pós-volume (target 30-day review 2026-05-21); cap operacional via 100/dia rate-limit já em vigor
 - [x] **Documentação cobre: deploy serverless, integração SDK, customização frontend** — Story 2.6 v0.8 entregou: `docs/usage/dev-onboarding.md` (5-step quickstart), `docs/api/reference.md` (HTTP contract), `sdk/README.md` (TS), `examples/colab/README.md` (Python), `docs/usage/gateway-deploy.md` (ops), `docs/usage/monitoring.md` (runbook). Frontend customization docs deferred to Story 2.3 web demo.
 - [x] Pod self-hosted continua acessível via `pod.sh up` pra dev (não foi quebrado) — validado Story 2.1
 - [x] **(NEW v0.8) External developer access distribution** — Story 2.6 Done: SDK public, root README, formal issue templates (access-request flow), owner contact published, `v0.1.0-alpha` release tagged. External devs can complete onboarding without owner hand-holding.
@@ -333,9 +333,9 @@ Assumindo SDK faz retry inteligente em cold (primeira request fica slow; subsequ
 ### Cold-start cost detail (se muitos idle periods)
 
 Com Opção A (network volume) cold é ~<$0.05/img cold worst case (100s × ~$0.0003/s measured). Cada idle >5s depois nova request vira cold. Em traffic padrão esporádico:
-- **Low traffic** (10 req/dia spaced): 10 × $0.03 cold + 0 warm + ~$0 otras = ~$0.30/dia = **$9/mês só inferência** (cold-dominated)
-- **Medium traffic** (50 req/dia): 5-10 colds + 40-45 warm = $0.20 + $0.07 = ~$0.27/dia = **$8/mês**
-- **High traffic** (100 req/dia cap): 1-2 colds + 98 warm = ~$0.15/dia = **$4.50/mês**
+- **Low traffic** (10 req/dia spaced): 10 × $0.03 cold + 0 warm + ~$0 otras = ~$0.30/dia = **<within budget> só inferência** (cold-dominated)
+- **Medium traffic** (50 req/dia): 5-10 colds + 40-45 warm = $0.20 + $0.07 = ~$0.27/dia = **<within budget>**
+- **High traffic** (100 req/dia cap): 1-2 colds + 98 warm = ~$0.15/dia = **<within budget>**
 
 **Insight:** tráfego low-esparso é MAIS CARO que high-batch porque cada request paga cold. ADR-0001 path B ou C (eliminating cold) pode inverter a lógica econômica para low-volume consumers.
 
@@ -343,7 +343,7 @@ Com Opção A (network volume) cold é ~<$0.05/img cold worst case (100s × ~$0.
 
 Com 100 imgs/dia globais + pior caso cold-dominated:
 - 100 × <$0.05/img cold worst case = **$3/dia máximo = $90/mês** (worst case matemático)
-- Realista (mix 20% cold + 80% warm): ~$0.12 × 100 = $12/dia × 30 = **$360/mês SE todos os dias maxed out** (unrealistic — rate-limit pressupõe ocasional abuse, não sustained max)
+- Realista (mix 20% cold + 80% warm): ~$0.12 × 100 = $12/dia × 30 = **<worst case sustained> SE todos os dias maxed out** (unrealistic — rate-limit pressupõe ocasional abuse, não sustained max)
 
 **Nova proposta cap operacional:** além de 100/dia hard cap, adicionar monitoring de **$10/dia alert** via RunPod billing email.
 

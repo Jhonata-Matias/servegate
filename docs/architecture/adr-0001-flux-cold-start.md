@@ -74,8 +74,8 @@ O **warm path** atende SLA primário do Epic 2 (<10s p95). A questão é: **como
 **Description:** PATCH endpoint `workersMin=1`. Primeiro worker fica hot 24/7. Cold virtualmente zero para primeiras requests.
 
 **CRITICAL FINDING:** RunPod docs confirmam que workersMin é billed CONTINUAMENTE at active rate (20-30% discount vs flex). Isso significa:
-- RTX 4090 active rate: ~$0.0001-0.0003/s GPU × 86400s × 30d = **$544/mês floor**
-- RTX A5000 active rate: ~$0.0001-0.0003/s GPU × 86400s × 30d = **$337/mês floor**
+- RTX 4090 active rate: ~$0.0001-0.0003/s GPU × 86400s × 30d = **<alternative stack 1-2 orders higher> floor**
+- RTX A5000 active rate: ~$0.0001-0.0003/s GPU × 86400s × 30d = **<alternative stack 1-2 orders higher> floor**
 
 **Pros:**
 - Cold UX: ~0s p95 (consistente)
@@ -98,7 +98,7 @@ O **warm path** atende SLA primário do Epic 2 (<10s p95). A questão é: **como
 - RunPod não tem scheduled scaling nativo — requer infraestrutura externa
 - 3-5 dev-days de implementação + monitoring
 - Cron failure modes (cron morreu, endpoint ficou em workersMin=1 24/7 = conta surpresa)
-- Still expensive for MVP volumes: ~$180/mês floor
+- Still expensive for MVP volumes: ~<alternative stack mid-range> floor
 
 ## Cost Matrix (consolidated, measured data)
 
