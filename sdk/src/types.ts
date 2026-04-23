@@ -23,21 +23,32 @@ export interface GenerateOutput {
   };
 }
 
-export interface WarmupResult {
-  duration_ms: number;
-  was_cold: boolean;
+export interface SubmitJobResponse {
+  job_id: string;
+  status_url: string;
+  est_wait_seconds: 'unknown';
+}
+
+export interface PollPendingResponse {
+  status: 'queued' | 'running';
+  est_wait_seconds: 'unknown';
 }
 
 export interface RetryConfig {
   maxRetries: number;
   initialDelayMs: number;
   backoffStrategy: 'exponential' | 'linear';
-  coldTimeoutMs: number;
-  warmTimeoutMs: number;
+  requestTimeoutMs: number;
+}
+
+export interface WarmupResult {
+  duration_ms: number;
+  was_cold: boolean;
 }
 
 export interface ClientOptions {
   retry?: Partial<RetryConfig>;
+  warmTimeoutMs?: number;
   warmThresholdMs?: number;
   fetchImpl?: typeof fetch;
 }
@@ -52,8 +63,8 @@ export const DEFAULT_RETRY_CONFIG: RetryConfig = {
   maxRetries: 3,
   initialDelayMs: 1000,
   backoffStrategy: 'exponential',
-  coldTimeoutMs: 180_000,
-  warmTimeoutMs: 30_000,
+  requestTimeoutMs: 30_000,
 };
 
+export const DEFAULT_POLL_TIMEOUT_MS = 180_000;
 export const DEFAULT_WARM_THRESHOLD_MS = 30_000;

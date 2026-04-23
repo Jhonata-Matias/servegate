@@ -86,7 +86,7 @@
     },
     {
       "id": "FR-2",
-      "description": "Gateway expõe GET /jobs/{job_id} que retorna 200 + {image_b64, metadata} se concluído, 202 + {status, est_remaining_seconds: 'unknown'} se em andamento, 504 se RunPod timeout, 404 se job_id inexistente/expirado.",
+      "description": "Gateway expõe GET /jobs/{job_id} que retorna 200 + {image_b64, metadata} se concluído, 202 + {status, est_wait_seconds: 'unknown'} se em andamento, 504 se RunPod timeout, 404 se job_id inexistente/expirado.",
       "priority": "P0",
       "rationale": "Permite cliente fazer polling assíncrono. Status semantics inspiradas em RunPod /status.",
       "acceptance": ["Status transitions: queued → running → completed | failed | timeout"],

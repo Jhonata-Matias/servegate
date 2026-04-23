@@ -1,16 +1,16 @@
 // Bundle smoke test — verify `instanceof` works in ESM bundle output.
 // Run via: node tests/bundle-esm.test.mjs
 import assert from 'node:assert';
-import { ColdStartError, RateLimitError, AuthError, ValidationError, NetworkError, FluxClient } from '../dist/index.js';
+import { TimeoutError, RateLimitError, AuthError, ValidationError, NetworkError, FluxClient } from '../dist/index.js';
 
-const cold = new ColdStartError({ duration_ms: 1000, retry_count: 1 });
-assert.ok(cold instanceof Error, 'ColdStartError instanceof Error');
-assert.ok(cold instanceof ColdStartError, 'ColdStartError instanceof ColdStartError');
-assert.strictEqual(cold.duration_ms, 1000);
+const timeout = new TimeoutError({ elapsed_ms: 1000, cause: 'poll_exhausted' });
+assert.ok(timeout instanceof Error, 'TimeoutError instanceof Error');
+assert.ok(timeout instanceof TimeoutError, 'TimeoutError instanceof TimeoutError');
+assert.strictEqual(timeout.elapsed_ms, 1000);
 
 const rl = new RateLimitError({ retry_after_seconds: 60, reset_at: '2026-01-01' });
 assert.ok(rl instanceof RateLimitError);
-assert.ok(!(rl instanceof ColdStartError));
+assert.ok(!(rl instanceof TimeoutError));
 
 const auth = new AuthError();
 assert.ok(auth instanceof AuthError);

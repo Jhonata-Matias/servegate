@@ -246,7 +246,7 @@ phases:
             4. runpod.getStatus
             5. mapStatus
             6. If completed: storage.updateStatus(+30min TTL), 200 + output
-            7. If running|queued: 202 + {status, est_remaining_seconds:"unknown"}
+            7. If running|queued: 202 + {status, est_wait_seconds:"unknown"}
             8. If failed|cancelled: 500 + error_code
             9. If timeout: 504 + {error:"generation_timeout", timeout_s:280}
 

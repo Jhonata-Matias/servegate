@@ -3,20 +3,18 @@
  * All errors extend Error and are designed to work with `instanceof` in both CJS and ESM bundles.
  */
 
-export class ColdStartError extends Error {
-  readonly duration_ms: number;
-  readonly retry_count: number;
-  readonly last_http_status?: number;
+export type TimeoutCause = 'poll_exhausted' | 'gateway_504' | 'runpod_timeout';
 
-  constructor(args: { duration_ms: number; retry_count: number; last_http_status?: number; message?: string }) {
-    super(args.message ?? `Cold start exceeded retry budget after ${args.retry_count} retries (${args.duration_ms}ms total)`);
-    this.name = 'ColdStartError';
-    this.duration_ms = args.duration_ms;
-    this.retry_count = args.retry_count;
-    if (args.last_http_status !== undefined) {
-      this.last_http_status = args.last_http_status;
-    }
-    Object.setPrototypeOf(this, ColdStartError.prototype);
+export class TimeoutError extends Error {
+  readonly elapsed_ms: number;
+  override readonly cause: TimeoutCause;
+
+  constructor(args: { elapsed_ms: number; cause: TimeoutCause; message?: string }) {
+    super(args.message ?? `Generation timed out after ${args.elapsed_ms}ms (${args.cause})`);
+    this.name = 'TimeoutError';
+    this.elapsed_ms = args.elapsed_ms;
+    this.cause = args.cause;
+    Object.setPrototypeOf(this, TimeoutError.prototype);
   }
 }
 

@@ -112,7 +112,7 @@ Cloudflare Worker
    │  │     IN_QUEUE→queued; IN_PROGRESS→running; COMPLETED→completed;
    │  │     FAILED→failed; CANCELLED→cancelled; TIMED_OUT→timeout
    │  ├─ Se completed: storage.update(status), retorna 200 + image_b64 payload
-   │  ├─ Se running/queued: retorna 202 + {status, est_remaining_seconds:"unknown"}
+   │  ├─ Se running/queued: retorna 202 + {status, est_wait_seconds:"unknown"}
    │  └─ Se failed/cancelled/timeout: retorna 504/500 + error_code
    ▼
 ```
@@ -276,7 +276,7 @@ Feature: Async job submission via POST /jobs
     When the client GETs /jobs/{job_id}
     Then the response status is 202
     And the body contains {status: "running"} or {status: "queued"}
-    And est_remaining_seconds is the literal string "unknown"
+    And est_wait_seconds is the literal string "unknown"
 
   Scenario: Unknown job_id returns 404 (EC-2)
     Given a job_id that was never created OR has expired past TTL

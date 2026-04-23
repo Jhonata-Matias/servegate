@@ -64,3 +64,19 @@ choice gets an entry. Small tactical choices (variable naming, test structure) s
 **Rationale:** Minimal surface change to existing types; additive. Existing consumers (auth.ts, log.ts, rate-limit.ts) remain source-compatible.
 
 ---
+
+## 2026-04-23T16:00:00Z — Phase 1 audit checkpoint
+
+**Context:** User asked for a real-state audit of Phase 1 against the story and decision log. Local repository evidence exists for 1.1 and 1.2, but there is no local RunPod dashboard capture for 1.3.
+
+**Decision:**
+- Treat 1.1 and 1.2 as locally verified from `gateway/wrangler.toml` and `gateway/src/types.ts`
+- Keep 1.3 open until @devops attaches dashboard evidence for `COMFY_GENERATION_TIMEOUT_S=280`
+- Create an evidence-request placeholder in `.aiox/notes/FR-4-runpod-env-audit-2026-04-23.md`
+- Create an explicit handoff to @devops for the missing RunPod proof
+
+**Rationale:** No invention rule. The story can only be marked complete for Phase 1 once AC-4 has local evidence. Until then the correct state is "partially complete, external blocker."
+
+**Traceability:** story Dev Agent Record, `gateway/wrangler.toml`, `gateway/src/types.ts`, and the delegated Phase 1.3 requirement in `implementation.yaml`
+
+---

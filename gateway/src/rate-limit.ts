@@ -83,6 +83,29 @@ export async function checkAndIncrement(
 }
 
 /**
+ * Reads the current rate-limit counter WITHOUT mutating. Used by GET /jobs/{id}
+ * handlers so polling does NOT consume quota (EC-5 — INC-2026-04-23-gateway-504).
+ *
+ * Returns the same RateLimitState shape so callers can populate X-RateLimit-*
+ * response headers consistently with the submit path.
+ */
+export async function checkAndRead(
+  kv: KVNamespace,
+  now: Date = new Date(),
+): Promise<RateLimitState> {
+  const key = dayKey(now);
+  const raw = await kv.get(key);
+  const count = raw ? Number.parseInt(raw, 10) || 0 : 0;
+
+  return {
+    count,
+    remaining: Math.max(0, DAILY_LIMIT - count),
+    resetAt: nextUtcMidnightIso(now),
+    secondsUntilReset: secondsUntilNextUtcMidnight(now),
+  };
+}
+
+/**
  * Builds a 429 Response with Retry-After header + structured body.
  */
 export function buildRateLimitResponse(state: RateLimitState): Response {
