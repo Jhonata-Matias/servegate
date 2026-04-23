@@ -1,0 +1,219 @@
+{
+  "storyId": "INC-2026-04-23-gateway-504",
+  "researchedAt": "2026-04-23T13:45:00Z",
+  "researchedBy": "@analyst",
+  "timeboxUsed": "~25min (well under 1-2h budget)",
+
+  "topics": [
+    {
+      "id": "RT-1",
+      "topic": "Cloudflare Workers KV eventual consistency",
+      "findings": [
+        {
+          "source": "https://developers.cloudflare.com/kv/concepts/how-kv-works/",
+          "date_accessed": "2026-04-23",
+          "key_takeaway": "KV is eventually consistent with default 60-second cache TTL. Changes in POP-A may take 'up to 60 seconds or more' to be visible at other POPs. Propagation is LAZY — replication only happens to POPs actively reading the key.",
+          "quote_or_data": "\"Changes may take up to 60 seconds or more to be visible in other global network locations as their cached versions of the data time out.\" \"Negative lookups indicating that the key does not exist are also cached.\""
+        },
+        {
+          "source": "https://developers.cloudflare.com/kv/concepts/how-kv-works/",
+          "date_accessed": "2026-04-23",
+          "key_takeaway": "Official read-after-write consistency pattern recommends Durable Objects — which our CON-1 explicitly bans on cost grounds.",
+          "quote_or_data": "\"Send all of your writes for a given KV key through a corresponding instance of a Durable Object, and then read that value from KV in other Workers.\""
+        },
+        {
+          "source": "https://developers.cloudflare.com/kv/reference/faq/",
+          "date_accessed": "2026-04-23",
+          "key_takeaway": "FAQ does NOT confirm sticky POP routing for same-client. Cloudflare docs do not document ECMP stickiness — our ASM-1 rationale needs correction.",
+          "quote_or_data": "(FAQ lacks any mention of sticky routing, ECMP, or same-client-same-POP behavior.)"
+        },
+        {
+          "source": "https://developers.cloudflare.com/kv/concepts/how-kv-works/",
+          "date_accessed": "2026-04-23",
+          "key_takeaway": "cacheTtl is a per-read parameter that CAN be configured lower than 60s default — but docs do not clarify whether setting cacheTtl=1 forces origin read."
+        }
+      ],
+      "conclusion": "ASM-1 is NUANCED. Eventual consistency risk is real (up to 60s delay between POPs). Our justification 'sticky routing via ECMP' is unverified by CF docs — REMOVE that claim from ASM-1. However, the mitigation (SDK retry with exponential backoff on 404, per EC-7) remains architecturally sound and aligned with CF best practices. Recommendation: set low cacheTtl on GET /jobs/{id} reads to minimize staleness window.",
+      "confidence": "high",
+      "impact_on_requirements": [
+        "UPDATE ASM-1: remove 'ECMP sticky routing' claim; keep mitigation via SDK retry (EC-7).",
+        "ADD to FR-2 or new NFR: GET /jobs/{id} KV read should pass cacheTtl parameter (≤60s, possibly lower) to reduce staleness.",
+        "FLAG for @architect: if PM/user finds EC-7 mitigation insufficient in practice, Durable Objects is the only CF-supported strong-consistency path — but violates CON-1. Trade-off would require re-scoping."
+      ]
+    },
+
+    {
+      "id": "RT-2",
+      "topic": "RunPod Serverless /run + /status API",
+      "findings": [
+        {
+          "source": "https://docs.runpod.io/serverless/endpoints/operation-reference",
+          "date_accessed": "2026-04-23",
+          "key_takeaway": "Complete status enum confirmed: IN_QUEUE | IN_PROGRESS | COMPLETED | FAILED | CANCELLED | TIMED_OUT. Our codebase currently handles only 3 of these in handler.py (running/success/error).",
+          "quote_or_data": "\"IN_QUEUE\", \"IN_PROGRESS\", \"COMPLETED\", \"FAILED\", \"CANCELLED\" — plus TIMED_OUT referenced in /retry section."
+        },
+        {
+          "source": "https://docs.runpod.io/serverless/endpoints/operation-reference",
+          "date_accessed": "2026-04-23",
+          "key_takeaway": "/run response schema: {id, status: 'IN_QUEUE'}. /status response schema: {delayTime, executionTime, id, output?, status}. output field is optional (only present when status=COMPLETED).",
+          "quote_or_data": "/run: {\"id\": \"string\", \"status\": \"IN_QUEUE\"}. /status: {\"delayTime\": 31618, \"executionTime\": 1437, \"id\": \"string\", \"output\": {}, \"status\": \"COMPLETED\"}."
+        },
+        {
+          "source": "https://docs.runpod.io/serverless/endpoints/operations",
+          "date_accessed": "2026-04-23",
+          "key_takeaway": "⚠️ CRITICAL: Async /run results are retained for ONLY 30 MINUTES after completion, not 24h as I initially estimated in EC-3. Our KV TTL strategy must align.",
+          "quote_or_data": "\"Async (/run) results are available for 30 minutes... Once expired, jobs cannot be retried.\""
+        },
+        {
+          "source": "https://docs.runpod.io/serverless/endpoints/operations",
+          "date_accessed": "2026-04-23",
+          "key_takeaway": "Rate limits: /run = 1000 req/10s (200 concurrent), /status = 2000 req/10s (400 concurrent). Ample headroom for MVP (100-500 jobs/month).",
+          "quote_or_data": "\"/status: 2000 requests per 10 seconds, /run: 1000 requests per 10 seconds\""
+        },
+        {
+          "source": "https://docs.runpod.io/serverless/endpoints/operation-reference",
+          "date_accessed": "2026-04-23",
+          "key_takeaway": "Docs do NOT explicitly document race condition behavior between /run response and first /status query. No guarantee that /status works immediately after /run returns.",
+          "quote_or_data": "(No explicit documentation of first-/status-after-/run timing.)"
+        }
+      ],
+      "conclusion": "ASM-2 PARTIALLY VALIDATED. Full schema and enum confirmed. Race condition behavior UNDOCUMENTED — assume worst case (/status may briefly 404 or return IN_QUEUE redundantly before RunPod's internal state is consistent). Mitigation: same as KV race (SDK retry on 404). Retention of 30min — NOT 24h — is a MATERIAL correction: our KV TTL of 'completion+1h' is over-optimistic since RunPod already dropped the result at the 30min mark.",
+      "confidence": "high",
+      "impact_on_requirements": [
+        "UPDATE terminology.status_str: enum must be {IN_QUEUE | IN_PROGRESS | COMPLETED | FAILED | CANCELLED | TIMED_OUT}. Gateway's status mapping can be simpler ({queued | running | completed | failed | timeout | cancelled}) but must handle all 6 RunPod states.",
+        "UPDATE FR-3 (KV TTL): change from 'completion+1h' to 'completion+30min' to align with RunPod retention. Beyond 30min, KV cache hits but result fetch would fail.",
+        "UPDATE EC-3: 'RunPod retém ~24h' is WRONG — should be '30min'. After that, orphaned job is irrelevant (nothing to retrieve).",
+        "ADD new FR or update FR-2: gateway status mapping table documented: IN_QUEUE→queued, IN_PROGRESS→running, COMPLETED→completed, FAILED→failed, CANCELLED→cancelled, TIMED_OUT→timeout.",
+        "ADD assumption/EC: first GET /jobs/{id} within ~1s of POST /jobs may 404 due to race — SDK retry (EC-7) mitigates; document this explicitly."
+      ]
+    },
+
+    {
+      "id": "RT-3",
+      "topic": "Best practices for HTTP async submit/poll in serverless edge workers",
+      "findings": [
+        {
+          "source": "https://learn.microsoft.com/en-us/azure/architecture/patterns/asynchronous-request-reply",
+          "date_accessed": "2026-04-23",
+          "key_takeaway": "Industry standard async pattern: 202 Accepted + Location header (pointing to status endpoint) + Retry-After header (suggesting polling interval). GET on status returns 200 with current state or 303 See Other redirect to result URI when done.",
+          "quote_or_data": "\"The API responds synchronously as quickly as possible and returns an HTTP 202 (Accepted) status code... The HTTP response includes a Location header that points to a status endpoint and a Retry-After header suggesting a polling interval.\""
+        },
+        {
+          "source": "https://developers.cloudflare.com/workers/best-practices/workers-best-practices/",
+          "date_accessed": "2026-04-23",
+          "key_takeaway": "CF Workers best-practice confirms async submit-poll is the correct pattern for long-running tasks. Submit returns instantly (<1ms typical). Exponential backoff on polling recommended. Cleanup job for expired jobs recommended (our KV TTL satisfies this)."
+        },
+        {
+          "source": "https://zuplo.com/learning-center/asynchronous-operations-in-rest-apis-managing-long-running-tasks",
+          "date_accessed": "2026-04-23",
+          "key_takeaway": "crypto.randomUUID() is the idiomatic UUID v4 generator in CF Workers; available natively without imports."
+        }
+      ],
+      "conclusion": "Our planned API design aligns with industry consensus. CONFIRMED ADDITIONS: (a) Location header pointing to /jobs/{id} on 202 responses, (b) Retry-After header (header name instead of X-Poll-After — standard compliance > custom), (c) crypto.randomUUID() for job_id generation.",
+      "confidence": "high",
+      "impact_on_requirements": [
+        "UPDATE FR-1: 202 response should include Location: /jobs/{id} header AND Retry-After: 5 header (standard), not custom X-Poll-After.",
+        "UPDATE FR-2 / EC-6: header name 'Retry-After' instead of 'X-Poll-After' — this follows RFC 7231 and aligns with industry tools (Retry-After is universally supported).",
+        "CONFIRM NFR-4: crypto.randomUUID() is correct primitive."
+      ]
+    },
+
+    {
+      "id": "RT-4",
+      "topic": "FLUX/ComfyUI cold-start metrics validation (~2026-04)",
+      "findings": [
+        {
+          "source": "https://www.runpod.io/blog/introducing-flashboot-serverless-cold-start",
+          "date_accessed": "2026-04-23",
+          "key_takeaway": "FlashBoot is RunPod's cold-start optimization layer. Free and opt-in per endpoint. Reduces cold starts to ~500ms in ideal conditions. Published June 2023 — existed BEFORE ADR-0001 measurements.",
+          "quote_or_data": "\"FlashBoot is available for all endpoints at no additional cost.\" \"95% of our cold-starts are less than 2.3 seconds, and 90% are less than 2s\" (Whisper endpoint)."
+        },
+        {
+          "source": "https://www.runpod.io/blog/introducing-flashboot-serverless-cold-start",
+          "date_accessed": "2026-04-23",
+          "key_takeaway": "⚠️ FlashBoot EFFICACY depends on REQUEST VOLUME. Low-volume endpoints see minimal benefit.",
+          "quote_or_data": "\"Results may vary, but as long as you have good volume of requests, FlashBoot works! While testing, make sure to run several requests to see good results.\""
+        },
+        {
+          "source": "https://www.runpod.io/blog/introducing-flashboot-serverless-cold-start",
+          "date_accessed": "2026-04-23",
+          "key_takeaway": "⚠️ FlashBoot + network volume INTERACTION is NOT DOCUMENTED. Our ADR-0001 Path A uses network volume mount — behavior with FlashBoot is unverified."
+        },
+        {
+          "source": "https://nerdynav.com/runpod-review/",
+          "date_accessed": "2026-04-23",
+          "key_takeaway": "General 2026 serverless cold start range: 30-60s for large containers. 48% under 200ms with FlashBoot. No FLUX-specific 2026 benchmark found in searches.",
+          "quote_or_data": "\"48% of RunPod's serverless cold starts are under 200ms.\""
+        }
+      ],
+      "conclusion": "ADR-0001 measurements (115-150s) LIKELY STILL VALID for our use case: network-volume-mount + low-volume (MVP 100-500/month) = FlashBoot unlikely to help materially. However, user should verify FlashBoot is enabled on current endpoint — if not, enabling is free and may give marginal benefit. No evidence that RunPod has made breaking changes that invalidate our timeout budget (280s handler COMFY_GENERATION_TIMEOUT_S remains appropriate).",
+      "confidence": "medium",
+      "impact_on_requirements": [
+        "ADD to implementation phase (plan) as Task: verify FlashBoot is enabled on RunPod endpoint (configured via RunPod dashboard, not wrangler.toml). If disabled, enable — zero cost, potential marginal upside.",
+        "NO CHANGE needed to FR-4 (280s timeout remains appropriate).",
+        "FLAG for 30-day review in ADR-0001 Addendum 2: collect actual cold-start p95 distribution from /jobs/{id} metadata (executionTime + delayTime) for 30-day review decision."
+      ]
+    }
+  ],
+
+  "open_uncertainties": [
+    {
+      "id": "OU-1",
+      "description": "Exact RunPod /status behavior immediately after /run (race condition window length)",
+      "mitigation": "SDK retry with exponential backoff on 404 (already in EC-7)",
+      "severity": "low",
+      "action": "No blocking action needed; empirical validation during implementation"
+    },
+    {
+      "id": "OU-2",
+      "description": "FlashBoot efficacy with network volume mount at low volume",
+      "mitigation": "Not blocking; ADR-0001 cold-start assumption remains conservative",
+      "severity": "low",
+      "action": "Enable FlashBoot on endpoint during implementation phase; measure actual cold-start distribution in 30-day review"
+    },
+    {
+      "id": "OU-3",
+      "description": "cacheTtl=low behavior in KV reads — does low value force origin read or just expire local cache?",
+      "mitigation": "Implementation detail; empirical test during dev",
+      "severity": "medium",
+      "action": "Test during implementation; if cacheTtl doesn't help, rely on SDK retry (EC-7) alone"
+    },
+    {
+      "id": "OU-4",
+      "description": "RunPod /status behavior for expired jobs (returns 404? 200 with no output? error body?)",
+      "mitigation": "Handler in gateway returns 404 {error: 'job_not_found_or_expired'} regardless of RunPod-specific behavior, unifying client experience (EC-2)",
+      "severity": "low",
+      "action": "No blocking action; EC-2 handling covers it"
+    }
+  ],
+
+  "blocking_for_spec": false,
+
+  "summary_for_pm": {
+    "material_corrections_to_requirements": [
+      "FR-3 KV TTL: completion+1h → completion+30min (align with RunPod 30min retention)",
+      "FR-1 headers: add Location + Retry-After (drop custom X-Poll-After)",
+      "EC-3: '~24h retention' → '30min retention' (factual correction)",
+      "terminology.status_str: enum must list all 6 RunPod states (was implicitly 5)",
+      "ASM-1: remove unverified 'ECMP sticky routing' claim; mitigation stays"
+    ],
+    "non_blocking_additions": [
+      "Implementation task: verify/enable FlashBoot on RunPod endpoint",
+      "Implementation task: test cacheTtl parameter behavior in GET /jobs/{id}"
+    ],
+    "ready_for_spec_phase": true,
+    "recommended_pm_action": "Update requirements.json with material corrections above, then hand off to @pm *write-spec (Phase 4)."
+  },
+
+  "sources_cited": [
+    "https://developers.cloudflare.com/kv/concepts/how-kv-works/",
+    "https://developers.cloudflare.com/kv/reference/faq/",
+    "https://docs.runpod.io/serverless/endpoints/operations",
+    "https://docs.runpod.io/serverless/endpoints/operation-reference",
+    "https://docs.runpod.io/serverless/endpoints/send-requests",
+    "https://www.runpod.io/blog/introducing-flashboot-serverless-cold-start",
+    "https://learn.microsoft.com/en-us/azure/architecture/patterns/asynchronous-request-reply",
+    "https://developers.cloudflare.com/workers/best-practices/workers-best-practices/",
+    "https://zuplo.com/learning-center/asynchronous-operations-in-rest-apis-managing-long-running-tasks"
+  ]
+}

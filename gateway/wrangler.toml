@@ -22,6 +22,15 @@ workers_dev = true
 binding = "RATE_LIMIT_KV"
 id = "55bd0b4a7c3c44bb958331ba82035e55"
 
+# KV namespace for async job mapping (key: <job_id_uuid>, value: JobMapping, TTL
+# completion+30min OR submit+6h). Added 2026-04-23 for INC-2026-04-23-gateway-504
+# async submit/poll refactor (FR-3).
+# Run: cd gateway && npx wrangler kv namespace create JOBS_KV
+# Then replace JOBS_KV_ID_PLACEHOLDER below with the ID returned by wrangler.
+[[kv_namespaces]]
+binding = "JOBS_KV"
+id = "JOBS_KV_ID_PLACEHOLDER"
+
 # Observability — logs visible in `wrangler tail` and Cloudflare dashboard
 [observability]
 enabled = true

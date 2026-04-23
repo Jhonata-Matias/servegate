@@ -1,0 +1,731 @@
+storyId: "INC-2026-04-23-gateway-504"
+createdAt: "2026-04-23T14:40:00Z"
+createdBy: "@architect"
+status: pending  # User-approved 2026-04-23T14:45:00Z per spec-pipeline Phase 6 elicitation
+complexity: STANDARD
+estimatedEffort: "13-15h active dev + 24h production observation (~2-3 days)"
+
+# ===================================================================
+# ARCHITECTURAL DECISIONS (resolving critique.json CRIT-1 and CRIT-4)
+# ===================================================================
+architecturalDecisions:
+  - id: AD-1
+    relatesTo: CRIT-1
+    title: "RunPod /status response contains image_b64 INLINE; gateway does NOT fetch /view"
+    decision: |
+      Gateway runpod.ts exposes only submitJob() → /run and getStatus() → /status.
+      No getOutput() function. Image bytes arrive as part of /status response when
+      status=COMPLETED via the `output` field.
+    rationale: |
+      serverless/handler.py:237 returns {"image_b64": <b64>, "metadata": {...}}.
+      RunPod Serverless framework marshals this return value into the `output` field
+      of /v2/{endpoint}/status/{id} responses. The /view endpoint is internal to the
+      RunPod worker (ComfyUI → handler.py) and is not exposed to /v2/ clients.
+      Verified via handler.py inspection + research RT-2 /status schema.
+    tradeoff_considered: |
+      Defensive design (probe for inline first, fall back to /view) was considered
+      but rejected — adds complexity without benefit since handler contract is stable
+      and controlled by us (CON-3 locks handler.py unchanged).
+
+  - id: AD-2
+    relatesTo: CRIT-4
+    title: "DEPRECATE ColdStartError. INTRODUCE TimeoutError in SDK v0.2.0"
+    decision: |
+      sdk/src/errors.ts changes:
+        - REMOVE ColdStartError export (deprecated in v0.2.0)
+        - ADD TimeoutError (new class extending Error) — thrown when:
+            (a) SDK poll loop exhausts max attempts before reaching terminal state, OR
+            (b) Gateway returns 504 with error_code='generation_timeout', OR
+            (c) Gateway returns GET /jobs/{id} body status='timeout' (mapped from RunPod TIMED_OUT)
+        - PRESERVE RateLimitError, AuthError, NetworkError, ValidationError (unchanged)
+    rationale: |
+      In async architecture, cold-start is NOT an error — it's a polling phase.
+      Semantically repurposing ColdStartError to mean "generation timeout" would be
+      misleading. Clean taxonomy: "TimeoutError" accurately describes the terminal
+      failure mode in the new model. ASM-4 confirms no third-party consumers affected.
+    breaking_change_migration: |
+      v0.1.0 → v0.2.0 CHANGELOG entry MUST document:
+      "⚠️ BREAKING: ColdStartError removed. If you had 'catch (e) { if (e instanceof
+      ColdStartError) ... }', replace with 'catch (e) { if (e instanceof TimeoutError)
+      ... }'. Cold-start is no longer a terminal error in v0.2.0 — the SDK transparently
+      polls the gateway async job endpoint."
+
+# ===================================================================
+# DEPENDENCIES
+# ===================================================================
+dependencies:
+  - name: "Cloudflare Workers KV"
+    version: "—"  # free tier
+    purpose: "New namespace JOBS_KV for job_id → runpod_request_id mapping (FR-3)"
+  - name: "RunPod Serverless /run + /status"
+    version: "/v2/{endpoint}/"
+    purpose: "Async submit (/run) and poll (/status) primitives (CON-3)"
+  - name: "Cloudflare Workers Runtime"
+    version: "compatibility_date=2026-04-01"
+    purpose: "crypto.randomUUID() native, KV bindings, fetch handler"
+
+# ===================================================================
+# PARALLELIZATION NOTES
+# ===================================================================
+parallelization:
+  notes: |
+    Single-dev project per ASM-4. Parallelization is academic but documented for
+    future *execute-epic wave execution.
+
+    Critical path (sequential):
+      Phase 1 → Phase 2 (subtasks 2.1-2.5) → Phase 3 → Phase 5.6 (deploy preview) → Phase 5.7 (deploy prod)
+
+    Parallel opportunity:
+      Phase 4 (SDK refactor) can run in parallel with Phase 3 (gateway tests).
+      Rationale: SDK uses gateway as dep but can be tested against mocks; real
+      integration happens at Phase 5.6.
+
+  cross_module_gate: |
+    GATE — Deploy preview (5.6) REQUIRES:
+      ✅ All Phase 2 subtasks COMPLETED
+      ✅ All Phase 3 subtasks COMPLETED (gateway test suite green)
+    SDK (Phase 4) can be developed against mocked gateway but must pass integration
+    against preview deploy before Phase 5.7 prod deploy.
+
+  rollout_order: |
+    Gateway PR FIRST (merges + deploys to preview), SDK PR SECOND (targets deployed
+    gateway). This avoids SDK references to endpoints that don't exist yet.
+
+# ===================================================================
+# PHASES
+# ===================================================================
+phases:
+
+  # -----------------------------------------------------------------
+  - id: phase-1
+    name: "Setup & Infrastructure"
+    description: "KV namespace, types scaffolding, RunPod env var hot-fix"
+    subtasks:
+      - id: "1.1"
+        description: "Create Cloudflare KV namespace JOBS_KV and bind in wrangler.toml"
+        service: infra
+        files:
+          - gateway/wrangler.toml
+        verification:
+          type: command
+          command: "cd gateway && npx wrangler kv namespace list | grep JOBS_KV"
+        status: pending
+        dependencies: []
+        effort_hours: 0.25
+        notes: |
+          Run: `cd gateway && npx wrangler kv namespace create JOBS_KV`
+          Copy returned `id` into wrangler.toml as a second [[kv_namespaces]] entry
+          with binding="JOBS_KV". Mirror existing RATE_LIMIT_KV pattern (existing
+          convention confirmed via code inspection).
+
+      - id: "1.2"
+        description: "Refactor types.ts — remove ProxyTypes, add Job/JobMapping/RunpodResponse/JobStatus enum with 6 RunPod states"
+        service: backend
+        files:
+          - gateway/src/types.ts
+        verification:
+          type: command
+          command: "cd gateway && npm run typecheck"
+        status: pending
+        dependencies: ["1.1"]
+        effort_hours: 0.5
+        notes: |
+          JobStatus enum per terminology.status_str (requirements.json C-3):
+            queued | running | completed | failed | cancelled | timeout
+          RunpodStatus enum (raw upstream, internal use):
+            IN_QUEUE | IN_PROGRESS | COMPLETED | FAILED | CANCELLED | TIMED_OUT
+          Mapping table exported as const record RUNPOD_TO_GATEWAY_STATUS.
+          Env type must add JOBS_KV: KVNamespace.
+
+      - id: "1.3"
+        description: "Audit and correct COMFY_GENERATION_TIMEOUT_S env var on RunPod endpoint to 280s (FR-4 hot-fix)"
+        service: infra
+        files:
+          - ".aiox/notes/FR-4-runpod-env-audit-2026-04-23.md"  # audit trail file
+        verification:
+          type: manual
+          instructions: |
+            1. Log into RunPod dashboard (https://www.runpod.io)
+            2. Navigate to Serverless → Endpoints → [servegate endpoint]
+            3. Check "Environment Variables" section
+            4. Verify COMFY_GENERATION_TIMEOUT_S is set to 280 (not 120)
+            5. If 120 or missing: set to 280, save, wait for worker recycle
+            6. Capture screenshot/text evidence in the audit file
+            7. @devops or user with dashboard access runs this — @dev cannot automate
+        status: pending
+        dependencies: []
+        effort_hours: 0.25
+        notes: |
+          Non-code task. Resolves the "within 120s" error observed in the incident
+          log (while the new async architecture addresses the architectural issue,
+          this hot-fix aligns timeout budget with handler.py default of 280s).
+
+  # -----------------------------------------------------------------
+  - id: phase-2
+    name: "Gateway Core Implementation"
+    description: "storage.ts, runpod.ts, index.ts router, rate-limit separation, proxy.ts deletion"
+    subtasks:
+      - id: "2.1"
+        description: "Implement storage.ts — KV put/get/updateStatus with cacheTtl parameter"
+        service: backend
+        files:
+          - gateway/src/storage.ts
+        verification:
+          type: command
+          command: "cd gateway && npm run typecheck"
+        status: pending
+        dependencies: ["1.1", "1.2"]
+        effort_hours: 1.0
+        notes: |
+          API surface:
+            putMapping(kv, jobId, mapping, {expirationTtl})
+              → 1 KV write with TTL = submit+6h (21600s)
+            getMapping(kv, jobId, {cacheTtl: 5})
+              → returns JobMapping | null; cacheTtl 5s reduces staleness window
+            updateStatus(kv, jobId, newStatus, {newTtl?})
+              → on COMPLETED, update TTL to completion+30min (1800s) per FR-3
+          All functions in TypeScript strict mode. No side effects beyond KV ops.
+          Internal logging uses gateway/src/log.ts redaction (CON-4).
+
+      - id: "2.2"
+        description: "Implement runpod.ts — submitJob() and getStatus() with status mapping (CRIT-1 resolved: no /view)"
+        service: backend
+        files:
+          - gateway/src/runpod.ts
+        verification:
+          type: command
+          command: "cd gateway && npm run typecheck"
+        status: pending
+        dependencies: ["1.2"]
+        effort_hours: 1.5
+        notes: |
+          API surface:
+            submitJob(env, prompt, params): Promise<RunpodSubmitResponse>
+              POST https://api.runpod.ai/v2/${env.RUNPOD_ENDPOINT_ID}/run
+              Authorization: Bearer ${env.RUNPOD_API_KEY}
+              Returns {id, status:"IN_QUEUE"}
+            getStatus(env, runpodRequestId): Promise<RunpodStatusResponse>
+              GET https://api.runpod.ai/v2/${env.RUNPOD_ENDPOINT_ID}/status/${id}
+              Returns {delayTime, executionTime, id, output?, status}
+              output (when status=COMPLETED) = handler.py return value = {image_b64, metadata}
+            mapStatus(runpodStatus): JobStatus
+              Uses RUNPOD_TO_GATEWAY_STATUS from types.ts
+          Timeouts: 30s per call (AbortController). Error handling: network → NetworkError,
+          5xx → UpstreamError, 4xx → propagate via typed error.
+          NO getOutput/view fetch — per AD-1 image_b64 comes inline.
+
+      - id: "2.3"
+        description: "Refactor index.ts — route POST /jobs, GET /jobs/{id}, reject POST / with 404 migration pointer"
+        service: backend
+        files:
+          - gateway/src/index.ts
+        verification:
+          type: command
+          command: "cd gateway && npm run typecheck && npm run build"
+        status: pending
+        dependencies: ["2.1", "2.2", "2.4"]
+        effort_hours: 1.5
+        notes: |
+          Routing logic:
+            POST /jobs            → handleSubmit(req, env, state)
+            GET  /jobs/:id        → handleStatus(req, env, state, jobId)
+            POST /                → 404 + {error: "endpoint_removed", migration_doc: "/docs/api/migration-async.md"} (EC-8)
+            Other                 → 405
+          handleSubmit:
+            1. validateAuth (existing)
+            2. checkAndIncrement (existing) — submit counter
+            3. runpod.submitJob
+            4. crypto.randomUUID() → job_id (NFR-4)
+            5. storage.putMapping
+            6. Response 202 + body {job_id, status_url, est_wait_seconds:"unknown"}
+               + headers {Location: /jobs/{job_id}, Retry-After: 5}
+          handleStatus:
+            1. validateAuth
+            2. storage.getMapping (cacheTtl: 5s)
+            3. If null → 404 {error: "job_not_found_or_expired"}
+            4. runpod.getStatus
+            5. mapStatus
+            6. If completed: storage.updateStatus(+30min TTL), 200 + output
+            7. If running|queued: 202 + {status, est_remaining_seconds:"unknown"}
+            8. If failed|cancelled: 500 + error_code
+            9. If timeout: 504 + {error:"generation_timeout", timeout_s:280}
+
+      - id: "2.4"
+        description: "Adjust rate-limit.ts — separate submit counter (counts) from poll (does NOT count)"
+        service: backend
+        files:
+          - gateway/src/rate-limit.ts
+        verification:
+          type: command
+          command: "cd gateway && npm run typecheck"
+        status: pending
+        dependencies: ["1.2"]
+        effort_hours: 0.5
+        notes: |
+          Option A (preferred, minimal change): existing checkAndIncrement() stays,
+          but handleStatus() in index.ts simply skips calling it — only calls
+          checkAndRead() (new function) to return state without incrementing.
+          EC-5 satisfied: POST /jobs consumes quota, GET /jobs/{id} does NOT.
+          Keep 100/day limit.
+
+      - id: "2.5"
+        description: "Delete legacy proxy.ts (CON-6 requires full removal, not extension)"
+        service: backend
+        files:
+          - gateway/src/proxy.ts
+        verification:
+          type: command
+          command: "cd gateway && npm run build && ! test -f src/proxy.ts"
+        status: pending
+        dependencies: ["2.3"]
+        effort_hours: 0.1
+        notes: |
+          Delete ONLY AFTER index.ts no longer imports from proxy.ts (verified in 2.3).
+          git rm gateway/src/proxy.ts. No replacement file.
+
+  # -----------------------------------------------------------------
+  - id: phase-3
+    name: "Gateway Tests"
+    description: "Unit + integration tests per spec.md §6"
+    subtasks:
+      - id: "3.1"
+        description: "Unit tests — storage.ts (put/get/updateStatus, TTL behavior, cacheTtl param)"
+        service: backend
+        files:
+          - gateway/tests/storage.test.ts
+        verification:
+          type: command
+          command: "cd gateway && npm test -- --run storage"
+        status: pending
+        dependencies: ["2.1"]
+        effort_hours: 1.0
+        notes: |
+          Use vitest (existing suite). Mock KVNamespace via Miniflare test harness
+          or manual mock. Cover: put roundtrip, get returns null after TTL, updateStatus
+          extends TTL, cacheTtl parameter is passed through (even if effect is local cache).
+
+      - id: "3.2"
+        description: "Unit tests — runpod.ts (6 status enum mapping, request shapes, error paths)"
+        service: backend
+        files:
+          - gateway/tests/runpod.test.ts
+        verification:
+          type: command
+          command: "cd gateway && npm test -- --run runpod"
+        status: pending
+        dependencies: ["2.2"]
+        effort_hours: 1.0
+        notes: |
+          Mock fetch. Assert: submitJob posts correct URL + auth header, parses
+          {id, status}; getStatus parses all 6 enum values; mapStatus covers all
+          6 → gateway enum; error paths (5xx, network, 401) produce typed errors.
+
+      - id: "3.3"
+        description: "Integration tests — happy path warm + cold, legacy 404, rate-limit, KV race simulation"
+        service: backend
+        files:
+          - gateway/tests/integration.test.ts
+        verification:
+          type: command
+          command: "cd gateway && npm test -- --run integration"
+        status: pending
+        dependencies: ["2.3", "2.4", "2.5", "3.1", "3.2"]
+        effort_hours: 1.5
+        notes: |
+          Scenarios per spec.md §6.2:
+            - Happy path warm: POST→202, GET×2→200 (elapsed <10s simulated)
+            - Happy path cold: POST→202, GET×N (mocked slow /status)→eventual 200, zero 504
+            - Legacy POST / → 404 + migration_doc
+            - Rate-limit: 100×POST exhausts; GET still works (separate counter)
+            - RunPod /run fail → 503 no KV entry (EC-1)
+            - Job expired → 404 (EC-2)
+            - KV race: first GET returns 404, simulates propagation, retry resolves
+
+      - id: "3.4"
+        description: "Observational test — KV reads per session matches formula (CRIT-2 resolution for NFR-5)"
+        service: backend
+        files:
+          - gateway/tests/nfr-5-kv-reads.test.ts
+        verification:
+          type: command
+          command: "cd gateway && npm test -- --run nfr-5"
+        status: pending
+        dependencies: ["3.3"]
+        effort_hours: 0.25
+        notes: |
+          Verify: in a 130s cold-start simulation with 5s polling cadence, the KV read
+          count per session equals floor(130/5)+1 = 27 reads (≤30 budget per NFR-5).
+          Also assert 1 write at submit.
+
+  # -----------------------------------------------------------------
+  - id: phase-4
+    name: "SDK Refactor (parallel-eligible with Phase 3)"
+    description: "Error taxonomy update + internal submit/poll in generate()"
+    subtasks:
+      - id: "4.1"
+        description: "Update errors.ts — remove ColdStartError, add TimeoutError (AD-2)"
+        service: backend
+        files:
+          - sdk/src/errors.ts
+        verification:
+          type: command
+          command: "cd sdk && npm run typecheck"
+        status: pending
+        dependencies: []
+        effort_hours: 0.5
+        notes: |
+          Remove export class ColdStartError. Add:
+            export class TimeoutError extends Error {
+              constructor(
+                message: string,
+                public readonly cause: 'poll_exhausted' | 'gateway_504' | 'runpod_timeout',
+                public readonly elapsedMs?: number
+              ) { super(message); this.name = 'TimeoutError'; }
+            }
+
+      - id: "4.2"
+        description: "Refactor client.ts — generate() internally submits + polls with Retry-After respect"
+        service: backend
+        files:
+          - sdk/src/client.ts
+        verification:
+          type: command
+          command: "cd sdk && npm run typecheck && npm run build"
+        status: pending
+        dependencies: ["4.1"]
+        effort_hours: 2.0
+        notes: |
+          generate(input): Promise<Result> preserves public signature (FR-6).
+          Internal flow:
+            1. POST {gatewayUrl}/jobs with input + X-API-Key
+            2. Parse 202 → extract job_id + Retry-After header (default 5s)
+            3. Loop: sleep(retry-after), GET {gatewayUrl}/jobs/{job_id}
+               - If 200: return body (image_b64 + metadata)
+               - If 202: continue (respect new Retry-After if present)
+               - If 404: retry with exponential backoff 1s/2s/4s (EC-7, up to 3 tries), then NetworkError
+               - If 429: throw RateLimitError
+               - If 401: throw AuthError
+               - If 504: throw TimeoutError(cause='gateway_504')
+               - After N polls (N = warmTimeoutMs/retryAfter): throw TimeoutError(cause='poll_exhausted')
+          warmup(): can now be NO-OP or call POST /jobs with tiny/noop prompt — decide
+          based on whether warmup semantics still make sense. For v0.2.0, keep warmup()
+          as a convenience: calls POST /jobs + GET /jobs/{id} once each to ensure worker
+          boot. Documented in CHANGELOG.
+
+      - id: "4.3"
+        description: "Update types.ts — align response shape with new contract"
+        service: backend
+        files:
+          - sdk/src/types.ts
+        verification:
+          type: command
+          command: "cd sdk && npm run typecheck"
+        status: pending
+        dependencies: ["4.1"]
+        effort_hours: 0.5
+        notes: |
+          Result type preserved ({image_b64, metadata:{seed, elapsed_ms}}).
+          Add new types (internal): SubmitResponse, StatusResponse, JobStatus.
+          Remove any types that referenced the synchronous proxy response.
+
+      - id: "4.4"
+        description: "Update test suite — new flow, TimeoutError scenarios, remove ColdStartError tests"
+        service: backend
+        files:
+          - sdk/tests/client.test.ts
+          - sdk/tests/errors.test.ts
+        verification:
+          type: command
+          command: "cd sdk && npm test -- --run"
+        status: pending
+        dependencies: ["4.2", "4.3"]
+        effort_hours: 1.5
+        notes: |
+          Remove ColdStartError test cases. Add TimeoutError cases for all 3 causes.
+          Mock fetch to simulate: 202→202→200 (happy), 202→504 (timeout),
+          429 (rate-limit), 401 (auth), 404 first try retried.
+
+      - id: "4.5"
+        description: "SDK version bump 0.2.0 + CHANGELOG ⚠️ BREAKING entry with migration guide"
+        service: infra
+        files:
+          - sdk/package.json
+          - sdk/CHANGELOG.md
+        verification:
+          type: command
+          command: "cd sdk && node -e \"process.exit(require('./package.json').version === '0.2.0' ? 0 : 1)\""
+        status: pending
+        dependencies: ["4.4"]
+        effort_hours: 0.5
+        notes: |
+          package.json: "version": "0.2.0"
+          CHANGELOG: new [0.2.0] section with:
+            ⚠️ BREAKING
+            - Removed ColdStartError. Cold-start is no longer a terminal error;
+              SDK now transparently polls the async job endpoint.
+            - Added TimeoutError with cause field ('poll_exhausted'|'gateway_504'|'runpod_timeout').
+              Migration: replace `catch { if (e instanceof ColdStartError) ... }`
+              with `catch { if (e instanceof TimeoutError) ... }`.
+            Changed
+            - generate() now internally submits via POST /jobs + polls GET /jobs/{id}.
+              Public signature unchanged.
+            - Internal timeouts (180s/30s in v0.1.0) replaced by poll loop bounded by
+              ClientOptions.warmTimeoutMs (default: 180s).
+
+  # -----------------------------------------------------------------
+  - id: phase-5
+    name: "Integration, Docs & Deploy"
+    description: "Migration guide, ADR-0002, deploy preview + prod, NFR-3 validation"
+    subtasks:
+      - id: "5.1"
+        description: "Write migration-async.md — Postman/curl guide for v1 → async transition"
+        service: infra
+        files:
+          - docs/api/migration-async.md
+        verification:
+          type: manual
+          instructions: "Markdown preview — validate code blocks render, links resolve, Postman JSON example is valid JSON."
+        status: pending
+        dependencies: []
+        effort_hours: 0.75
+        notes: |
+          Content per EC-8:
+            - Old contract (POST / synchronous)
+            - New contract (POST /jobs + GET /jobs/{id})
+            - Postman collection: 2 requests, 'Tests' tab on submit stores {{job_id}}
+            - curl example (see PM's earlier illustration in pipeline session)
+            - SDK migration note (catch TimeoutError instead of ColdStartError)
+
+      - id: "5.2"
+        description: "Update docs/api/reference.md for new contract"
+        service: infra
+        files:
+          - docs/api/reference.md
+        verification:
+          type: manual
+          instructions: "Markdown preview; verify all endpoints section reflects /jobs + /jobs/{id}, removes POST /."
+        status: pending
+        dependencies: ["5.1"]
+        effort_hours: 0.5
+        notes: |
+          Remove POST / section. Add POST /jobs + GET /jobs/{id} sections with
+          request/response examples, error codes, rate-limit behavior.
+
+      - id: "5.3"
+        description: "Create ADR-0002 documenting async gateway shift (ref INC-2026-04-23-gateway-504)"
+        service: infra
+        files:
+          - docs/architecture/adr-0002-async-gateway-pattern.md
+        verification:
+          type: manual
+          instructions: "ADR template compliance — Context, Decision, Consequences, References to ADR-0001 and this spec."
+        status: pending
+        dependencies: []
+        effort_hours: 1.0
+        notes: |
+          Use existing ADR template (docs/architecture/adr-0001-flux-cold-start.md as reference).
+          Sections:
+            - Status: Accepted
+            - Context: Incident, ADR-0001 gap (cold-start cliff in sync proxy)
+            - Decision: Async submit/poll, single contract, SDK TimeoutError
+            - Consequences: zero 504 on cold, breaking SDK, migration cost
+            - References: requirements.json, spec.md, research.json, critique.json, ADR-0001
+
+      - id: "5.4"
+        description: "Verify/enable FlashBoot on RunPod endpoint (A-1 non-blocking, may help cold p95)"
+        service: infra
+        files:
+          - ".aiox/notes/A-1-flashboot-status-2026-04-23.md"
+        verification:
+          type: manual
+          instructions: |
+            1. RunPod dashboard → Serverless → Endpoints → [servegate endpoint] → Edit
+            2. Check "FlashBoot" toggle
+            3. If disabled: enable it, save
+            4. Document current state + action in the audit file
+        status: pending
+        dependencies: []
+        effort_hours: 0.1
+        notes: |
+          Research RT-4: FlashBoot is free, opt-in, may offer marginal cold-start
+          improvement in low-volume scenarios (uncertain with network volume per OU-2).
+          Not blocking but zero-cost sanity check.
+
+      - id: "5.5"
+        description: "Apply CRIT-3 autoFix — add FR-4 Gherkin scenario to spec.md §6.3"
+        service: infra
+        files:
+          - docs/stories/INC-2026-04-23-gateway-504/spec/spec.md
+        verification:
+          type: command
+          command: "grep -c 'FR-4' docs/stories/INC-2026-04-23-gateway-504/spec/spec.md"
+        status: pending
+        dependencies: []
+        effort_hours: 0.25
+        notes: |
+          Apply the autoFix from critique.json § autoFixes CRIT-3 verbatim. Adds
+          Gherkin scenario 'COMFY_GENERATION_TIMEOUT_S env var is set to 280s on
+          RunPod endpoint' to spec.md §6.3. After applying, bump spec iteration
+          marker from 1 → 1.1 in metadata.
+
+      - id: "5.6"
+        description: "Deploy preview via wrangler + smoke test (GATE before prod)"
+        service: infra
+        files:
+          - "(none — operational)"
+        verification:
+          type: manual
+          instructions: |
+            1. `cd gateway && npx wrangler deploy --env preview` (or equivalent)
+            2. curl https://preview-url -H "X-API-Key: ..." -d '{"prompt":"test","steps":4}'
+            3. Expect 202 with job_id + Location + Retry-After headers in <2s
+            4. curl GET preview-url/jobs/{job_id} every 5s until 200
+            5. Verify image_b64 present in response
+            6. Repeat 2-5 once for cold + once for warm scenarios
+            7. @devops delegates deploy command; @dev runs smoke after
+        status: pending
+        dependencies: ["3.3", "3.4", "2.5", "5.5"]
+        effort_hours: 0.5
+        notes: |
+          BLOCKING GATE: if smoke fails, fix before proceeding to 5.7. Rollback is
+          `wrangler rollback` (<1min).
+
+      - id: "5.7"
+        description: "Deploy production + monitor NFR-3 (zero 504) for 24h"
+        service: infra
+        files:
+          - "(none — operational)"
+        verification:
+          type: manual
+          instructions: |
+            1. Delegate to @devops: `cd gateway && npx wrangler deploy` (production)
+            2. Monitor via `wrangler tail` for first 2h
+            3. After 24h: query Cloudflare Analytics for count(status=504 AND wallTimeMs>=60000)
+               Acceptance: count == 0 (NFR-3)
+            4. If any 504 with wallTimeMs≥60000 appears: investigate, consider rollback
+            5. Update story completion notes with 24h observation results
+        status: pending
+        dependencies: ["5.6"]
+        effort_hours: 0.5  # + 24h passive observation
+        notes: |
+          @devops owns `wrangler deploy` per agent-authority matrix. After this
+          subtask, hand off to @sm to draft the formal story file for @dev execution
+          (or, if treating this as direct dev work, hand off to @dev).
+
+# ===================================================================
+# QUALITY GATES (cross-phase)
+# ===================================================================
+qualityGates:
+  - id: gate-phase-1-complete
+    after: phase-1
+    criteria:
+      - "JOBS_KV namespace created and bound in wrangler.toml"
+      - "types.ts compiles with new types and JobStatus enum"
+      - "RunPod env var COMFY_GENERATION_TIMEOUT_S=280 verified"
+    blocking_for: phase-2
+
+  - id: gate-phase-2-complete
+    after: phase-2
+    criteria:
+      - "All new files compile (typecheck passes)"
+      - "gateway/src/proxy.ts deleted"
+      - "npm run build succeeds"
+      - "No TypeScript errors across gateway/src/"
+    blocking_for: phase-3
+
+  - id: gate-gateway-ready
+    after: [phase-2, phase-3]
+    criteria:
+      - "All gateway tests green (unit + integration)"
+      - "NFR-5 observational test passes (≤30 reads/session)"
+    blocking_for: phase-5-deploy-preview
+
+  - id: gate-sdk-ready
+    after: phase-4
+    criteria:
+      - "All SDK tests green"
+      - "SDK builds cleanly (CJS + ESM)"
+      - "package.json version === 0.2.0"
+      - "CHANGELOG has ⚠️ BREAKING entry"
+    blocking_for: sdk-publish  # separate concern, not in this plan's scope
+
+  - id: gate-preview-smoke-passes
+    after: "5.6"
+    criteria:
+      - "POST /jobs returns 202 with correct headers in <2s"
+      - "Full submit+poll cycle returns image_b64 (warm and cold scenarios)"
+      - "POST / returns 404 with migration_doc pointer"
+    blocking_for: "5.7"
+
+  - id: gate-prod-zero-504
+    after: "5.7 + 24h"
+    criteria:
+      - "Count(status=504 AND wallTimeMs>=60000) == 0 in 24h observation window"
+    outcome_on_fail: "Rollback via wrangler; investigate and iterate"
+    outcome_on_pass: "Story INC-2026-04-23-gateway-504 marked Done; close incident"
+
+# ===================================================================
+# ROLLBACK PLAN
+# ===================================================================
+rollback:
+  scope_per_phase:
+    phase-1: "wrangler.toml edit revert; no infra cost of orphan KV namespace (delete via dashboard if desired)"
+    phase-2: "git revert commits; proxy.ts restored from history"
+    phase-3: "N/A — test files don't affect production"
+    phase-4: "sdk version stays 0.1.0 on npm (v0.2.0 not published if tests fail)"
+    phase-5-preview: "wrangler rollback (<1min) — targets previous worker version"
+    phase-5-prod: |
+      Same as preview rollback. Clients hit POST /jobs → 404 briefly during rollback;
+      retry after 30s resolves. Consider announcing rollback if delay >5min.
+  overall_safety_net: |
+    Git-based rollback recoverable at every commit. Production rollback window
+    <1 minute (Cloudflare Workers versioning). No data loss risk — KV entries
+    naturally TTL-expire; no schema migration involved.
+
+# ===================================================================
+# NEXT STEPS (PIPELINE CONTINUATION)
+# ===================================================================
+nextSteps:
+  afterApproval: |
+    1. @architect updates status: pending_approval → pending
+    2. Hand off to @sm via *draft to create formal story file at:
+       docs/stories/INC-2026-04-23-gateway-504/INC-2026-04-23-gateway-504.story.md
+       (story-tmpl.yaml) which bundles this implementation.yaml as executable tasks
+       for @dev.
+    3. Alternative: skip story drafting and hand directly to @dev with this
+       implementation.yaml as contract (user's call — depends on whether formal
+       story lifecycle or direct dev is preferred for incident-driven work).
+
+  alternativePaths:
+    - id: direct_dev
+      when: "user wants to move fast; incident is fresh"
+      action: "Hand off implementation.yaml directly to @dev"
+      trade-off: "Skips @po validation; story governance lighter"
+    - id: formal_story
+      when: "user wants full AIOX process compliance"
+      action: "@sm *draft → @po *validate → @dev *develop"
+      trade-off: "More ceremony; better traceability post-facto"
+
+# ===================================================================
+# METADATA
+# ===================================================================
+metadata:
+  pipelineTraceability:
+    requirements: docs/stories/INC-2026-04-23-gateway-504/spec/requirements.json
+    complexity: docs/stories/INC-2026-04-23-gateway-504/spec/complexity.json
+    research: docs/stories/INC-2026-04-23-gateway-504/spec/research.json
+    spec: docs/stories/INC-2026-04-23-gateway-504/spec/spec.md
+    critique: docs/stories/INC-2026-04-23-gateway-504/spec/critique.json
+  critiqueIssuesResolved:
+    CRIT-1: "AD-1 — image_b64 inline in /status output (no /view fetch from gateway)"
+    CRIT-2: "Subtask 3.4 — NFR-5 observational test for reads/session"
+    CRIT-3: "Subtask 5.5 — applies autoFix Gherkin to spec.md §6.3"
+    CRIT-4: "AD-2 — Deprecate ColdStartError, add TimeoutError in v0.2.0"
+    CRIT-5: "This plan — 5 phases, 20 subtasks, ordering + dependencies + effort explicit"
+  totalSubtasks: 20
+  totalPhases: 5
+  activeDevHours: ~13-15h
+  observationHours: 24h (NFR-3 validation, passive)
+  iteration: 1 (Approved by user 2026-04-23T14:45:00Z)
+  approvedAt: 2026-04-23T14:45:00Z
+  approvedBy: "@user via architect elicitation"
