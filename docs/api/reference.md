@@ -1,87 +1,83 @@
-# servegate FLUX API — Reference  *(formerly gemma4)*
+# servegate FLUX API Reference
 
-**Status:** Alpha (invite-only) • **Gateway:** live at `gemma4-gateway.jhonata-matias.workers.dev` • **Model:** FLUX.1-schnell (Apache 2.0)
+**Status:** Alpha  
+**Base URL:** `https://gemma4-gateway.jhonata-matias.workers.dev`
 
-This is the single source of truth for the gateway HTTP contract. For TypeScript, prefer the [SDK](../../sdk/README.md) which wraps this contract with typed errors + retry.
+This is the canonical HTTP contract for the async gateway introduced in `v0.2.0`. For TypeScript consumers, prefer the SDK in [`sdk/`](../../sdk/README.md).
 
----
+## Overview
 
-## Quickstart (curl)
+The gateway no longer blocks on image generation. The contract is now:
+
+1. `POST /jobs` submits a generation request and returns `202`
+2. `GET /jobs/{job_id}` polls until the job completes or reaches a terminal state
+3. `POST /` is removed and returns a migration pointer
+
+All requests require `X-API-Key`.
+
+## Quickstart
+
+### 1. Submit a job
 
 ```bash
-# Minimum viable call — generates a 1024×1024 image in ~7s (warm) or ~130s (cold).
-curl -X POST https://gemma4-gateway.jhonata-matias.workers.dev \
+curl -i -X POST https://gemma4-gateway.jhonata-matias.workers.dev/jobs \
   -H "X-API-Key: $GATEWAY_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
-    "input": {
-      "prompt": "a peaceful zen garden with cherry blossoms, photorealistic",
-      "steps": 4,
-      "width": 1024,
-      "height": 1024,
-      "seed": 42
-    }
-  }' \
-  | jq -r '.output.image_b64' \
-  | base64 -d > out.png
-```
-
-On success: `out.png` contains the generated image. On failure: jq returns an error string; inspect the raw response with `-i` to see status code + headers.
-
----
-
-## Endpoint
-
-| | |
-|---|---|
-| **Base URL** | `https://gemma4-gateway.jhonata-matias.workers.dev` |
-| **Path** | `/` (root — any path routes to the generation handler) |
-| **Method** | `POST` only (other methods return 405) |
-| **Content-Type** | `application/json` (required for body) |
-
----
-
-## Request
-
-### Headers
-
-| Header | Required | Description |
-|---|---|---|
-| `X-API-Key` | Yes | Your `GATEWAY_API_KEY` issued during alpha onboarding. Missing or wrong = 401. |
-| `Content-Type` | Yes | Must be `application/json`. |
-
-### Body schema
-
-```json
-{
-  "input": {
-    "prompt": "string — required, non-empty",
+    "prompt": "a peaceful zen garden with cherry blossoms, photorealistic",
     "steps": 4,
     "width": 1024,
     "height": 1024,
     "seed": 42
-  }
+  }'
+```
+
+Expected response:
+
+```http
+HTTP/1.1 202 Accepted
+Location: /jobs/2f3f0f1f-2a6f-4d8b-b6f3-0df9d9f36e9e
+Retry-After: 5
+X-RateLimit-Limit: 100
+X-RateLimit-Remaining: 99
+X-RateLimit-Reset: 2026-04-24T00:00:00.000Z
+```
+
+```json
+{
+  "job_id": "2f3f0f1f-2a6f-4d8b-b6f3-0df9d9f36e9e",
+  "status_url": "/jobs/2f3f0f1f-2a6f-4d8b-b6f3-0df9d9f36e9e",
+  "est_wait_seconds": "unknown"
 }
 ```
 
-| Field | Type | Required | Notes |
-|---|---|---|---|
-| `input.prompt` | string | Yes | Non-empty. FLUX.1-schnell is tuned for short, descriptive prompts. |
-| `input.steps` | integer | Yes | Must be `> 0`. **Recommended: `4`** (FLUX.1-schnell optimum). Higher values don't improve quality meaningfully and increase cost/latency. |
-| `input.width` | integer | Yes | Must be `> 0`. Recommended: multiples of 64, max ~1536. Typical: 1024. |
-| `input.height` | integer | Yes | Same constraints as `width`. |
-| `input.seed` | integer | No | Omit for random; set for reproducibility. |
+### 2. Poll for completion
 
-Invalid types (e.g., `"steps": "4"`) are rejected by the upstream serverless handler with a 400-class error — the gateway does not coerce.
+```bash
+curl -i https://gemma4-gateway.jhonata-matias.workers.dev/jobs/$JOB_ID \
+  -H "X-API-Key: $GATEWAY_API_KEY"
+```
 
----
+Pending response:
 
-## Response — 200 OK (success)
+```http
+HTTP/1.1 202 Accepted
+Retry-After: 5
+```
+
+```json
+{
+  "status": "running",
+  "est_wait_seconds": "unknown"
+}
+```
+
+Completed response:
 
 ```json
 {
   "output": {
-    "image_b64": "<base64-encoded PNG bytes>",
+    "image_b64": "<base64 PNG>",
     "metadata": {
       "seed": 42,
       "elapsed_ms": 3100
@@ -90,157 +86,188 @@ Invalid types (e.g., `"steps": "4"`) are rejected by the upstream serverless han
 }
 ```
 
-| Field | Type | Notes |
+## Endpoints
+
+### `POST /jobs`
+
+Submits a generation request to RunPod asynchronously.
+
+#### Headers
+
+| Header | Required | Description |
 |---|---|---|
-| `output.image_b64` | string | Base64-encoded PNG. Decode with `base64 -d` or `Buffer.from(x, 'base64')`. |
-| `output.metadata.seed` | integer | Echoes the seed used (request seed or auto-generated). |
-| `output.metadata.elapsed_ms` | integer | Upstream RunPod elapsed time — excludes gateway overhead (~5–15 ms typical). |
+| `X-API-Key` | Yes | Shared gateway credential |
+| `Content-Type: application/json` | Yes | Request body must be JSON |
 
-### Rate-limit headers (on every 200 response)
-
-| Header | Example | Description |
-|---|---|---|
-| `X-RateLimit-Limit` | `100` | Daily cap (global, all users). |
-| `X-RateLimit-Remaining` | `42` | Remaining calls today (pre-response snapshot). |
-| `X-RateLimit-Reset` | `2026-04-23T00:00:00.000Z` | ISO-8601 UTC timestamp when the counter resets. |
-
----
-
-## Error responses
-
-All error responses are JSON with a stable `error` code. Production clients should dispatch on `error` string (not on error message copy).
-
-### 401 Unauthorized
-
-Auth failure. Thrown **before** rate-limit counter increments (no quota consumed).
+#### Request body
 
 ```json
-{"error": "invalid_api_key", "reason": "missing_header"}
+{
+  "prompt": "string",
+  "steps": 4,
+  "width": 1024,
+  "height": 1024,
+  "seed": 42
+}
 ```
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `prompt` | string | Yes | Non-empty prompt text |
+| `steps` | integer | Yes | Positive integer. Recommended: `4` |
+| `width` | integer | Yes | Positive integer |
+| `height` | integer | Yes | Positive integer |
+| `seed` | integer | No | Optional deterministic seed |
+
+#### Success response
+
+Status: `202 Accepted`
 
 ```json
-{"error": "invalid_api_key", "reason": "mismatch"}
+{
+  "job_id": "uuid-v4",
+  "status_url": "/jobs/{job_id}",
+  "est_wait_seconds": "unknown"
+}
 ```
 
-| `reason` | Meaning | Fix |
+Headers:
+
+| Header | Value |
+|---|---|
+| `Location` | `/jobs/{job_id}` |
+| `Retry-After` | `5` |
+| `X-RateLimit-Limit` | `100` |
+| `X-RateLimit-Remaining` | Remaining submit quota |
+| `X-RateLimit-Reset` | UTC reset timestamp |
+
+### `GET /jobs/{job_id}`
+
+Polls the current state of a submitted job. This endpoint does **not** consume daily submit quota.
+
+#### Success and terminal responses
+
+| Status | Body | Meaning |
 |---|---|---|
-| `missing_header` | `X-API-Key` header absent. | Send the header. |
-| `mismatch` | `X-API-Key` value doesn't match. | Verify key (case-sensitive, no whitespace). |
+| `200` | `{output: {image_b64, metadata}}` | Job completed successfully |
+| `202` | `{status: "queued"|"running", est_wait_seconds: "unknown"}` | Job still in progress |
+| `404` | `{error: "job_not_found_or_expired"}` | Unknown or expired job ID |
+| `500` | `{error: "runpod_failed"|"runpod_cancelled", status: "failed"|"cancelled"}` | RunPod reached a terminal failure state |
+| `504` | `{error: "generation_timeout", timeout_s: 280}` | RunPod timed out generation |
 
-### 405 Method Not Allowed
+Pending and not-found responses include `Retry-After: 5`.
 
-Non-POST requests (GET, PUT, DELETE, HEAD, OPTIONS).
+### `POST /`
+
+Legacy synchronous root submission is removed.
+
+Status: `404`
 
 ```json
-{"error": "method_not_allowed", "allowed": "POST"}
+{
+  "error": "endpoint_removed",
+  "message": "POST / was removed in v0.2.0. Use POST /jobs + GET /jobs/{id} instead.",
+  "migration_doc": "/docs/api/migration-async.md"
+}
 ```
 
-Response header: `Allow: POST`.
+## Error Responses
 
-### 429 Too Many Requests
+### `400 invalid_json`
 
-Global daily rate limit (100/day, resets 00:00 UTC) exhausted.
+```json
+{
+  "error": "invalid_json",
+  "message": "Request body must be valid JSON"
+}
+```
+
+### `401 invalid_api_key`
+
+Authentication fails before any submit quota is consumed.
+
+### `429 rate_limit_exceeded`
+
+Submit quota is exhausted for the current UTC day.
 
 ```json
 {
   "error": "rate_limit_exceeded",
   "limit": 100,
-  "reset_at": "2026-04-23T00:00:00.000Z"
+  "reset_at": "2026-04-24T00:00:00.000Z"
 }
 ```
 
-Response headers:
+### `502 upstream_error`
 
-| Header | Example |
-|---|---|
-| `Retry-After` | `12345` (seconds until `reset_at`) |
-| `X-RateLimit-Limit` | `100` |
-| `X-RateLimit-Remaining` | `0` |
-| `X-RateLimit-Reset` | `2026-04-23T00:00:00.000Z` |
-
-**Note:** KV eventual consistency can produce ±1–2 overshoot (e.g., request 101–102 may succeed in edge cases). Documented trade-off; acceptable during alpha.
-
-### 502 Bad Gateway
-
-Upstream RunPod returned 5xx. Gateway shields details.
+RunPod returned a `5xx` during submit or polling.
 
 ```json
-{"error": "upstream_error", "upstream_status": 500}
+{
+  "error": "upstream_error"
+}
 ```
 
-**Retry guidance:** yes, with backoff. Usually transient.
+### `503 upstream_unavailable`
 
-### 503 Service Unavailable
+Network/timeout path to RunPod failed, or the gateway could not persist the job mapping.
 
-Network-level failure reaching upstream.
+Possible bodies:
 
 ```json
-{"error": "network_error"}
+{"error": "upstream_unavailable"}
 ```
-
-**Retry guidance:** yes, with backoff.
-
-### 504 Gateway Timeout
-
-Upstream call exceeded the gateway timeout.
 
 ```json
-{"error": "upstream_timeout", "timeout_ms": 180000}
+{
+  "error": "storage_unavailable",
+  "message": "Job submitted to upstream but could not be tracked"
+}
 ```
 
-**Retry guidance:** yes. First call after long idle often hits this (cold start ~130s is within budget; >180s means something degraded upstream).
+### `500 gateway_configuration_error`
 
----
+Masked upstream `4xx` or gateway-side configuration issue when contacting RunPod.
 
-## Rate limiting model
+```json
+{
+  "error": "gateway_configuration_error"
+}
+```
 
-| | |
+## Rate Limiting
+
+| Property | Value |
 |---|---|
-| **Cap** | 100 images / day, **global across all users** (alpha). |
-| **Reset** | 00:00 UTC (daily). |
-| **Counter** | Cloudflare KV, key `count:YYYY-MM-DD` (UTC), TTL 48h. |
-| **Auth order** | Auth runs **before** rate-limit increment → invalid keys don't consume quota. |
-| **Per-user quotas** | Not available in alpha. Fair-use guidance during onboarding. |
-| **Overshoot tolerance** | ±1–2 requests (KV eventual consistency). Acceptable trade-off. |
+| Submit cap | `100` jobs/day |
+| Reset boundary | `00:00 UTC` |
+| Counted endpoint | `POST /jobs` only |
+| Non-counted endpoint | `GET /jobs/{id}` |
 
----
+Headers returned on gateway responses:
 
-## Cold start behavior
-
-The first request after ~5 minutes of idle triggers a RunPod cold start (~130s expected, 180s gateway timeout). Subsequent calls stay warm for ~5 minutes.
-
-**Recommended patterns:**
-
-- **TypeScript:** Use the [SDK](../../sdk/README.md) — `client.warmup()` on app init, `generate()` with built-in retry-with-backoff (1s → 2s → 4s, max 3).
-- **Python / other:** Send a pre-warm request (small `steps=4` generation) ~10s before you need the real call.
-- **Batch / script:** Accept the cold penalty on the first call; subsequent calls are fast.
-
-See [ADR-0001](../architecture/adr-0001-flux-cold-start.md) for the cold-start architectural decision.
-
----
-
-## SDK vs raw HTTP
-
-| If you're using... | Use |
+| Header | Description |
 |---|---|
-| TypeScript / Node.js | [`@jhonata-matias/flux-client`](../../sdk/README.md) — typed errors (`ColdStartError`, `RateLimitError`, `AuthError`, `ValidationError`, `NetworkError`), automatic retry with cold-start-aware timeouts, `warmup()` helper. |
-| Python / Colab | Raw HTTP with `requests`. See [examples/colab/README.md](../../examples/colab/README.md) for a runnable quickstart. |
-| Any other language | Raw HTTP via curl/equivalent, following the schemas above. |
+| `X-RateLimit-Limit` | Daily cap |
+| `X-RateLimit-Remaining` | Remaining quota snapshot |
+| `X-RateLimit-Reset` | UTC reset timestamp |
 
----
+## SDK Notes
 
-## Security notes
+`@jhonata-matias/flux-client@0.2.0` preserves `generate()` but now uses this submit/poll contract internally.
 
-- **Server-side only:** Never embed `GATEWAY_API_KEY` in client-side JS bundles, mobile apps, or anywhere a browser can read it. Proxy through your own backend.
-- **Key rotation:** If compromised, request a new key via the [access request](https://github.com/Jhonata-Matias/servegate/issues/new/choose) template with a `[Rotation]` prefix.
-- **Reporting vulnerabilities:** Use [private security advisories](https://github.com/Jhonata-Matias/servegate/security/advisories/new), not public issues.
+Typed terminal errors exposed by the SDK:
 
----
+| Error | Meaning |
+|---|---|
+| `TimeoutError` | Poll budget exhausted, gateway `504`, or RunPod generation timeout |
+| `RateLimitError` | Gateway quota exhausted |
+| `AuthError` | Invalid API key |
+| `NetworkError` | Client-to-gateway network/request failure |
+| `ValidationError` | Invalid local input before submit |
 
-## See also
+## Related
 
-- [Developer Onboarding](../usage/dev-onboarding.md) — 5-step quickstart
-- [TypeScript SDK](../../sdk/README.md) — typed client
-- [Python / Colab example](../../examples/colab/README.md) — standalone requests-based
-- [Terms of Use](../legal/TERMS.md) + [Privacy Statement](../legal/PRIVACY.md)
-- [Architecture ADR-0001](../architecture/adr-0001-flux-cold-start.md) — cold-start decision
+- Migration guide: [migration-async.md](./migration-async.md)
+- ADR: [adr-0002-async-gateway-pattern.md](../architecture/adr-0002-async-gateway-pattern.md)
+- Cold-start rationale: [adr-0001-flux-cold-start.md](../architecture/adr-0001-flux-cold-start.md)

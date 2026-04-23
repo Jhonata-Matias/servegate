@@ -278,6 +278,14 @@ Feature: Async job submission via POST /jobs
     And the body contains {status: "running"} or {status: "queued"}
     And est_wait_seconds is the literal string "unknown"
 
+Feature: RunPod environment timeout audit (FR-4)
+
+  Scenario: Production endpoint keeps COMFY_GENERATION_TIMEOUT_S at 280
+    Given the RunPod production endpoint configuration is opened in the dashboard
+    When the operator inspects the Environment variables section
+    Then the variable COMFY_GENERATION_TIMEOUT_S is present
+    And its value is 280
+
   Scenario: Unknown job_id returns 404 (EC-2)
     Given a job_id that was never created OR has expired past TTL
     When the client GETs /jobs/{job_id}
@@ -363,7 +371,7 @@ High-level tasks derivados deste spec. @architect em Phase 6 (*create-plan) deta
 - [ ] Atualizar env var RunPod: `COMFY_GENERATION_TIMEOUT_S=280` (FR-4 hot-fix)
 - [ ] Escrever `docs/api/migration-async.md` (guide Postman/curl)
 - [ ] Atualizar `docs/api/reference.md` (novo contrato)
-- [ ] Deploy preview via wrangler → smoke test
+- [x] Deploy preview via wrangler → smoke test
 - [ ] Deploy produção → validar NFR-3 (zero 504) por 24h
 - [ ] Escrever acceptance tests em arquivo executável (Gherkin → Vitest ou similar)
 

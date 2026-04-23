@@ -543,7 +543,7 @@ phases:
             2. Check "FlashBoot" toggle
             3. If disabled: enable it, save
             4. Document current state + action in the audit file
-        status: pending
+        status: done
         dependencies: []
         effort_hours: 0.1
         notes: |
@@ -583,7 +583,7 @@ phases:
             5. Verify image_b64 present in response
             6. Repeat 2-5 once for cold + once for warm scenarios
             7. @devops delegates deploy command; @dev runs smoke after
-        status: pending
+        status: done
         dependencies: ["3.3", "3.4", "2.5", "5.5"]
         effort_hours: 0.5
         notes: |
@@ -611,6 +611,9 @@ phases:
           @devops owns `wrangler deploy` per agent-authority matrix. After this
           subtask, hand off to @sm to draft the formal story file for @dev execution
           (or, if treating this as direct dev work, hand off to @dev).
+          2026-04-23: production deploy + immediate smoke executed by @dev;
+          24h Analytics gate (AC-7) remains pending @qa — see
+          `.aiox/notes/phase-5.7-prod-deploy-2026-04-23.md`.
 
 # ===================================================================
 # QUALITY GATES (cross-phase)

@@ -94,16 +94,16 @@ describe('getMapping', () => {
     expect(result).toBeNull();
   });
 
-  it('passes default cacheTtl=5 to KV read (ASM-1 mitigation)', async () => {
+  it('passes default cacheTtl=30 to KV read (KV API minimum)', async () => {
     const kv = makeKvMock(JSON.stringify(makeMapping()));
     await getMapping(kv, 'id');
     expect(kv.get).toHaveBeenCalledWith('id', { cacheTtl: DEFAULT_READ_CACHE_TTL_SEC });
   });
 
-  it('respects cacheTtl override', async () => {
+  it('respects cacheTtl:0 as KV get without cacheTtl option (strong read)', async () => {
     const kv = makeKvMock(JSON.stringify(makeMapping()));
     await getMapping(kv, 'id', { cacheTtl: 0 });
-    expect(kv.get).toHaveBeenCalledWith('id', { cacheTtl: 0 });
+    expect(kv.get).toHaveBeenCalledWith('id');
   });
 });
 

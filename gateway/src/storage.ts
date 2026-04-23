@@ -10,8 +10,8 @@
  *       and /status would return nothing meaningful anyway.
  *
  * Eventual-consistency mitigation (ASM-1 + research RT-1):
- *   - GET /jobs/{id} reads pass a low `cacheTtl` to Cloudflare KV to narrow the
- *     propagation staleness window from the default 60s.
+ *   - GET /jobs/{id} reads set KV `cacheTtl` (min **30s** per Cloudflare Workers API).
+ *   - `cacheTtl: 0` omits the option (default KV read behavior) for `updateStatus` strong reads.
  *   - Residual races are absorbed by SDK retry-with-backoff on 404 (EC-7).
  */
 
@@ -19,7 +19,9 @@ import type { JobMapping, JobStatus } from './types.js';
 
 export const TTL_ON_SUBMIT_SEC = 6 * 60 * 60;          // 6h — submit-to-completion budget
 export const TTL_AFTER_COMPLETION_SEC = 30 * 60;        // 30min — matches RunPod retention
-export const DEFAULT_READ_CACHE_TTL_SEC = 5;            // narrow staleness window per RT-1
+/** Min seconds when passing `cacheTtl` to `kv.get` (sub-30 throws at runtime). */
+const KV_READ_CACHE_TTL_MIN_SEC = 30;
+export const DEFAULT_READ_CACHE_TTL_SEC = KV_READ_CACHE_TTL_MIN_SEC;
 
 /**
  * Writes an initial JobMapping with submit TTL.
@@ -37,18 +39,23 @@ export async function putMapping(
 /**
  * Reads a JobMapping by job_id. Returns null if not found OR expired.
  *
- * Uses `cacheTtl` to shorten the edge cache lifetime vs the 60s default.
- * Lower values increase origin hits but reduce staleness; we default to 5s which
- * matches our suggested polling cadence (Retry-After: 5) — so each poll naturally
- * picks up recent writes.
+ * Uses `cacheTtl` on the KV read when >= 30s. For `cacheTtl: 0` (updateStatus path), calls
+ * `kv.get` with no `cacheTtl` option (invalid values such as 5s throw at runtime).
  */
 export async function getMapping(
   kv: KVNamespace,
   jobId: string,
   options: { cacheTtl?: number } = {},
 ): Promise<JobMapping | null> {
-  const cacheTtl = options.cacheTtl ?? DEFAULT_READ_CACHE_TTL_SEC;
-  const raw = await kv.get(jobId, { cacheTtl });
+  const raw =
+    options.cacheTtl === 0
+      ? await kv.get(jobId)
+      : await kv.get(jobId, {
+          cacheTtl: Math.max(
+            KV_READ_CACHE_TTL_MIN_SEC,
+            options.cacheTtl ?? DEFAULT_READ_CACHE_TTL_SEC,
+          ),
+        });
   if (!raw) return null;
   try {
     return JSON.parse(raw) as JobMapping;

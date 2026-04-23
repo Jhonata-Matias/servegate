@@ -233,7 +233,7 @@ async function handleStatus(
   // 2. Rate-limit state (read-only — EC-5 GET does NOT consume)
   const rlState = await checkAndRead(env.RATE_LIMIT_KV);
 
-  // 3. Look up mapping in KV (cacheTtl=5s for RT-1 mitigation, per storage.ts default)
+  // 3. Look up mapping in KV (cacheTtl default 30s min per Workers KV, storage.ts)
   const mapping = await getMapping(env.JOBS_KV, jobId);
   if (!mapping) {
     log({
