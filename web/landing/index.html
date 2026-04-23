@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html class="scroll-smooth dark" lang="pt-BR">
+<head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <title>flux servegate (API v0.2.0)</title>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://code.iconify.design/iconify-icon/1.0.7/iconify-icon.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    },
+                    colors: {
+                        obsidian: '#050505',
+                        charcoal: '#111111',
+                        surface: '#1c1c1c',
+                        primary: '#ffffff',
+                        accent: '#1d7fe5',
+                        accentDark: '#0f4f9e',
+                        accentLight: '#4da3ff',
+                        danger: '#ff453a',
+                        success: '#00cc66',
+                        warning: '#ffaa00',
+                        info: '#38bdf8',
+                        muted: '#737373',
+                    },
+                    animation: {
+                        'spin-slow': 'spin 8s linear infinite',
+                        'shimmer': 'shimmer 1.5s infinite linear',
+                        'float': 'float 6s ease-in-out infinite',
+                    },
+                    keyframes: {
+                        shimmer: {
+                            from: { transform: 'translateX(-100%) skewX(-15deg)' },
+                            to: { transform: 'translateX(200%) skewX(-15deg)' }
+                        },
+                        float: {
+                            '0%, 100%': { transform: 'translateY(0)' },
+                            '50%': { transform: 'translateY(-10px)' }
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #050505; color: #ffffff; overflow-x: hidden; }
+        .ambient-glow { position: fixed; top: -20%; left: -10%; width: 50vw; height: 50vh; background: radial-gradient(circle, rgba(29,127,229,0.06) 0%, rgba(0,0,0,0) 70%); border-radius: 50%; pointer-events: none; z-index: 0; filter: blur(60px); animation: float 10s ease-in-out infinite alternate; }
+        .ambient-glow-2 { position: fixed; bottom: -20%; right: -10%; width: 60vw; height: 60vh; background: radial-gradient(circle, rgba(77,163,255,0.04) 0%, rgba(0,0,0,0) 70%); border-radius: 50%; pointer-events: none; z-index: 0; filter: blur(80px); animation: float 12s ease-in-out infinite alternate-reverse; }
+        .glass-panel { background: rgba(23, 23, 23, 0.4); backdrop-filter: blur(20px); border: 1px solid rgba(255, 255, 255, 0.08); }
+        .glass-card { background: linear-gradient(135deg, rgba(255,255,255,0.05), rgba(255,255,255,0.01)); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.1); transition: all 0.4s; }
+        .glass-card:hover { border-color: rgba(29,127,229,0.3); transform: translateY(-5px); box-shadow: 0 10px 30px -10px rgba(29,127,229,0.15); }
+        .reveal { opacity: 0; transform: translateY(30px); transition: all 1s cubic-bezier(0.16, 1, 0.3, 1); }
+        .reveal.active { opacity: 1; transform: translateY(0); }
+        .text-reveal-wrapper { overflow: hidden; display: inline-block; vertical-align: bottom; }
+        .text-reveal-content { transform: translateY(110%); opacity: 0; transition: transform 1.2s cubic-bezier(0.16, 1, 0.3, 1), opacity 1.2s ease; display: block; }
+        .reveal-active .text-reveal-content { transform: translateY(0); opacity: 1; }
+        .flashlight-card { position: relative; background: rgba(20, 20, 20, 0.5); overflow: hidden; border: 1px solid rgba(255,255,255,0.05); }
+        .flashlight-card::before { content: ""; position: absolute; inset: 0px; background: radial-gradient(600px circle at var(--mouse-x) var(--mouse-y), rgba(29, 127, 229, 0.1), transparent 40%); opacity: 0; transition: opacity 0.5s; pointer-events: none; z-index: 2; }
+        .flashlight-card:hover::before { opacity: 1; }
+        .bg-grid { background-size: 50px 50px; background-image: linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px), linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px); }
+        .section-header { font-family: 'JetBrains Mono', monospace; font-size: 0.875rem; color: #1d7fe5; text-transform: uppercase; letter-spacing: 0.2em; margin-bottom: 2rem; padding: 1rem; border: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.02); display: inline-block; }
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #050505; }
+        ::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #1d7fe5; }
+        pre.code-block { background: rgba(0,0,0,0.5); padding: 1.5rem; border-radius: 0.5rem; border: 1px solid rgba(255,255,255,0.05); overflow-x: auto; color: #a1a1aa; font-family: 'JetBrains Mono', monospace; font-size: 0.875rem; line-height: 1.6; }
+        .keyword { color: #1d7fe5; }
+        .string { color: #00cc66; }
+    </style>
+</head>
+
+<body class="bg-grid">
+    <div class="ambient-glow"></div>
+    <div class="ambient-glow-2"></div>
+
+    <div class="max-w-[1400px] mx-auto border-x border-white/10 relative z-10 bg-obsidian/50 backdrop-blur-sm shadow-2xl">
+        
+        <!-- HEADER -->
+        <header class="relative z-50 border-b border-white/10 sticky top-0 glass-panel">
+            <div class="flex justify-between items-center px-6 md:px-12 py-5">
+                <div class="flex items-center gap-8">
+                    <a class="text-xs font-mono tracking-widest uppercase hover:text-accent transition-colors hidden md:block" href="#quickstart">Quickstart</a>
+                    <a class="text-xs font-mono tracking-widest uppercase hover:text-accent transition-colors" href="#endpoints">Endpoints</a>
+                </div>
+                <div class="absolute left-1/2 -translate-x-1/2 flex items-center gap-3 group cursor-pointer">
+                    <iconify-icon class="text-2xl text-accent group-hover:rotate-180 transition-transform duration-700" icon="solar:programming-bold-duotone"></iconify-icon>
+                    <span class="font-bold tracking-tighter text-xl">servegate</span>
+                </div>
+                <div class="flex items-center gap-6 md:gap-8">
+                    <a class="text-xs font-mono tracking-widest uppercase hover:text-accent transition-colors hidden md:block" href="#errors">Erros e Limits</a>
+                    <a class="text-xs font-mono tracking-widest uppercase hover:text-accent transition-colors hidden md:block" href="#resources">Resources</a>
+                    <a class="text-xs font-mono tracking-widest uppercase hover:text-accent transition-colors hidden lg:block" href="https://github.com/Jhonata-Matias/servegate/blob/main/sdk/README.md" target="_blank" rel="noopener">SDK Docs</a>
+                    <a class="flex items-center gap-1.5 text-xs font-mono tracking-widest uppercase hover:text-accent transition-colors" href="https://github.com/Jhonata-Matias/servegate" target="_blank" rel="noopener" title="View on GitHub">
+                        <iconify-icon class="text-base" icon="mdi:github"></iconify-icon>
+                        <span class="hidden md:inline">GitHub</span>
+                    </a>
+                </div>
+            </div>
+        </header>
+
+        <!-- HERO SECTION -->
+        <section id="hero" class="relative z-10 grid grid-cols-1 md:grid-cols-12 border-b border-white/10 min-h-[85vh]">
+            <div class="col-span-1 md:col-span-8 border-b md:border-b-0 md:border-r border-white/10 relative overflow-hidden flex flex-col justify-center p-8 md:p-20">
+                <div class="absolute top-10 w-full flex justify-between px-10 items-center opacity-50 z-20">
+                    <span class="text-xs font-mono text-muted tracking-widest">GATEWAY V0.2.0</span>
+                    <iconify-icon class="text-xl text-white animate-spin-slow" icon="solar:star-fall-linear"></iconify-icon>
+                </div>
+
+                <div class="relative z-20 mt-10">
+                    <span class="px-3 py-1 mb-6 inline-block rounded-full text-xs font-mono font-medium bg-accent/10 text-accent border border-accent/20">Alpha Status</span>
+                    <h1 class="text-6xl md:text-8xl lg:text-[7rem] font-semibold tracking-tighter leading-[0.9] text-white">
+                        <span class="text-reveal-wrapper"><span class="text-reveal-content delay-100">FLUX API</span></span><br/>
+                        <span class="text-reveal-wrapper"><span class="text-reveal-content delay-200 text-transparent bg-clip-text bg-gradient-to-r from-accent to-accentLight">Reference</span></span>
+                    </h1>
+
+                    <p class="mt-8 text-muted text-lg md:text-xl max-w-xl font-light reveal delay-400">
+                        O contrato HTTP canônico para a API de geração de imagens descentralizada via RunPod. A nova arquitetura do gateway (v0.2.0) opera de forma assíncrona, não bloqueando a sua thread e escalando eficientemente.
+                    </p>
+
+                    <div class="mt-12 flex items-center gap-6 reveal delay-500 relative z-30">
+                        <a href="#quickstart" class="group relative z-10 flex items-center justify-center overflow-hidden rounded-full p-[1px] leading-none">
+                            <span class="absolute inset-[-1000%] animate-[spin_2s_linear_infinite] bg-[conic-gradient(from_0deg,transparent_0_340deg,#1d7fe5_360deg)] opacity-70"></span>
+                            <span class="relative flex h-full w-full items-center rounded-full bg-charcoal pt-4 pr-8 pb-4 pl-8 ring-1 ring-white/10 transition-colors group-hover:bg-accent/20 border border-transparent group-hover:border-accent">
+                                <span class="relative z-10 flex items-center font-mono text-xs uppercase tracking-widest text-white group-hover:text-accent font-bold transition-colors">Start Building</span>
+                                <span class="relative z-10 ml-3 flex items-center text-accent transition-transform duration-300 group-hover:translate-x-1">
+                                    <iconify-icon class="text-xl" icon="solar:arrow-right-line-duotone"></iconify-icon>
+                                </span>
+                            </span>
+                        </a>
+                        <a href="https://github.com/Jhonata-Matias/servegate" target="_blank" rel="noopener" class="group flex items-center gap-2 rounded-full bg-white/5 hover:bg-white/10 px-6 py-[17px] border border-white/10 hover:border-white/30 transition-all">
+                            <iconify-icon class="text-lg text-white group-hover:text-accent transition-colors" icon="mdi:github"></iconify-icon>
+                            <span class="font-mono text-xs uppercase tracking-widest text-white group-hover:text-accent font-bold transition-colors">View Repo</span>
+                        </a>
+                        <a href="#endpoints" class="text-xs font-mono uppercase tracking-widest text-muted hover:text-white transition-colors border-b border-transparent hover:border-white pb-1">Ver Endpoints</a>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-span-1 md:col-span-4 grid grid-rows-3 h-full">
+                <!-- Stat 1 -->
+                <div class="flashlight-card row-span-1 border-b border-white/10 p-10 flex flex-col justify-between reveal delay-200 group" onmousemove="const rect = this.getBoundingClientRect(); this.style.setProperty('--mouse-x', `${event.clientX - rect.left}px`); this.style.setProperty('--mouse-y', `${event.clientY - rect.top}px`);">
+                    <iconify-icon class="text-4xl text-muted group-hover:text-accent transition-colors duration-500" icon="solar:round-transfer-horizontal-bold-duotone"></iconify-icon>
+                    <div>
+                        <h2 class="text-3xl font-medium tracking-tighter text-white">Async API</h2>
+                        <span class="text-xs font-mono text-muted mt-2 block uppercase tracking-widest">SUBMIT &amp; POLL PATTERN</span>
+                    </div>
+                </div>
+                <!-- Stat 2 -->
+                <div class="flashlight-card row-span-1 border-b border-white/10 p-10 flex flex-col justify-between reveal delay-300 group" onmousemove="const rect = this.getBoundingClientRect(); this.style.setProperty('--mouse-x', `${event.clientX - rect.left}px`); this.style.setProperty('--mouse-y', `${event.clientY - rect.top}px`);">
+                    <iconify-icon class="text-4xl text-muted group-hover:text-success transition-colors duration-500" icon="solar:shield-keyhole-bold-duotone"></iconify-icon>
+                    <div>
+                        <h2 class="text-3xl font-medium tracking-tighter text-white">API Key Auth</h2>
+                        <span class="text-xs font-mono text-muted mt-2 block uppercase tracking-widest">Shared Gateway Credential</span>
+                    </div>
+                </div>
+                <!-- Stat 3 -->
+                <div class="flashlight-card row-span-1 p-10 flex flex-col justify-between reveal delay-400 group relative overflow-hidden" onmousemove="const rect = this.getBoundingClientRect(); this.style.setProperty('--mouse-x', `${event.clientX - rect.left}px`); this.style.setProperty('--mouse-y', `${event.clientY - rect.top}px`);">
+                    <iconify-icon class="text-4xl text-muted group-hover:text-warning transition-colors duration-500" icon="solar:stopwatch-bold-duotone"></iconify-icon>
+                    <div>
+                        <h2 class="text-3xl font-medium tracking-tighter text-white">100 / Dia</h2>
+                        <span class="text-xs font-mono text-muted mt-2 block uppercase tracking-widest">Submit Quota Daily Limit</span>
+                    </div>
+                    <div class="absolute -bottom-10 -right-10 w-32 h-32 bg-warning opacity-0 group-hover:opacity-10 rounded-full blur-3xl transition-opacity duration-700 pointer-events-none"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- QUICKSTART -->
+        <section id="quickstart" class="relative z-10 border-b border-white/10 pt-20 pb-20">
+            <div class="px-8 md:px-12 mb-12">
+                <div class="section-header reveal">01 // Quickstart</div>
+                <h2 class="text-4xl md:text-5xl font-medium tracking-tight text-white reveal delay-100">Gerando a primeira imagem</h2>
+            </div>
+            
+            <div class="grid grid-cols-1 lg:grid-cols-2 border-t border-white/10">
+                <div class="p-8 md:p-12 border-b lg:border-b-0 lg:border-r border-white/10 glass-panel reveal">
+                    <div class="flex items-baseline gap-4 mb-4">
+                        <span class="flex items-center justify-center w-6 h-6 rounded bg-accent/20 text-accent font-mono text-sm font-bold border border-accent/30">1</span>
+                        <h3 class="text-2xl font-medium">Submeter um request</h3>
+                    </div>
+                    <p class="text-muted text-sm mb-6">Submeta um job de geração e aguarde um retorno <span class="text-white font-mono text-xs bg-white/10 px-1 rounded">202 Accepted</span>.</p>
+                    
+                    <pre class="code-block mb-6"><span class="keyword">curl</span> -i -X POST <span class="string">https://gemma4-gateway.jhonata-matias.workers.dev/jobs</span> \
+  -H <span class="string">"X-API-Key: $GATEWAY_API_KEY"</span> \
+  -H <span class="string">"Content-Type: application/json"</span> \
+  -d '{
+    "prompt": "a peaceful zen garden with cherry blossoms, photorealistic",
+    "steps": 4,
+    "width": 1024,
+    "height": 1024,
+    "seed": 42
+  }'</pre>
+                    
+                    <div class="border-t border-white/10 pt-6">
+                        <span class="text-xs font-mono text-muted uppercase tracking-widest block mb-2">Expected Response</span>
+                        <pre class="code-block text-xs">HTTP/1.1 <span class="keyword text-success">202 Accepted</span>
+Location: /jobs/2f3f0f1f-2a6f-4d8b-b6f3-0df9d9f36e9e
+Retry-After: 5
+
+{
+  "job_id": <span class="string">"2f3f0f1f-2a6f-4d8b-b6f3-0df9d9f36e9e"</span>,
+  "status_url": <span class="string">"/jobs/2f3f0f1f-2a6f-4d8b-b6f3-0df9d9f36e9e"</span>,
+  "est_wait_seconds": <span class="string">"unknown"</span>
+}</pre>
+                    </div>
+                </div>
+
+                <div class="p-8 md:p-12 reveal delay-100 bg-black/20">
+                    <div class="flex items-baseline gap-4 mb-4">
+                        <span class="flex items-center justify-center w-6 h-6 rounded bg-accent/20 text-accent font-mono text-sm font-bold border border-accent/30">2</span>
+                        <h3 class="text-2xl font-medium">Faça Polling do status</h3>
+                    </div>
+                    <p class="text-muted text-sm mb-6">Busque pela sua imagem até o status de <span class="text-success font-mono text-xs bg-success/10 border border-success/20 px-1 rounded">completed</span>.</p>
+                    
+                    <pre class="code-block mb-6"><span class="keyword">curl</span> -i <span class="string">https://gemma4-gateway.jhonata-matias.workers.dev/jobs/$JOB_ID</span> \
+  -H <span class="string">"X-API-Key: $GATEWAY_API_KEY"</span></pre>
+
+                    <div class="space-y-6 border-t border-white/10 pt-6">
+                        <div>
+                            <span class="text-xs font-mono text-muted uppercase tracking-widest block mb-2">Pending Response</span>
+                            <pre class="code-block text-xs">HTTP/1.1 <span class="keyword text-warning">202 Accepted</span>
+Retry-After: 5
+
+{
+  "status": <span class="string">"running"</span>,
+  "est_wait_seconds": <span class="string">"unknown"</span>
+}</pre>
+                        </div>
+                        <div>
+                            <span class="text-xs font-mono text-muted uppercase tracking-widest block mb-2">Completed Response</span>
+                            <pre class="code-block text-xs">{
+  "output": {
+    "image_b64": <span class="string">"&lt;base64 PNG&gt;"</span>,
+    "metadata": {
+      "seed": 42,
+      "elapsed_ms": 3100
+    }
+  }
+}</pre>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ENDPOINTS REFERENCE -->
+        <section id="endpoints" class="relative z-10 border-b border-white/10 pt-20 pb-20 bg-charcoal/30">
+            <div class="px-8 md:px-12 mb-12">
+                <div class="section-header reveal">02 // Endpoints</div>
+                <h2 class="text-4xl md:text-5xl font-medium tracking-tight text-white reveal delay-100">API Reference</h2>
+            </div>
+            
+            <div class="px-8 md:px-12 grid grid-cols-1 gap-12">
+                
+                <!-- Endpoint: POST /jobs -->
+                <div class="glass-card p-8 rounded-xl reveal">
+                    <div class="flex items-center gap-4 mb-3">
+                        <span class="px-3 py-1 rounded bg-accent/20 text-accent font-mono text-sm font-bold border border-accent/20 shadow-[0_0_15px_rgba(29,127,229,0.3)]">POST</span>
+                        <h3 class="text-2xl font-mono text-white">/jobs</h3>
+                    </div>
+                    <p class="text-sm text-zinc-400 mb-8 border-b border-white/10 pb-6">Submit de geração de imagens de forma assíncrona. Esta rota consome o Rate Limit diário e retorna um ID de job para rastreamento.</p>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-12">
+                        <div>
+                            <h4 class="text-xs font-mono text-muted uppercase tracking-widest mb-4">Request Body</h4>
+                            <div class="rounded-lg border border-white/10 overflow-hidden">
+                                <table class="w-full text-left text-sm text-zinc-300">
+                                    <thead class="bg-black/50 text-muted font-mono text-xs uppercase">
+                                        <tr><th class="py-3 px-4 border-b border-white/10">Field</th><th class="py-3 px-4 border-b border-white/10">Type</th><th class="py-3 px-4 border-b border-white/10">Required</th></tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-white/5 bg-charcoal/50">
+                                        <tr class="hover:bg-white/5 transition-colors">
+                                            <td class="py-3 px-4 font-mono text-accentLight">prompt</td>
+                                            <td class="py-3 px-4">string</td>
+                                            <td class="py-3 px-4"><span class="text-success font-medium">Yes</span> (non-empty)</td>
+                                        </tr>
+                                        <tr class="hover:bg-white/5 transition-colors">
+                                            <td class="py-3 px-4 font-mono text-accentLight">steps</td>
+                                            <td class="py-3 px-4">integer</td>
+                                            <td class="py-3 px-4"><span class="text-success font-medium">Yes</span> (rec: 4)</td>
+                                        </tr>
+                                        <tr class="hover:bg-white/5 transition-colors">
+                                            <td class="py-3 px-4 font-mono text-accentLight">width</td>
+                                            <td class="py-3 px-4">integer</td>
+                                            <td class="py-3 px-4"><span class="text-success font-medium">Yes</span></td>
+                                        </tr>
+                                        <tr class="hover:bg-white/5 transition-colors">
+                                            <td class="py-3 px-4 font-mono text-accentLight">height</td>
+                                            <td class="py-3 px-4">integer</td>
+                                            <td class="py-3 px-4"><span class="text-success font-medium">Yes</span></td>
+                                        </tr>
+                                        <tr class="hover:bg-white/5 transition-colors">
+                                            <td class="py-3 px-4 font-mono text-zinc-500">seed</td>
+                                            <td class="py-3 px-4">integer</td>
+                                            <td class="py-3 px-4 text-zinc-500">No</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <div>
+                            <h4 class="text-xs font-mono text-muted uppercase tracking-widest mb-4">Rate Limiting Header Feedback</h4>
+                            <div class="bg-charcoal border border-white/10 rounded-lg p-5">
+                                <ul class="space-y-4">
+                                    <li class="flex flex-col">
+                                        <span class="font-mono text-sm text-white">X-RateLimit-Limit</span>
+                                        <span class="text-xs text-muted mt-1">Limite diário Global (Padrão: <span class="text-accent font-bold">100</span>)</span>
+                                    </li>
+                                    <li class="flex flex-col border-t border-white/5 pt-3">
+                                        <span class="font-mono text-sm text-white">X-RateLimit-Remaining</span>
+                                        <span class="text-xs text-muted mt-1">Quota restante para transações</span>
+                                    </li>
+                                    <li class="flex flex-col border-t border-white/5 pt-3">
+                                        <span class="font-mono text-sm text-white">X-RateLimit-Reset</span>
+                                        <span class="text-xs text-muted mt-1">Status timestamp para Reset as <span class="text-white">00:00 UTC</span></span>
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Endpoint: GET /jobs/{job_id} -->
+                <div class="glass-card p-8 rounded-xl reveal delay-100">
+                    <div class="flex items-center gap-4 mb-3">
+                        <span class="px-3 py-1 rounded bg-success/20 text-success font-mono text-sm font-bold border border-success/20 shadow-[0_0_15px_rgba(0,204,102,0.2)]">GET</span>
+                        <h3 class="text-2xl font-mono text-white">/jobs/{job_id}</h3>
+                    </div>
+                    <p class="text-sm text-zinc-400 mb-8 border-b border-white/10 pb-6">Faz pooling do estado de um job submetido. Este endpoint <span class="text-success font-bold">não consome</span> quota ou limite diário.</p>
+
+                    <h4 class="text-xs font-mono text-muted uppercase tracking-widest mb-4">Mapeamento de Retorno (States)</h4>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div class="p-5 bg-success/5 border border-success/20 rounded relative hover:bg-success/10 transition-colors">
+                            <span class="text-xs font-mono text-success drop-shadow-[0_0_5px_rgba(0,204,102,0.8)]">200 OK</span>
+                            <div class="mt-2 text-sm text-white">Sucesso</div>
+                            <div class="mt-1 text-xs text-zinc-400 font-mono">{ output: ... }</div>
+                        </div>
+
+                        <div class="p-5 bg-warning/5 border border-warning/20 rounded relative hover:bg-warning/10 transition-colors">
+                            <span class="text-xs font-mono text-warning drop-shadow-[0_0_5px_rgba(255,170,0,0.8)]">202 Accepted</span>
+                            <div class="mt-2 text-sm text-white">In Progress</div>
+                            <div class="mt-1 text-xs text-zinc-400 font-mono">Retorna Retry-After: 5</div>
+                        </div>
+
+                        <div class="p-5 bg-white/5 border border-white/20 rounded relative hover:bg-white/10 transition-colors">
+                            <span class="text-xs font-mono text-white">404 Not Found</span>
+                            <div class="mt-2 text-sm text-white">Expired/Unknown</div>
+                            <div class="mt-1 text-xs text-zinc-400 font-mono">{ error: "job_not_found_or_expired" }</div>
+                        </div>
+
+                        <div class="p-5 bg-danger/5 border border-danger/20 rounded relative hover:bg-danger/10 transition-colors">
+                            <span class="text-xs font-mono text-danger drop-shadow-[0_0_5px_rgba(255,69,58,0.8)]">5xx Errors</span>
+                            <div class="mt-2 text-sm text-white">Upstream Fail</div>
+                            <div class="mt-1 text-xs text-zinc-400 font-mono">Timeout ou Runpod Erro Fatal</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ERRORS & TROUBLESHOOTING -->
+        <section id="errors" class="relative z-10 pt-20 pb-20">
+            <div class="px-8 md:px-12 mb-12">
+                <div class="section-header reveal">03 // Troubleshoot</div>
+                <h2 class="text-4xl md:text-5xl font-medium tracking-tight text-white reveal delay-100">Exceções & SDK</h2>
+            </div>
+            
+            <div class="px-8 md:px-12 grid grid-cols-1 md:grid-cols-2 gap-12">
+                <div class="flex flex-col gap-4 reveal">
+                    <h3 class="text-xl font-medium mb-2 text-white">Respostas de Erro</h3>
+                    
+                    <div class="p-5 border-l-2 border-warning bg-black/40">
+                        <div class="flex justify-between items-center mb-1">
+                            <span class="font-mono text-warning text-sm">429 rate_limit_exceeded</span>
+                        </div>
+                        <p class="text-xs text-zinc-400">Quota de uso exaurida, limite diário atigindo (100 jobs/dia).</p>
+                    </div>
+
+                    <div class="p-5 border-l-2 border-danger bg-black/40">
+                        <div class="flex justify-between items-center mb-1">
+                            <span class="font-mono text-danger text-sm">401 invalid_api_key</span>
+                        </div>
+                        <p class="text-xs text-zinc-400">Falha na verificação de autenticação do Header.</p>
+                    </div>
+                    
+                    <div class="p-5 border-l-2 border-danger bg-black/40">
+                        <div class="flex justify-between items-center mb-1">
+                            <span class="font-mono text-danger text-sm">502 bad_gateway · 504 generation_timeout</span>
+                        </div>
+                        <p class="text-xs text-zinc-400"><span class="text-white font-mono">502</span>: RunPod retornou 5xx ou rede indisponível. <span class="text-white font-mono">504</span>: RunPod marcou <code class="font-mono text-zinc-300">TIMED_OUT</code> (job excedeu <code class="font-mono text-zinc-300">COMFY_GENERATION_TIMEOUT_S=280</code>). SDK mapeia 504 para <code class="font-mono text-accent">TimeoutError(cause: 'gateway_504')</code>.</p>
+                    </div>
+                    
+                    <div class="p-5 border-l-2 border-white/20 bg-black/40">
+                        <div class="flex justify-between items-center mb-1">
+                            <span class="font-mono text-white text-sm">400 invalid_json</span>
+                            <span class="font-mono text-white text-sm">500 config_error</span>
+                        </div>
+                        <p class="text-xs text-zinc-400">Payload mal formato no Body, ou erro persistente mascara do upstream do RunPod.</p>
+                    </div>
+                </div>
+
+                <div class="p-8 border border-white/10 rounded-xl bg-gradient-to-br from-charcoal to-black reveal delay-200">
+                    <div class="flex items-center gap-3 mb-6">
+                        <iconify-icon icon="solar:programming-bold-duotone" class="text-3xl text-accent"></iconify-icon>
+                        <h3 class="text-xl font-medium text-white">SDK Client TypeScript</h3>
+                    </div>
+                    <p class="text-sm text-zinc-300 mb-6 leading-relaxed">
+                        O pacote <code class="font-mono text-accent bg-accent/10 px-2 py-0.5 rounded border border-accent/20">@jhonata-matias/flux-client@0.2.0</code> abstrai de forma elegante toda essa camada de pooling no método <code class="font-mono text-zinc-300">generate()</code> retornando os seguintes tratamentos nativos:
+                    </p>
+                    <ul class="space-y-4">
+                        <li class="flex items-start gap-3 border-b border-white/5 pb-3">
+                            <iconify-icon icon="solar:danger-triangle-bold-duotone" class="text-warning mt-0.5"></iconify-icon> 
+                            <div>
+                                <span class="font-bold text-sm text-white">TimeoutError</span>
+                                <p class="text-xs text-zinc-400">Timeout terminal com discriminador <code class="font-mono text-accent">cause</code>: <code class="font-mono">poll_exhausted</code> (SDK poll budget), <code class="font-mono">gateway_504</code> (worker), <code class="font-mono">runpod_timeout</code> (~280s RunPod).</p>
+                            </div>
+                        </li>
+                        <li class="flex items-start gap-3 border-b border-white/5 pb-3">
+                            <iconify-icon icon="solar:close-circle-bold-duotone" class="text-danger mt-0.5"></iconify-icon> 
+                            <div>
+                                <span class="font-bold text-sm text-white">RateLimitError ou AuthError</span>
+                                <p class="text-xs text-zinc-400">Erros emitidos na primeira requisição.</p>
+                            </div>
+                        </li>
+                        <li class="flex items-start gap-3">
+                            <iconify-icon icon="solar:shield-warning-bold-duotone" class="text-pink-500 mt-0.5"></iconify-icon> 
+                            <div>
+                                <span class="font-bold text-sm text-white">NetworkError / ValidationError</span>
+                                <p class="text-xs text-zinc-400">Falha ao iniciar payload na base local.</p>
+                            </div>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <!-- RESOURCES & LINKS (footer) -->
+        <section id="resources" class="relative z-10 border-t border-white/10 pt-20 pb-20 bg-charcoal/20">
+            <div class="px-8 md:px-12 mb-12">
+                <div class="section-header reveal">04 // Resources</div>
+                <h2 class="text-4xl md:text-5xl font-medium tracking-tight text-white reveal delay-100">Referências & Links</h2>
+                <p class="text-muted text-sm mt-4 max-w-2xl reveal delay-200">Artefatos públicos do projeto <span class="text-white font-mono">servegate</span> — fonte do gateway, SDK TypeScript, guias de migração, ADRs e releases. Tudo open source sob licença MIT.</p>
+            </div>
+
+            <div class="px-8 md:px-12 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <a href="https://github.com/Jhonata-Matias/servegate" target="_blank" rel="noopener" class="group glass-card p-6 rounded-xl block transition-all hover:border-accent/30">
+                    <div class="flex items-start gap-4">
+                        <iconify-icon class="text-3xl text-accent" icon="mdi:github"></iconify-icon>
+                        <div class="flex-1">
+                            <h3 class="text-lg font-medium text-white group-hover:text-accent transition-colors">Repositório GitHub</h3>
+                            <p class="text-xs text-muted mt-1 font-mono">Jhonata-Matias/servegate</p>
+                            <p class="text-xs text-zinc-400 mt-2">Código fonte completo do gateway + SDK + docs. Alpha, público, MIT.</p>
+                        </div>
+                    </div>
+                </a>
+
+                <a href="https://github.com/Jhonata-Matias/servegate/releases/tag/v0.2.0-alpha" target="_blank" rel="noopener" class="group glass-card p-6 rounded-xl block transition-all hover:border-accent/30">
+                    <div class="flex items-start gap-4">
+                        <iconify-icon class="text-3xl text-accent" icon="solar:tag-horizontal-bold-duotone"></iconify-icon>
+                        <div class="flex-1">
+                            <h3 class="text-lg font-medium text-white group-hover:text-accent transition-colors">Release v0.2.0-alpha</h3>
+                            <p class="text-xs text-muted mt-1 font-mono">Pre-release · 2026-04-23</p>
+                            <p class="text-xs text-zinc-400 mt-2">Release notes completos do async refactor + SDK breaking changes (<code class="font-mono">ColdStartError</code> → <code class="font-mono">TimeoutError</code>).</p>
+                        </div>
+                    </div>
+                </a>
+
+                <a href="https://github.com/Jhonata-Matias/servegate/blob/main/docs/api/migration-async.md" target="_blank" rel="noopener" class="group glass-card p-6 rounded-xl block transition-all hover:border-accent/30">
+                    <div class="flex items-start gap-4">
+                        <iconify-icon class="text-3xl text-warning" icon="solar:arrow-right-up-bold-duotone"></iconify-icon>
+                        <div class="flex-1">
+                            <h3 class="text-lg font-medium text-white group-hover:text-accent transition-colors">Migration Guide v0.1 → v0.2</h3>
+                            <p class="text-xs text-muted mt-1 font-mono">docs/api/migration-async.md</p>
+                            <p class="text-xs text-zinc-400 mt-2">Upgrade path, código before/after em curl + SDK, error taxonomy mapping.</p>
+                        </div>
+                    </div>
+                </a>
+
+                <a href="https://github.com/Jhonata-Matias/servegate/blob/main/docs/usage/dev-onboarding.md" target="_blank" rel="noopener" class="group glass-card p-6 rounded-xl block transition-all hover:border-accent/30">
+                    <div class="flex items-start gap-4">
+                        <iconify-icon class="text-3xl text-success" icon="solar:book-bold-duotone"></iconify-icon>
+                        <div class="flex-1">
+                            <h3 class="text-lg font-medium text-white group-hover:text-accent transition-colors">Developer Onboarding</h3>
+                            <p class="text-xs text-muted mt-1 font-mono">EN + <a href="https://github.com/Jhonata-Matias/servegate/blob/main/docs/usage/dev-onboarding.pt-BR.md" class="hover:underline">pt-BR</a></p>
+                            <p class="text-xs text-zinc-400 mt-2">5 passos ~15min: access request → <code class="font-mono">npm install</code> → primeira imagem.</p>
+                        </div>
+                    </div>
+                </a>
+
+                <a href="https://github.com/Jhonata-Matias/servegate/blob/main/sdk/CHANGELOG.md" target="_blank" rel="noopener" class="group glass-card p-6 rounded-xl block transition-all hover:border-accent/30">
+                    <div class="flex items-start gap-4">
+                        <iconify-icon class="text-3xl text-info" icon="solar:clipboard-list-bold-duotone"></iconify-icon>
+                        <div class="flex-1">
+                            <h3 class="text-lg font-medium text-white group-hover:text-accent transition-colors">SDK CHANGELOG</h3>
+                            <p class="text-xs text-muted mt-1 font-mono">@jhonata-matias/flux-client</p>
+                            <p class="text-xs text-zinc-400 mt-2">Histórico de versões + migration notes breaking por minor.</p>
+                        </div>
+                    </div>
+                </a>
+
+                <a href="https://github.com/Jhonata-Matias/servegate/blob/main/docs/architecture/adr-0002-async-gateway-pattern.md" target="_blank" rel="noopener" class="group glass-card p-6 rounded-xl block transition-all hover:border-accent/30">
+                    <div class="flex items-start gap-4">
+                        <iconify-icon class="text-3xl text-pink-500" icon="solar:diagram-down-bold-duotone"></iconify-icon>
+                        <div class="flex-1">
+                            <h3 class="text-lg font-medium text-white group-hover:text-accent transition-colors">ADR-0002 Async Pattern</h3>
+                            <p class="text-xs text-muted mt-1 font-mono">Architectural Decision Record</p>
+                            <p class="text-xs text-zinc-400 mt-2">Por que async submit/poll? Contexto do timeout cliff 60s (Worker) vs ~130s cold start.</p>
+                        </div>
+                    </div>
+                </a>
+            </div>
+
+            <div class="mt-16 mx-8 md:mx-12 pt-10 border-t border-white/5 text-center">
+                <p class="text-xs font-mono text-muted uppercase tracking-widest">servegate · Alpha · MIT License</p>
+                <p class="text-xs text-zinc-500 mt-2">Gateway em produção desde 2026-04-23 · SDK v0.2.0 published em GitHub Packages</p>
+                <a href="https://github.com/Jhonata-Matias/servegate" target="_blank" rel="noopener" class="inline-flex items-center gap-2 mt-4 text-xs font-mono text-accent hover:underline">
+                    <iconify-icon icon="mdi:github"></iconify-icon>
+                    github.com/Jhonata-Matias/servegate →
+                </a>
+            </div>
+        </section>
+
+    </div>
+
+    <script>
+        const observerOptions = {
+            root: null,
+            rootMargin: '0px',
+            threshold: 0.1
+        };
+
+        const observer = new IntersectionObserver((entries, observer) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('active', 'reveal-active');
+                    observer.unobserve(entry.target);
+                }
+            });
+        }, observerOptions);
+
+        document.querySelectorAll('.reveal, .text-reveal-wrapper').forEach(el => {
+            observer.observe(el);
+        });
+    </script>
+</body>
+</html>
