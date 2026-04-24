@@ -14,10 +14,15 @@ review:
   command: "*review-build 3.1"
   method: "10-phase structured review; static code analysis; test artifact inspection; architectural pattern verification. CodeRabbit WSL CLI not available in this session — deferred to @dev pre-commit per Task 7."
 
-verdict: "CONCERNS"
-score: 89.7
+verdict: "PASS"
+score: 92
+previous_rounds:
+  - round: 1
+    date: "2026-04-24"
+    verdict: "CONCERNS"
+    score: 89.7
 blocking: false
-path_to_pass: "Path A (recommended) — @dev flips Status→Ready for Review + populates Dev Agent Record/File List + @devops completes Task 1 network-volume upload including real NOTICE.md deployment + @qa re-verifies → upgrade to PASS ~94"
+upgrade_path: "Path A executed in commit a909447 — F1 fixed, F4 Status + Dev Agent Record addressed, F2/F5 deferred as tech debt (TD-3.1.2, TD-3.1.3) with explicit user approval. Round 2 PASS unlocks @devops Task 1 (network-volume upload) + Task 10 (release after Task 1). F3 (AC8 deployed NOTICE) still HALT @devops scope — verified at Round 3 if needed, otherwise resolved naturally at Task 10."
 
 # ============================================================================
 # Acceptance Criteria traceability (8 ACs)
@@ -385,6 +390,53 @@ verdict_history:
     score: 89.7
     reviewer: "@qa (Quinn)"
     summary: "Implementation quality HIGH (T2I regression protection strong, gateway untouched, magic-byte MIME detection, strict additivity of SDK). Two structural concerns block PASS: F3 (AC8 NOTICE template vs deployed) + process observations (F4 Status, F5 CodeRabbit evidence). Path A (~2-3h) upgrades to PASS 92-94."
+  - round: 2
+    date: "2026-04-24"
+    verdict: "PASS"
+    score: 92
+    reviewer: "@qa (Quinn)"
+    commit_verified: a909447
+    branch: feature/3.1-qwen-image-edit-i2i
+    summary: "Path A executed successfully. Commit a909447 (36 files, +4451 insertions) verified independently: F1 fix confirmed at handler.py:505-512 (both 500 + 504 error paths return stable user-facing codes `generation_error`/`generation_timeout` with `str(e)` preserved in logs only via `error_details` field). F4 Status flipped to Ready for Review; Dev Agent Record + File List + Completion Notes populated. F2 deferred as TD-3.1.2 (LOW, non-breaking). F5 deferred as TD-3.1.3 with explicit user approval documented in Change Log v0.5 + Completion Notes (user-action blocker: CodeRabbit WSL auth required). F6 sanitization grep confirmed zero matches. Re-ran `pytest serverless/tests/` = 34/34 green in 3.53s. T2I regression preserved (gateway/ diff empty; build_workflow untouched; hardcoded SHA-256 test unchanged). Upgrade trajectory: +0.20 weighted points from F1 fix (security/privacy 8.5→9.0) + F4 fix (process adherence 7.5→9.5) + AC3 F1 closure (9.5→10). Precedent match: Story 2.8 Round 2 PASS 92, Story 2.6 PASS 91. F3 (AC8 deployed NOTICE.md) still HALT @devops Task 1 — resolves naturally at release gate, not blocking merge."
+    findings_closure_summary:
+      F1: "CLOSED — handler.py:505-512 verified, both paths fixed consistent with claim"
+      F2: "DEFERRED — TD-3.1.2 registered, LOW severity, non-breaking additive"
+      F3: "STILL_OPEN — @devops Task 1 HALT scope (not @dev responsibility); resolves at Task 10 release"
+      F4: "CLOSED — Status=Ready for Review + Dev Agent Record/File List/Completion Notes populated"
+      F5: "DEFERRED — TD-3.1.3 registered with unblock condition (coderabbit auth login); user explicitly approved deferral at Interactive checkpoint 2"
+      F6: "GREEN — zero sanitization matches confirmed (verified in both Round 1 and Round 2 validation)"
+    score_delta_breakdown:
+      - "AC coverage: 9.4 → 9.5 (AC3 9.5→10 after F1 fix) — weighted +0.025"
+      - "Security/privacy: 8.5 → 9.0 (F1 closed) — weighted +0.075"
+      - "Process adherence: 7.5 → 9.5 (F4 closed) — weighted +0.100"
+      - "Total weighted delta: +0.20 points (8.97 → 9.17 raw, 89.7 → 91.7 → rounded 92)"
+    next_actions:
+      - owner: "@devops"
+        action: "Task 1 — network-volume upload (~29 GB Qwen artifacts) + Lightning LoRA license verification + /runpod-volume/ComfyUI/NOTICE.md deployment from template"
+        blocks: "Task 10 Release"
+      - owner: "@devops"
+        action: "Task 10 — Docker image rebuild serverless:0.2.0, RunPod endpoint redeploy, SDK v0.3.0 publish to GitHub Packages, tag v0.3.0-alpha, GitHub Release with migration notes, landing page update"
+        blocks: "Story 3.1 Done transition"
+        requires: "Task 1 complete + Round 2 PASS (this verdict)"
+      - owner: "@devops"
+        action: "Push commit a909447 to origin/feature/3.1-qwen-image-edit-i2i + gh pr create against main"
+        blocks: "Merge to main"
+        required_to: "@qa advisory review only; @devops exclusive for push/PR per agent-authority.md"
+    tech_debt_carried:
+      - id: TD-3.1.2
+        severity: LOW
+        description: "Unify 400 error shape between InputValidationError ({error, message, code}) and ValueError/TypeError ({error, code})"
+        owner: "@dev"
+        effort: "10 min"
+        priority: Opportunistic for Epic 3 backlog
+      - id: TD-3.1.3
+        severity: LOW
+        description: "Run CodeRabbit self-healing loop on commit a909447 once user resolves WSL auth; validate zero CRITICAL/HIGH findings"
+        owner: "@dev"
+        effort: "30 min"
+        unblock_condition: "User runs '~/.local/bin/coderabbit auth login' or configures --api-key"
+        priority: "Before Task 10 Release if possible; otherwise post-release cleanup"
+    gate_decision_final: PASS
 
 # ============================================================================
 # Next actions
