@@ -10,19 +10,25 @@ adr: "adr-0003-image-to-image-model-selection"
 review:
   reviewer: "@qa (Quinn)"
   date: "2026-04-24"
-  round: 1
+  round: 3
   command: "*review-build 3.1"
-  method: "10-phase structured review; static code analysis; test artifact inspection; architectural pattern verification. CodeRabbit WSL CLI not available in this session — deferred to @dev pre-commit per Task 7."
+  method: "Round 3 — focused regression review triggered by @devops deploy-halt evidence (.aiox/notes/story-3.1-deploy-halt-2026-04-24.md). Re-verified against ComfyUI v0.3.62 (pinned) + v0.19.3 (latest) source + authenticated GitHub Code Search API + local custom_nodes inspection. Finding stands: F7 invented class_types. Rounds 1+2 accepted AC2 on pattern-match evidence (handler emits names documented in ADR-0003) without verifying against a real ComfyUI node registry."
 
-verdict: "PASS"
-score: 92
+verdict: "FAIL"
+score: 52
 previous_rounds:
   - round: 1
     date: "2026-04-24"
     verdict: "CONCERNS"
     score: 89.7
-blocking: false
-upgrade_path: "Path A executed in commit a909447 — F1 fixed, F4 Status + Dev Agent Record addressed, F2/F5 deferred as tech debt (TD-3.1.2, TD-3.1.3) with explicit user approval. Round 2 PASS unlocks @devops Task 1 (network-volume upload) + Task 10 (release after Task 1). F3 (AC8 deployed NOTICE) still HALT @devops scope — verified at Round 3 if needed, otherwise resolved naturally at Task 10."
+  - round: 2
+    date: "2026-04-24"
+    verdict: "PASS"
+    score: 92
+    revoked: true
+    revocation_reason: "AC2 correctness was not verified against a real ComfyUI registry. Static pattern-match evidence (handler emits names per ADR text) is insufficient for a workflow that must execute against ComfyUI at runtime. Round 3 F7 proves the class_types do not exist in any public ComfyUI distribution."
+blocking: true
+upgrade_path: "Round 3 FAIL — returns to @dev for F7 remediation. Requires handler rework (replace 4 invented class_types with real core ComfyUI loaders OR author a custom-node package), Dockerfile update (COMFY_REF bump likely + custom_nodes/ install), test rework (tautological tests → real ComfyUI registry validation), live pod smoke before re-handoff to @qa. Estimated wall-time: 4-8h depending on remediation path chosen. See .aiox/notes/story-3.1-deploy-halt-2026-04-24.md for detailed remediation options A/B/C."
 
 # ============================================================================
 # Acceptance Criteria traceability (8 ACs)
@@ -40,13 +46,23 @@ acceptance_criteria:
 
   - id: AC2
     name: "Qwen workflow graph implemented"
-    status: PASS
-    evidence:
-      - "serverless/handler.py:143-210 — build_qwen_edit_workflow() with all specified nodes"
-      - "Nodes: QwenImageEditDiffusionModelLoader (10), QwenImageEditCLIPLoader (11), QwenImageEditVAELoader (12), LoadImageBase64 (13), LoraLoader Lightning (14), VAEEncode (15), CLIPTextEncode +/- (16,17), KSampler (18), VAEDecode (19), SaveImage (20) — all 11 nodes per ADR-0003 spec"
-      - "serverless/workflow_template_qwen_edit.json new reference file created"
-      - "serverless/tests/test_handler_qwen_workflow.py exists for workflow validation"
-    score: 10
+    status: FAIL
+    round_3_override: true
+    previous_status_rounds_1_2: PASS
+    evidence_round_3:
+      - "CRITICAL: serverless/handler.py:153-165 uses 4 class_type strings that DO NOT exist in ComfyUI core v0.3.62 (pinned in Dockerfile:21) nor v0.19.3 (latest, verified 2026-04-24 via raw GitHub fetch of nodes.py + comfy_extras/nodes_qwen.py)"
+      - "Invented class_types: QwenImageEditDiffusionModelLoader (node 10), QwenImageEditCLIPLoader (node 11), QwenImageEditVAELoader (node 12), LoadImageBase64 (node 13)"
+      - "GitHub Code Search API (authenticated as Jhonata-Matias, 2026-04-24): total_count=0 for each invented class name; 1 unrelated result on alt spelling 'QwenImageEditLoader' (repo jatidevelopments/ryla, not a ComfyUI node)"
+      - "No local custom_nodes/ directory present in repo. No ComfyUI-Manager install step in serverless/Dockerfile. No pip dependency adding Qwen-specific node packages in serverless/requirements.txt"
+      - "Real ComfyUI exposes Qwen support via generic CLIPLoader (type='qwen_image'), UNETLoader, VAELoader + comfy_extras/nodes_qwen.py::TextEncodeQwenImageEdit — NONE of which the handler references"
+    evidence_rounds_1_2_re_evaluated:
+      - "Prior evidence 'serverless/handler.py:143-210 — build_qwen_edit_workflow() with all specified nodes' remains factually true but was insufficient — confirmed the handler emits names specified in ADR-0003 but did not verify those names resolve against a real ComfyUI registry"
+      - "Prior evidence 'serverless/tests/test_handler_qwen_workflow.py exists for workflow validation' — re-inspected: tests are TAUTOLOGICAL. test_qwen_edit_workflow_contains_required_node_classes asserts the handler returns the same strings the story specified; no ComfyUI registry lookup; no live workflow submission; no /object_info endpoint verification"
+      - "workflow_template_qwen_edit.json reference file replicates the 4 invented class_types verbatim — reinforcing the same gap, not catching it"
+    score: 1
+    finding_ref: F7
+    severity: CRITICAL
+    impact: "Any real inference request routed to the i2i branch will fail at /prompt submission with ComfyUI NODE_CLASS_MAPPINGS KeyError. Story is un-deployable. AC2 (Qwen workflow graph implemented) is materially unmet despite code existing."
 
   - id: AC3
     name: "Input validation rules enforced"
@@ -107,6 +123,11 @@ acceptance_criteria:
       - "async contract (ADR-0002) preserved: SDK generate() method unchanged, submit/poll machinery shared"
     score: 10
     note: "This is the strongest AC evidence in the story — hardcoded SHA-256 is a gold-standard regression check. Tests are pure unit tests (don't require ComfyUI running), so they can execute in any CI. @dev should verify local pytest run passes before final commit."
+    round_3_reconfirmation:
+      status: PASS_UNAFFECTED_BY_F7
+      evidence: "git diff a909447 HEAD -- serverless/ sdk/ returns empty; T2I build_workflow untouched; hardcoded SHA-256 baseline unaffected since T2I path does not reference any of the 4 invented class_types in F7."
+      forward_risk: "@dev rework for F7 remediation MAY need to bump COMFY_REF (Dockerfile:21) from v0.3.62 to a newer ComfyUI version that natively supports Qwen via generic loaders. ANY such bump requires Round 4 re-verification of the SHA-256 baseline against the new ComfyUI build — byte-identical determinism is version-sensitive."
+      recommendation: "If remediation path chosen involves COMFY_REF bump: @dev records NEW SHA-256 from the chosen ComfyUI version on the same fixed-seed T2I workflow BEFORE changing the hardcoded assertion in test_handler_t2i_regression.py. Document the reason in Change Log. This is a controlled regression (version intentional, output byte-identical within the new version line) — NOT an AC6 failure."
 
   - id: AC7
     name: "Documentation updates"
@@ -288,6 +309,56 @@ findings:
     owner: "@dev"
     effort: "10 min"
 
+  # ==========================================================================
+  # Round 3 CRITICAL finding — discovered by @devops during Phase 0 pre-flight
+  # Reference: .aiox/notes/story-3.1-deploy-halt-2026-04-24.md
+  # ==========================================================================
+  - id: F7
+    severity: CRITICAL
+    category: correctness
+    round_discovered: 3
+    location: "serverless/handler.py:153-165 + serverless/workflow_template_qwen_edit.json:4-24 + serverless/tests/test_handler_qwen_workflow.py:47-51 + serverless/tests/test_handler_dispatch.py:70-71"
+    issue: |
+      AC2 graph uses 4 ComfyUI class_type strings that do not exist in any public ComfyUI version (core v0.3.62 pinned or v0.19.3 latest) nor in any public GitHub custom-node repository, nor locally in the repo:
+      - QwenImageEditDiffusionModelLoader (node 10)
+      - QwenImageEditCLIPLoader (node 11)
+      - QwenImageEditVAELoader (node 12)
+      - LoadImageBase64 (node 13)
+
+      The Dockerfile (serverless/Dockerfile:20-23) installs only ComfyUI core at v0.3.62 with no custom_nodes/ population. A live ComfyUI worker will reject the workflow with NODE_CLASS_MAPPINGS lookup error at /prompt submission.
+
+      The 34/34 pytest green figure from Round 2 is misleading for AC2 — the tests that "validate" the Qwen workflow are TAUTOLOGICAL: they assert the handler returns the same strings the story asked it to emit, without cross-checking those strings against a real ComfyUI registry or /object_info endpoint.
+    evidence:
+      - "Raw fetch https://raw.githubusercontent.com/comfyanonymous/ComfyUI/v0.19.3/nodes.py — none of the 4 class names present"
+      - "Raw fetch comfy_extras/nodes_qwen.py (latest) — provides only TextEncodeQwenImageEdit, TextEncodeQwenImageEditPlus, EmptyQwenImageLayeredLatentImage (none of which the handler uses)"
+      - "GitHub Code Search API (authenticated, 2026-04-24): total_count=0 for each of the 4 invented names"
+      - "Repository scan: find . -type d -name custom_nodes → empty; grep -l invented names → only handler.py + 2 test files + workflow_template JSON"
+      - "serverless/Dockerfile installs ComfyUI core only; no custom-node package install"
+    why_rounds_1_2_missed:
+      - "Round 1 + Round 2 evidence for AC2 validated that the handler EMITS the names documented in ADR-0003, which is factually true but not the same as validating those names resolve against a real ComfyUI registry"
+      - "Unit tests are tautological: handler returns 'X' → test asserts handler returned 'X'. No registry introspection; no live workflow submission; no CI stage requiring a running ComfyUI"
+      - "'Performance' NFR was marked DEFERRED (cannot measure without deploy) — but correctness was treated as validated via pattern match, which was a meta-review gap"
+    recommendation: |
+      Return to @dev. Three remediation options (detailed in .aiox/notes/story-3.1-deploy-halt-2026-04-24.md):
+
+      Option A (recommended): Replace invented class_types with real core ComfyUI nodes:
+        - Node 10: UNETLoader (unet_name, weight_dtype='fp8_e4m3fn')
+        - Node 11: CLIPLoader (clip_name, type='qwen_image') — requires ComfyUI version that supports this type (bump COMFY_REF from v0.3.62 needed)
+        - Node 12: VAELoader (vae_name)
+        - Node 13: handler decodes base64 → /tmp/{uuid}.png; use LoadImage (image=filename); cleanup tmp post-request
+        - Consider: positive CLIPTextEncode → TextEncodeQwenImageEdit per Qwen-Image-Edit recommended pattern in core
+
+      Option B: Author a custom-node package locally (serverless/custom_nodes/qwen_image_edit/) providing the 4 class names; add to Dockerfile. Higher scope, Option A preferred.
+
+      Option C: Bump COMFY_REF to latest v0.19.x + use Option A. Requires Round 4 AC6 re-baseline (new SHA-256 for T2I regression test — CONTROLLED regression, document in Change Log).
+
+      Test rework mandatory: replace tautological string-assertion with live-ComfyUI /object_info check (can be gated in CI by a running ComfyUI container), OR minimum add a comment + assertion mapping each expected class_type to a known-good ComfyUI version reference.
+    blocking: true
+    owner: "@dev"
+    effort: "4-8h (handler rework ~1h + Dockerfile update ~30min + test rework ~1h + local pod smoke verification ~1h + any COMFY_REF bump side-effect handling ~1-3h)"
+    unblocks: "Story 3.1 deploy flow — Task 1 (pod upload), Task 10 (release), SDK v0.3.0 publish, PR merge to main"
+    regression_guard: "New tests MUST fail if class_types become invalid again. Consider: a pytest fixture that boots a lightweight ComfyUI skeleton and validates /object_info contains all class_types referenced by the handler. This is the evidence that was missing in Rounds 1+2."
+
 # ============================================================================
 # Quality score breakdown (weighted)
 # ============================================================================
@@ -438,16 +509,76 @@ verdict_history:
         priority: "Before Task 10 Release if possible; otherwise post-release cleanup"
     gate_decision_final: PASS
 
+  - round: 3
+    date: "2026-04-24"
+    verdict: "FAIL"
+    score: 52
+    reviewer: "@qa (Quinn)"
+    triggered_by: "@devops deploy HALT during Phase 0 pre-flight — evidence at .aiox/notes/story-3.1-deploy-halt-2026-04-24.md"
+    commit_at_review: 19e8f52
+    round_2_revocation: true
+    round_2_revocation_reason: "Round 2 PASS 92 was based on static pattern-match evidence for AC2 (handler emits names documented in ADR-0003) without verification against a real ComfyUI node registry. Round 3 F7 proves the 4 class_type strings do not exist in any public ComfyUI distribution. The 34/34 pytest green figure was tautological for the i2i graph — tests assert the handler returns hardcoded strings, nothing more."
+    summary: "Story 3.1 FAIL on AC2 correctness. Handler's Qwen i2i workflow uses 4 invented class_types that no real ComfyUI version exposes. Deploy blocked until @dev rework. T2I path (AC6) remains clean and unaffected. All prior closures (F1, F4, F6) and deferrals (F2 TD-3.1.2, F5 TD-3.1.3) remain valid — new F7 supersedes the gate verdict."
+    findings_closure_summary:
+      F1: "CLOSED (unchanged from Round 2) — handler.py:505-512 error sanitization fix confirmed"
+      F2: "DEFERRED (unchanged) — TD-3.1.2, LOW, non-breaking"
+      F3: "STILL_OPEN — @devops Task 1 HALT scope; was going to resolve at Task 10 release, now blocked until F7 remediation"
+      F4: "CLOSED (unchanged)"
+      F5: "DEFERRED (unchanged) — TD-3.1.3"
+      F6: "GREEN (unchanged)"
+      F7: "NEW, CRITICAL — AC2 graph uses non-existent ComfyUI class_types; returns to @dev for rework"
+    score_delta_breakdown:
+      - "AC coverage (8/8): 9.5 → 3.0 — AC2 10→1 (F7 CRITICAL correctness fail); weighted: 2.375 → 0.750 (delta -1.625)"
+      - "Evidence quality: 8.5 → 4.0 — tautological tests for AC2 graph revealed; weighted: 0.850 → 0.400 (delta -0.450)"
+      - "Pattern adherence: 9.5 → 6.5 — invented class_types deviate from real ComfyUI pattern; weighted: 0.950 → 0.650 (delta -0.300)"
+      - "DoD completeness: 7.0 → 3.0 — integration test DoD items (live endpoint T2I + i2i) cannot pass as-is; weighted: 0.350 → 0.150 (delta -0.200)"
+      - "Other dimensions unchanged (reliability AC6 unaffected; security/privacy unaffected; docs/process same)"
+      - "Total weighted: 9.17 → 5.22 (raw) → 52% — rounded verdict FAIL"
+    next_actions:
+      - owner: "@dev"
+        action: "Remediate F7 — rework build_qwen_edit_workflow() using real ComfyUI class_types (Option A recommended per finding notes). Rework test_handler_qwen_workflow.py + test_handler_dispatch.py to stop tautological assertions — add live ComfyUI /object_info validation OR document a known-good ComfyUI version reference for each class_type used."
+        blocks: "Story 3.1 deploy flow (Task 1, Task 10, SDK publish, PR merge)"
+        effort: "4-8h"
+      - owner: "@dev"
+        action: "If COMFY_REF bump chosen (Option A/C): record new T2I SHA-256 baseline against new ComfyUI version BEFORE updating test_handler_t2i_regression.py assertion; document controlled regression in Change Log."
+        blocks: "Round 4 AC6 re-verification"
+      - owner: "@dev"
+        action: "After code rework complete: local pod smoke (submit Qwen workflow to live ComfyUI, confirm output dims match input per AC4) + full pytest re-run + handoff to @qa for Round 4"
+        blocks: "Round 4 gate review"
+      - owner: "@qa"
+        action: "Round 4 review after @dev rework — expected path: AC2 PASS with live-ComfyUI evidence + AC6 re-baseline confirmation (if COMFY_REF bump) → PASS 85+"
+        blocks: "@devops deploy resumption"
+    tech_debt_carried:
+      - id: TD-3.1.2
+        status: carried_over_from_round_2
+      - id: TD-3.1.3
+        status: carried_over_from_round_2
+      - id: TD-3.1.4
+        severity: MEDIUM
+        title: "Test suite meta-gap: tautological assertions for workflow class_types"
+        source: F7 meta-finding
+        description: "The test pattern 'handler returns string X → assert handler returned X' does not validate correctness against the external system (ComfyUI). QA Rounds 1+2 accepted this as evidence. Going forward: any test that validates emitted ComfyUI/external-system node names MUST include registry introspection or a known-good reference fixture."
+        owner: "@qa + @dev"
+        effort: "process update (test authoring guidelines) + retroactive sweep for similar patterns"
+        priority: "Before next Epic (general framework health); register as spec-pipeline improvement"
+    gate_decision_final: FAIL
+    remediation_estimated_wall_time: "4-8h @dev rework + 30-60min @qa Round 4 review"
+
 # ============================================================================
-# Next actions
+# Next actions (Round 3 — supersedes Round 2 next_actions above)
 # ============================================================================
 next_actions:
   - owner: "@dev"
-    action: "Flip Status, populate Dev Agent Record, optional fix F1, run Task 7 CodeRabbit + sanitization, commit"
+    action: "Remediate F7 (invented ComfyUI class_types in handler). See finding F7 recommendation + .aiox/notes/story-3.1-deploy-halt-2026-04-24.md for Options A/B/C. Rework handler + tests + Dockerfile (possibly COMFY_REF bump). Run local pod smoke before re-handoff."
     blocking_for_merge: true
+    effort: "4-8h"
   - owner: "@devops"
-    action: "Execute Task 1 (network-volume upload + real NOTICE.md deployment including Lightning LoRA license verification)"
+    action: "HOLD Task 1 (~29 GB upload) + Task 10 (build + deploy + publish + PR). All blocked until F7 remediation + Round 4 PASS."
     blocking_for_release: true
   - owner: "@qa"
-    action: "Round 2 re-verification after Path A completion → expected PASS 92-94"
+    action: "Round 4 review after @dev rework. Expected: AC2 PASS with live-ComfyUI evidence; AC6 re-confirmation (possibly with new baseline if COMFY_REF bumped); re-enable deploy flow."
+    blocking_for_merge: true
+  - owner: "@po"
+    action: "Revert Story 3.1 Status from 'Ready for Review' to 'InProgress' or similar; notify of regression in verdict; reflect in Epic 3 PRD if needed."
     blocking_for_merge: false
+    note: "Story file status edits are @po scope per story-lifecycle.md; @qa only updates QA Results section."

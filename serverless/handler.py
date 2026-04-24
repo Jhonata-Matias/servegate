@@ -25,7 +25,9 @@ import sys
 import time
 import urllib.parse
 import urllib.request
-from typing import Any, Dict, Tuple
+import uuid
+from pathlib import Path
+from typing import Any, Dict, Optional, Tuple
 
 from PIL import Image
 import runpod
@@ -53,6 +55,9 @@ QWEN_UNET_NAME = "qwen_image_edit_fp8_e4m3fn.safetensors"
 QWEN_CLIP_NAME = "qwen_2.5_vl_7b_fp8_scaled.safetensors"
 QWEN_VAE_NAME = "qwen_image_vae.safetensors"
 QWEN_LIGHTNING_LORA_NAME = "qwen_image_lightning_8steps_lora.safetensors"
+# ComfyUI resolves LoadImage.image against this directory. Must match COMFY_DIR in Dockerfile.
+# Override via env for local testing where ComfyUI lives elsewhere.
+COMFY_INPUT_DIR = os.environ.get("COMFY_INPUT_DIR", "/opt/ComfyUI/input")
 LANCZOS = Image.Resampling.LANCZOS if hasattr(Image, "Resampling") else Image.LANCZOS
 
 
@@ -142,28 +147,44 @@ def build_workflow(prompt: str, steps: int, seed: int, width: int, height: int) 
 
 def build_qwen_edit_workflow(
     prompt: str,
-    input_image_b64: str,
+    input_image_filename: str,
     strength: float,
     seed: int,
     steps: int,
 ) -> Dict[str, Any]:
-    """Qwen-Image-Edit workflow per ADR-0003; T2I build_workflow stays untouched."""
+    """Qwen-Image-Edit workflow per ADR-0003.
+
+    Class types are VERIFIED against ComfyUI v0.3.62 (pinned in Dockerfile); see
+    serverless/tests/fixtures/comfyui-v0_3_62-object-info.json for the registry
+    of allowed class_types + enum values. Round 3 F7 remediation replaced the 4
+    non-existent 'QwenImageEdit*' loader classes with real core ComfyUI nodes
+    (UNETLoader, CLIPLoader type='qwen_image', VAELoader, LoadImage) plus the
+    Qwen-specific TextEncodeQwenImageEdit from comfy_extras/nodes_qwen.py for
+    conditioning with image-aware encoding.
+
+    T2I build_workflow path (FLUX.1-schnell) remains byte-identical unchanged
+    per AC6; this function is purely additive on top of that contract.
+
+    Input image is loaded from ComfyUI's input directory by basename; the
+    handler() caller MUST write the decoded bytes to COMFY_INPUT_DIR before
+    submitting and clean up afterward (see write_input_image / cleanup helpers).
+    """
     return {
         "10": {
-            "class_type": "QwenImageEditDiffusionModelLoader",
+            "class_type": "UNETLoader",
             "inputs": {"unet_name": QWEN_UNET_NAME, "weight_dtype": "fp8_e4m3fn"},
         },
         "11": {
-            "class_type": "QwenImageEditCLIPLoader",
-            "inputs": {"clip_name": QWEN_CLIP_NAME, "type": "qwen_image_edit"},
+            "class_type": "CLIPLoader",
+            "inputs": {"clip_name": QWEN_CLIP_NAME, "type": "qwen_image"},
         },
         "12": {
-            "class_type": "QwenImageEditVAELoader",
+            "class_type": "VAELoader",
             "inputs": {"vae_name": QWEN_VAE_NAME},
         },
         "13": {
-            "class_type": "LoadImageBase64",
-            "inputs": {"image": input_image_b64},
+            "class_type": "LoadImage",
+            "inputs": {"image": input_image_filename},
         },
         "14": {
             "class_type": "LoraLoader",
@@ -180,12 +201,22 @@ def build_qwen_edit_workflow(
             "inputs": {"pixels": ["13", 0], "vae": ["12", 0]},
         },
         "16": {
-            "class_type": "CLIPTextEncode",
-            "inputs": {"text": prompt, "clip": ["14", 1]},
+            "class_type": "TextEncodeQwenImageEdit",
+            "inputs": {
+                "clip": ["14", 1],
+                "prompt": prompt,
+                "vae": ["12", 0],
+                "image": ["13", 0],
+            },
         },
         "17": {
-            "class_type": "CLIPTextEncode",
-            "inputs": {"text": "", "clip": ["14", 1]},
+            "class_type": "TextEncodeQwenImageEdit",
+            "inputs": {
+                "clip": ["14", 1],
+                "prompt": "",
+                "vae": ["12", 0],
+                "image": ["13", 0],
+            },
         },
         "18": {
             "class_type": "KSampler",
@@ -208,6 +239,34 @@ def build_qwen_edit_workflow(
         },
         "20": {"class_type": "SaveImage", "inputs": {"images": ["19", 0], "filename_prefix": "qwen-edit"}},
     }
+
+
+def write_input_image_to_comfy(image_b64: str) -> str:
+    """Decode base64 and write to ComfyUI's input directory; return the basename.
+
+    ComfyUI's LoadImage node resolves filenames relative to its input dir. We
+    use a uuid4-prefixed name to avoid collisions across concurrent requests
+    and to make cleanup safe. Caller MUST invoke cleanup_input_image() after
+    workflow completes (success or failure) — see handler() try/finally.
+    """
+    decoded = base64.b64decode(image_b64)
+    filename = f"qwen-edit-{uuid.uuid4().hex}.png"
+    target_dir = Path(COMFY_INPUT_DIR)
+    target_dir.mkdir(parents=True, exist_ok=True)
+    (target_dir / filename).write_bytes(decoded)
+    return filename
+
+
+def cleanup_input_image(filename: Optional[str]) -> None:
+    """Best-effort cleanup of per-request input image. Never raises."""
+    if not filename:
+        return
+    try:
+        (Path(COMFY_INPUT_DIR) / filename).unlink(missing_ok=True)
+    except OSError as e:
+        # Log but don't fail — tempfile leak is recoverable; failing the
+        # response over cleanup would mask the real outcome.
+        log("warn", "input_image_cleanup_failed", filename=filename, error_type=type(e).__name__)
 
 
 def queue_workflow(workflow: Dict[str, Any]) -> str:
@@ -403,10 +462,16 @@ def _normalize_i2i_input(raw: Dict[str, Any], prompt: str, seed: int) -> Dict[st
     return {"prompt": prompt, "steps": steps, "seed": seed, "strength": strength, **image}
 
 
-def i2i_params(params: Dict[str, Any]) -> Dict[str, Any]:
+def i2i_params(params: Dict[str, Any], input_image_filename: str) -> Dict[str, Any]:
+    """Build the kwargs for build_qwen_edit_workflow().
+
+    input_image_filename is the basename ComfyUI's LoadImage will resolve
+    against COMFY_INPUT_DIR — NOT the base64 payload, which we've already
+    persisted via write_input_image_to_comfy() before calling this.
+    """
     return {
         "prompt": params["prompt"],
-        "input_image_b64": params["input_image_b64"],
+        "input_image_filename": input_image_filename,
         "strength": params["strength"],
         "seed": params["seed"],
         "steps": params["steps"],
@@ -487,10 +552,18 @@ def handler(job: Dict[str, Any]) -> Dict[str, Any]:
     is_i2i = "input_image_b64" in params
     log("info", "job_start", job_id=job_id, **safe_log_fields(params))
 
+    input_image_filename: Optional[str] = None
     try:
         wait_for_comfy()
-        # ADR-0003: input_image_b64 presence deterministically selects Qwen-Image-Edit.
-        workflow = build_qwen_edit_workflow(**i2i_params(params)) if is_i2i else build_workflow(**params)
+        if is_i2i:
+            # Round 3 F7 remediation: LoadImage resolves filenames against ComfyUI's
+            # input dir, so persist the decoded bytes there (unique per-request) and
+            # pass only the basename into the workflow graph. Cleanup in finally.
+            input_image_filename = write_input_image_to_comfy(params["input_image_b64"])
+            workflow = build_qwen_edit_workflow(**i2i_params(params, input_image_filename))
+        else:
+            # ADR-0003: T2I path is byte-identical unchanged per AC6.
+            workflow = build_workflow(**params)
         prompt_id = queue_workflow(workflow)
         log("info", "queued", job_id=job_id, prompt_id=prompt_id)
         history = poll_history(prompt_id)
@@ -506,10 +579,13 @@ def handler(job: Dict[str, Any]) -> Dict[str, Any]:
         # F1 mitigation: keep details in logs only; return stable user-facing code (QA gate 3.1 Round 1).
         log("error", "timeout", job_id=job_id, error_type=type(e).__name__, error_details=str(e))
         return {"error": "generation_timeout", "code": 504}
-    except (urllib.error.URLError, ConnectionError, RuntimeError, ValueError) as e:
+    except (urllib.error.URLError, ConnectionError, RuntimeError, ValueError, OSError) as e:
         # F1 mitigation: generic error code surface; diagnostic details stay in structured logs.
+        # OSError added: write_input_image_to_comfy may raise on disk/permission issues.
         log("error", "execution_failed", job_id=job_id, error_type=type(e).__name__, error_details=str(e))
         return {"error": "generation_error", "code": 500}
+    finally:
+        cleanup_input_image(input_image_filename)
 
     elapsed_ms = int((time.time() - started) * 1000)
     image_b64 = base64.b64encode(image_bytes).decode("ascii")

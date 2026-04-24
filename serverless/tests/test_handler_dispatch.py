@@ -50,9 +50,17 @@ def test_t2i_payload_routes_to_flux_workflow(monkeypatch):
     assert "image_b64" in result
 
 
-def test_i2i_payload_routes_to_qwen_workflow(monkeypatch):
+def test_i2i_payload_routes_to_qwen_workflow(monkeypatch, tmp_path):
+    """i2i dispatch uses real ComfyUI class_types (Round 3 F7 remediation).
+
+    Also validates the handler writes the input image to COMFY_INPUT_DIR as a
+    PNG (basename used in LoadImage node) and cleans up after response.
+    """
     seen: dict[str, object] = {}
     patch_runtime(monkeypatch, image_bytes(128, 128), seen)
+    # Redirect ComfyUI input dir to a pytest tmp_path so the test can inspect
+    # the written file and verify cleanup. Production path is /opt/ComfyUI/input.
+    monkeypatch.setattr(handler_module, "COMFY_INPUT_DIR", str(tmp_path))
 
     result = handler_module.handler(
         {
@@ -67,8 +75,18 @@ def test_i2i_payload_routes_to_qwen_workflow(monkeypatch):
 
     workflow = seen["workflow"]
     assert isinstance(workflow, dict)
-    assert workflow["10"]["class_type"] == "QwenImageEditDiffusionModelLoader"
-    assert workflow["13"]["class_type"] == "LoadImageBase64"
+    # Round 3 F7 fix: real ComfyUI v0.3.62 class_types, not the invented names.
+    assert workflow["10"]["class_type"] == "UNETLoader"
+    assert workflow["11"]["class_type"] == "CLIPLoader"
+    assert workflow["11"]["inputs"]["type"] == "qwen_image"
+    assert workflow["12"]["class_type"] == "VAELoader"
+    assert workflow["13"]["class_type"] == "LoadImage"
+    # LoadImage.image is the basename of the tempfile, not the base64 payload.
+    loaded_filename = workflow["13"]["inputs"]["image"]
+    assert loaded_filename.startswith("qwen-edit-") and loaded_filename.endswith(".png")
+    # Handler must clean up the input tempfile after the response (finally block).
+    assert not (tmp_path / loaded_filename).exists(), "input image tempfile was not cleaned up"
+    assert workflow["16"]["class_type"] == "TextEncodeQwenImageEdit"
     assert workflow["18"]["inputs"]["denoise"] == 0.85
     assert result["metadata"]["qwen_generated_width"] == 128
     assert result["metadata"]["qwen_generated_height"] == 128
