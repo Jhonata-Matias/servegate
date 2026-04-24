@@ -7,12 +7,33 @@ Como buildar, deployar, invocar e operar o endpoint Serverless empacotado em `se
 | Componente | Detalhe |
 |---|---|
 | Imagem | `ghcr.io/jhonata-matias/gemma4-flux-serverless:0.1.0` |
-| Modelos | Network volume `mqqgzwnfp1` (US-IL-1) montado em `/runpod-volume` |
+| Modelos | Network volume `<NETWORK_VOLUME_ID>` (`<RUNPOD_DATACENTER_ID>`) montado em `/runpod-volume` |
 | GPU | NVIDIA GeForce RTX 4090 (24GB) |
-| Datacenter | `US-IL-1` (constraint do volume) |
+| Datacenter | `<RUNPOD_DATACENTER_ID>` (constraint do volume) |
 | Cold start alvo | <30s |
 | Warm latency alvo | <10s p95 |
-| Cost alvo | ~$0.0006/imagem |
+| Cost alvo | `<$0.01/img warm` |
+
+## i2i Model Artifacts
+
+Story 3.1 adds Qwen-Image-Edit as an image-to-image branch in the existing handler. `@devops` owns artifact upload and license verification before deployment.
+
+Expected network-volume layout:
+
+| Path | Artifact | License note |
+|---|---|---|
+| `/runpod-volume/ComfyUI/models/unet/qwen_image_edit_fp8_e4m3fn.safetensors` | Qwen-Image-Edit UNet fp8 | Apache 2.0 per ADR-0003 |
+| `/runpod-volume/ComfyUI/models/vae/qwen_image_vae.safetensors` | Qwen VAE | Apache 2.0 per ADR-0003 |
+| `/runpod-volume/ComfyUI/models/clip/qwen_2.5_vl_7b_fp8_scaled.safetensors` | Qwen2.5-VL encoder | Apache 2.0 per ADR-0003 |
+| `/runpod-volume/ComfyUI/models/loras/qwen_image_lightning_8steps_lora.safetensors` | Lightning 8-step LoRA | Verify source license before upload; fallback is 50-step path |
+| `/runpod-volume/ComfyUI/NOTICE.md` | License provenance notice | Use `docs/legal/QWEN_IMAGE_EDIT_NOTICE.md` as the source template and fill LoRA source after verification |
+
+Operational checks before serverless deploy:
+
+- run the Qwen-Image-Edit workflow once on a Pod with the same volume
+- verify `LoadImageBase64` or equivalent custom node is installed
+- verify no prompt, input image bytes, or output image bytes appear in worker logs
+- keep the existing FLUX.1-schnell artifacts unchanged
 
 ## 1. Buildar a imagem
 
@@ -67,8 +88,8 @@ ENDPOINT=$(curl -sS -X POST "https://rest.runpod.io/v1/endpoints" \
     \"computeType\": \"GPU\",
     \"gpuTypeIds\": [\"NVIDIA GeForce RTX 4090\"],
     \"gpuCount\": 1,
-    \"dataCenterIds\": [\"US-IL-1\"],
-    \"networkVolumeId\": \"mqqgzwnfp1\",
+    \"dataCenterIds\": [\"<RUNPOD_DATACENTER_ID>\"],
+    \"networkVolumeId\": \"<NETWORK_VOLUME_ID>\",
     \"workersMin\": 0,
     \"workersMax\": 3,
     \"idleTimeout\": 5,
@@ -171,6 +192,7 @@ curl -sS -X PATCH "https://rest.runpod.io/v1/templates/$RUNPOD_SERVERLESS_TEMPLA
 Veja `serverless/README.md` para o contrato completo de input/output. TL;DR:
 
 - **Input** (`event.input`): `{prompt: string, steps?: int=4, seed?: int=random, width?: int=1024, height?: int=1024}`
+- **Input edit** (`event.input`): `{prompt: string, input_image_b64: string, strength?: float=0.85, steps?: int=8, seed?: int=random}`
 - **Output sucesso**: `{image_b64: string, metadata: {seed: int, elapsed_ms: int}}`
 - **Output erro**: `{error: string, code: 400|500|504}`
 
@@ -179,6 +201,7 @@ Validações:
 - `steps` ∈ [1, 50]
 - `width/height` ∈ [256, 2048] e múltiplos de 8
 - `seed` ∈ [0, 2^63)
+- Para edit: imagem PNG/JPEG/WebP por magic bytes, payload decodado ≤8 MB, rejeita `1:1`, downsample defensivo para ≤1 MP, `strength` ∈ (0.0, 1.0], `steps` ∈ [4, 50]
 
 ## 6. Operação
 
@@ -208,15 +231,16 @@ Handler emite logs JSON one-per-line (`level`, `msg`, `job_id`, ...) para facili
 | Worker fica RUNNING mas nunca responde | ComfyUI travou no boot | Logs do worker — provavelmente OOM ou GPU não disponível |
 | Latência > 10s warm | GPU diferente da esperada (não é 4090) | Verificar `gpuTypeIds` no endpoint config; reduzir `gpuTypeIds` para só RTX 4090 |
 | `executionTimeoutMs` exceeded | Cold start + steps muito altos | Aumentar timeout para 180000ms se steps > 10 |
+| `invalid_aspect_ratio` em edit | Input exatamente `1:1` | Usar crop não-quadrado antes de submeter |
 
 ## 8. Comparativo com Pod self-hosted (Story 1.1)
 
 | | Pod self-hosted | Serverless |
 |---|---|---|
 | Custo idle | $0.69/h sempre | $0 (scale to zero) |
-| Custo por imagem | "grátis" se já ligado | ~$0.0006 (4090 flex) |
-| Cold start | ~30-70s | ~30s (com flashboot) |
-| Warm latência | 3-5s | 3-5s + ~200ms HTTP |
+| Custo por imagem | "grátis" se já ligado | `<$0.01/img warm` |
+| Cold start | variável | variável com flashboot |
+| Warm latência | baixa em Pod já ligado | baixa + overhead HTTP |
 | Throughput máximo | 1 req/s (1 worker) | até `workersMax × throughput` |
 | Operação | manual (`pod.sh up/stop`) | autoscale |
 | Dev iterativo | rápido (SSH direto) | lento (re-build + re-push) |

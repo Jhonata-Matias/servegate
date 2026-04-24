@@ -22,6 +22,26 @@ During alpha (v0.x), the following applies:
 - Add 4 missing coverage tests (NetworkError direct, warmup timeout, linear backoff, safeReadJson failure)
 - Add `@vitest/coverage-v8` devDep
 
+## [0.3.0] — 2026-04-24
+
+### Added
+
+- Added `FluxClient.edit(input: EditInput): Promise<GenerateOutput>` for image-to-image edits through the existing async submit/poll gateway contract.
+- Added exported `EditInput` and `EditImageInput` types.
+- Added client-side validation for edit images: PNG/JPEG/WebP magic bytes, decoded payload <= 8 MB, non-square aspect ratio, <= 1 MP input, `strength` range `(0.0, 1.0]`, and `steps` range `4-50`.
+- Added opt-in `autoDownsample: true` support for Node.js consumers that install optional `sharp`; without opt-in, images above 1 MP throw `ValidationError`.
+- Added pt-BR SDK README with `edit()` usage and troubleshooting.
+
+### Changed
+
+- Package version bumped to `0.3.0`; this release is strictly additive for existing `generate()` consumers.
+- `GenerateMetadata` now includes optional i2i dimension fields when the server returns them.
+
+### License
+
+- SDK license remains MIT.
+- README documents upstream Qwen-Image-Edit Apache 2.0 provenance and the Lightning LoRA verification requirement before deployment.
+
 ## [0.2.0] — 2026-04-23
 
 ### ⚠️ BREAKING

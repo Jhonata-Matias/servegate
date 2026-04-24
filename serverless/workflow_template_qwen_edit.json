@@ -1,0 +1,128 @@
+{
+  "_comment": "Reference Qwen-Image-Edit workflow used by handler.py:build_qwen_edit_workflow(). Placeholders ${prompt} / ${input_image_b64} / ${strength} / ${seed} / ${steps} are substituted at runtime. ADR-0003 keeps this additive to workflow_template.json.",
+  "10": {
+    "class_type": "QwenImageEditDiffusionModelLoader",
+    "inputs": {
+      "unet_name": "qwen_image_edit_fp8_e4m3fn.safetensors",
+      "weight_dtype": "fp8_e4m3fn"
+    }
+  },
+  "11": {
+    "class_type": "QwenImageEditCLIPLoader",
+    "inputs": {
+      "clip_name": "qwen_2.5_vl_7b_fp8_scaled.safetensors",
+      "type": "qwen_image_edit"
+    }
+  },
+  "12": {
+    "class_type": "QwenImageEditVAELoader",
+    "inputs": {
+      "vae_name": "qwen_image_vae.safetensors"
+    }
+  },
+  "13": {
+    "class_type": "LoadImageBase64",
+    "inputs": {
+      "image": "${input_image_b64}"
+    }
+  },
+  "14": {
+    "class_type": "LoraLoader",
+    "inputs": {
+      "model": [
+        "10",
+        0
+      ],
+      "clip": [
+        "11",
+        0
+      ],
+      "lora_name": "qwen_image_lightning_8steps_lora.safetensors",
+      "strength_model": 1.0,
+      "strength_clip": 1.0
+    }
+  },
+  "15": {
+    "class_type": "VAEEncode",
+    "inputs": {
+      "pixels": [
+        "13",
+        0
+      ],
+      "vae": [
+        "12",
+        0
+      ]
+    }
+  },
+  "16": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "text": "${prompt}",
+      "clip": [
+        "14",
+        1
+      ]
+    }
+  },
+  "17": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "text": "",
+      "clip": [
+        "14",
+        1
+      ]
+    }
+  },
+  "18": {
+    "class_type": "KSampler",
+    "inputs": {
+      "seed": "${seed}",
+      "steps": "${steps}",
+      "cfg": 1.0,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "denoise": "${strength}",
+      "model": [
+        "14",
+        0
+      ],
+      "positive": [
+        "16",
+        0
+      ],
+      "negative": [
+        "17",
+        0
+      ],
+      "latent_image": [
+        "15",
+        0
+      ]
+    }
+  },
+  "19": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": [
+        "18",
+        0
+      ],
+      "vae": [
+        "12",
+        0
+      ]
+    }
+  },
+  "20": {
+    "class_type": "SaveImage",
+    "inputs": {
+      "images": [
+        "19",
+        0
+      ],
+      "filename_prefix": "qwen-edit"
+    }
+  }
+}

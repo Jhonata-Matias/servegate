@@ -3,7 +3,7 @@
 > 🌐 [English](./dev-onboarding.md) | **Português (Brasil)**
 
 **Status:** Alpha (invite-only)
-**SDK:** `@jhonata-matias/flux-client@0.2.x` (GitHub Packages, **público** desde 2026-04-22)
+**SDK:** `@jhonata-matias/flux-client@0.3.x` (GitHub Packages, **público** desde 2026-04-22)
 **Gateway:** `https://gemma4-gateway.jhonata-matias.workers.dev` *(async submit/poll desde 2026-04-23)*
 
 Comece a gerar imagens FLUX via API autenticada em ~15 minutos.
@@ -133,6 +133,31 @@ try {
 }
 ```
 
+### Opcional — Primeiro image edit
+
+`v0.3.0` adiciona `client.edit()` para image-to-image editing. A request usa o mesmo contrato assíncrono de `generate()`.
+
+```typescript
+import { readFileSync, writeFileSync } from 'node:fs';
+
+const result = await client.edit({
+  prompt: 'make the jacket green while keeping the background unchanged',
+  image: readFileSync('input.png'),
+  strength: 0.85,
+  steps: 8,
+});
+
+writeFileSync('edited.png', Buffer.from(result.output.image_b64, 'base64'));
+console.log('output dims:', result.output.metadata.output_width, result.output.metadata.output_height);
+```
+
+A validação de edit é mais estrita que text-to-image:
+
+- input image precisa ser PNG, JPEG ou WebP
+- imagens exatamente `1:1` são rejeitadas
+- payload decodado precisa ter `<= 8 MB`
+- input precisa ter `<= 1 MP`, exceto se você optar explicitamente por `autoDownsample: true` em Node.js com `sharp` instalado
+
 ## Passo 5 — Patterns production-ready
 
 ### Retry handling
@@ -151,6 +176,7 @@ O SDK valida `GenerateInput` estritamente (sem coerção). Gotchas comuns:
 - `width`/`height` precisam ser inteiros positivos (recomendado: múltiplos de 64, máx ~1536)
 - `seed` é inteiro opcional para reprodutibilidade
 - `prompt` precisa ser string não-vazia
+- `edit()` também rejeita imagens quadradas, MIME types não suportados, payloads acima de `8 MB` e imagens acima de `1 MP`, exceto quando o downsample opcional via sharp está habilitado
 
 Input inválido lança `ValidationError` pre-network — sem custo, feedback imediato.
 
@@ -200,6 +226,7 @@ Se a key foi comprometida **agora**:
 | 502 Upstream Error | Endpoint RunPod com 5xx | Reporte via issue — owner investiga |
 | Erros de tipo no `import` | `.npmrc` mal configurado | Verifique a linha `@jhonata-matias:registry=...` + token |
 | `npm install` 404 | Token sem scope `read:packages` | Regenere o GitHub token com o scope correto |
+| `ValidationError` em imagem do `edit()` | Imagem quadrada, input >1 MP, payload decodado >8 MB ou MIME não suportado | Converta/corte/faça downsample para PNG/JPEG/WebP antes de submeter |
 
 ## FAQ
 
@@ -226,6 +253,7 @@ R: Sim! PRs são bem-vindos. Veja as stories existentes em `docs/stories/` (em i
 - [Gateway deploy guide (self-host)](./gateway-deploy.md) (em inglês)
 - [ADR-0001: Cold-start strategy](../architecture/adr-0001-flux-cold-start.md) (em inglês)
 - [SDK CHANGELOG](../../sdk/CHANGELOG.md) (em inglês)
+- [ADR-0003: Image-to-image model selection](../architecture/adr-0003-image-to-image-model-selection.md) (em inglês)
 
 ---
 

@@ -3,7 +3,7 @@
 > 🌐 **English** | [Português (Brasil)](./dev-onboarding.pt-BR.md)
 
 **Status:** Alpha (invite-only)
-**SDK:** `@jhonata-matias/flux-client@0.2.x` (GitHub Packages, **public** since 2026-04-22)
+**SDK:** `@jhonata-matias/flux-client@0.3.x` (GitHub Packages, **public** since 2026-04-22)
 **Gateway:** `https://gemma4-gateway.jhonata-matias.workers.dev` *(async submit/poll since 2026-04-23)*
 
 Get started generating FLUX images via authenticated API in ~15 minutes.
@@ -133,6 +133,31 @@ try {
 }
 ```
 
+### Optional — First image edit
+
+`v0.3.0` adds `client.edit()` for image-to-image editing. The request uses the same async contract as `generate()`.
+
+```typescript
+import { readFileSync, writeFileSync } from 'node:fs';
+
+const result = await client.edit({
+  prompt: 'make the jacket green while keeping the background unchanged',
+  image: readFileSync('input.png'),
+  strength: 0.85,
+  steps: 8,
+});
+
+writeFileSync('edited.png', Buffer.from(result.output.image_b64, 'base64'));
+console.log('output dims:', result.output.metadata.output_width, result.output.metadata.output_height);
+```
+
+Edit validation is stricter than text-to-image:
+
+- input image must be PNG, JPEG, or WebP
+- exact `1:1` images are rejected
+- decoded payload must be `<= 8 MB`
+- input must be `<= 1 MP`, unless you explicitly opt into `autoDownsample: true` in Node.js with `sharp` installed
+
 ## Step 5 — Production-ready patterns
 
 ### Retry handling
@@ -151,6 +176,7 @@ SDK validates `GenerateInput` strictly (no coercion). Common gotchas:
 - `width`/`height` must be positive integers (recommended: multiples of 64, max ~1536)
 - `seed` is optional integer for reproducibility
 - `prompt` must be non-empty string
+- `edit()` additionally rejects square images, unsupported MIME types, payloads over `8 MB`, and images above `1 MP` unless optional sharp-based downsample is enabled
 
 Invalid input throws `ValidationError` pre-network — no cost, immediate feedback.
 
@@ -200,6 +226,7 @@ If key compromised **right now**:
 | 502 Upstream Error | RunPod endpoint 5xx | Report via issue — owner investigates |
 | Type errors on `import` | `.npmrc` misconfigured | Verify `@jhonata-matias:registry=...` line + token |
 | `npm install` 404 | Token lacks `read:packages` | Regenerate GitHub token with correct scope |
+| `ValidationError` on `edit()` image | Square image, >1 MP input, >8 MB decoded payload, or unsupported MIME | Convert/crop/downsample to PNG/JPEG/WebP before submit |
 
 ## FAQ
 
@@ -226,6 +253,7 @@ A: Yes! PRs welcome. See existing stories in `docs/stories/` for planned work. E
 - [Gateway deploy guide (self-host)](./gateway-deploy.md)
 - [ADR-0001: Cold-start strategy](../architecture/adr-0001-flux-cold-start.md)
 - [SDK CHANGELOG](../../sdk/CHANGELOG.md)
+- [ADR-0003: Image-to-image model selection](../architecture/adr-0003-image-to-image-model-selection.md)
 
 ---
 

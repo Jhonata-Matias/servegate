@@ -3,7 +3,7 @@
 > 🌐 [English](./TERMS.md) | **Português (Brasil)**
 
 **Data de vigência:** 2026-04-21
-**Versão:** 0.1.0-alpha
+**Versão:** 0.2.0-alpha
 **Status:** ⚠️ **ALPHA — sem SLA de uptime, sem garantias de estabilidade, breaking changes esperadas**
 
 Ao usar a servegate FLUX API (doravante "o Serviço"; anteriormente distribuído como "gemma4 FLUX API"), você concorda com estes Termos. Se não concorda, não use o Serviço.
@@ -12,11 +12,12 @@ Ao usar a servegate FLUX API (doravante "o Serviço"; anteriormente distribuído
 
 ## 1. Descrição do Serviço
 
-O Serviço fornece acesso programático à geração de imagens usando o modelo FLUX.1-schnell hospedado no RunPod Serverless. Ele consiste em:
+O Serviço fornece acesso programático à geração e edição de imagens hospedada no RunPod Serverless. Ele consiste em:
 
 - **HTTP Gateway:** `https://gemma4-gateway.jhonata-matias.workers.dev` (autenticado)
 - **TypeScript SDK:** `@jhonata-matias/flux-client` (GitHub Packages)
-- **Modelo único:** black-forest-labs/FLUX.1-schnell (Apache 2.0)
+- **Modelo text-to-image:** black-forest-labs/FLUX.1-schnell (Apache 2.0)
+- **Modelo image-to-image edit:** stack Qwen-Image-Edit (componentes Apache 2.0; veja ADR-0003)
 
 ## 2. Uso aceitável
 
@@ -93,12 +94,15 @@ Veja `docs/legal/PRIVACY.pt-BR.md` para a declaração detalhada de privacidade.
 
 - Nós logamos: timestamp, IP, HTTP status, elapsed_ms, contador diário — **NÃO prompts nem bytes de imagem**
 - Prompts e imagens são processados em in-flight apenas; não armazenados server-side
+- Para image-to-image edit, imagens submetidas pelo usuário são processadas na infraestrutura de compute controlada pelo servegate para inferência e não são enviadas para um provider externo de API hospedada de edição de imagem
 - API keys são criptografadas at rest (Cloudflare Worker secrets)
 
 ## 9. Propriedade intelectual
 
 - **Modelo FLUX:** Apache 2.0 (black-forest-labs/FLUX.1-schnell)
+- **Stack Qwen-Image-Edit:** componentes Apache 2.0 para inferência image-to-image; a proveniência do Lightning LoRA é verificada antes do deploy
 - **Seus prompts:** você mantém a propriedade
+- **Suas imagens de input:** você mantém a propriedade e é responsável por ter direitos para editar/processar essas imagens
 - **Imagens geradas:** você é dono do output (sujeito à licença do modelo e às leis aplicáveis sobre obras geradas por AI na sua jurisdição)
 - **Código SDK/Gateway:** licença MIT
 
@@ -141,6 +145,7 @@ Estes Termos são regidos pelas leis do Brasil. Disputas serão resolvidas nos t
 
 | Versão | Data | Notas |
 |---|---|---|
+| 0.2.0-alpha | 2026-04-24 | Adicionada cláusula de processamento image-to-image e nota de proveniência Qwen-Image-Edit |
 | 0.1.0-alpha | 2026-04-21 | Termos iniciais do alpha — projeto pessoal de owner único |
 
 ---
