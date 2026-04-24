@@ -9,6 +9,7 @@ import {
   DEFAULT_RETRY_CONFIG,
   DEFAULT_WARM_THRESHOLD_MS,
   type ClientConstructorArgs,
+  type EditInput,
   type GenerateInput,
   type GenerateOutput,
   type PollPendingResponse,
@@ -16,7 +17,7 @@ import {
   type SubmitJobResponse,
   type WarmupResult,
 } from './types.js';
-import { validateGenerateInput } from './validate.js';
+import { validateAndNormalizeEditInput, validateGenerateInput, type NormalizedEditRequest } from './validate.js';
 
 const COLD_HEURISTIC_THRESHOLD_MS = 30_000;
 const DEFAULT_RETRY_AFTER_SECONDS = 5;
@@ -40,6 +41,8 @@ interface TerminalPollErrorBody {
   error?: string;
   status?: string;
 }
+
+type JobSubmitInput = GenerateInput | NormalizedEditRequest;
 
 export class FluxClient {
   readonly #apiKey: string;
@@ -122,6 +125,17 @@ export class FluxClient {
 
     const start = Date.now();
     const submitResponse = await this.#submitWithRetry(input as GenerateInput);
+    return this.#pollSubmittedJob(submitResponse, start, this.#warmTimeoutMs, true);
+  }
+
+  /**
+   * Edit an existing image via the same async submit/poll gateway contract.
+   * The `input_image_b64` payload shape selects the i2i branch server-side.
+   */
+  async edit(input: EditInput): Promise<GenerateOutput> {
+    const request = await validateAndNormalizeEditInput(input);
+    const start = Date.now();
+    const submitResponse = await this.#submitWithRetry(request);
     return this.#pollSubmittedJob(submitResponse, start, this.#warmTimeoutMs, true);
   }
 
@@ -238,7 +252,7 @@ export class FluxClient {
     return this.#retryConfig.initialDelayMs * Math.pow(2, attempt);
   }
 
-  async #submitWithRetry(input: GenerateInput): Promise<Response> {
+  async #submitWithRetry(input: JobSubmitInput): Promise<Response> {
     for (let attempt = 0; attempt <= this.#retryConfig.maxRetries; attempt++) {
       try {
         const response = await this.#request(`${this.#gatewayUrl}/jobs`, {

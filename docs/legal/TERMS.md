@@ -3,7 +3,7 @@
 > 🌐 **English** | [Português (Brasil)](./TERMS.pt-BR.md)
 
 **Effective date:** 2026-04-21
-**Version:** 0.1.0-alpha
+**Version:** 0.2.0-alpha
 **Status:** ⚠️ **ALPHA — no uptime SLA, no stability guarantees, breaking changes expected**
 
 By using the servegate FLUX API (hereafter "the Service"; formerly distributed as "gemma4 FLUX API"), you agree to these Terms. If you don't agree, don't use the Service.
@@ -12,11 +12,12 @@ By using the servegate FLUX API (hereafter "the Service"; formerly distributed a
 
 ## 1. Service description
 
-The Service provides programmatic access to image generation using the FLUX.1-schnell model hosted on RunPod Serverless. It consists of:
+The Service provides programmatic access to image generation and image editing hosted on RunPod Serverless. It consists of:
 
 - **HTTP Gateway:** `https://gemma4-gateway.jhonata-matias.workers.dev` (authenticated)
 - **TypeScript SDK:** `@jhonata-matias/flux-client` (GitHub Packages)
-- **Single model:** black-forest-labs/FLUX.1-schnell (Apache 2.0)
+- **Text-to-image model:** black-forest-labs/FLUX.1-schnell (Apache 2.0)
+- **Image-to-image edit model:** Qwen-Image-Edit stack (Apache 2.0 components; see ADR-0003)
 
 ## 2. Acceptable use
 
@@ -93,12 +94,15 @@ See `docs/legal/PRIVACY.md` for detailed privacy statement. Summary:
 
 - We log: timestamp, IP, HTTP status, elapsed_ms, daily counter — **NOT prompts or image bytes**
 - Prompts and images are processed in-flight only; not stored server-side
+- For image-to-image edits, user-submitted input images are processed on servegate-controlled compute infrastructure for inference and are not sent to a separate hosted image-edit API provider
 - API keys are encrypted at rest (Cloudflare Worker secrets)
 
 ## 9. Intellectual property
 
 - **FLUX model:** Apache 2.0 (black-forest-labs/FLUX.1-schnell)
+- **Qwen-Image-Edit stack:** Apache 2.0 components for image-to-image inference; Lightning LoRA provenance is verified before deployment
 - **Your prompts:** you retain ownership
+- **Your submitted input images:** you retain ownership and are responsible for having rights to edit/process them
 - **Generated images:** you own the output (subject to model license and applicable laws on AI-generated works in your jurisdiction)
 - **SDK/Gateway code:** MIT license
 
@@ -141,6 +145,7 @@ These Terms are governed by the laws of Brazil. Disputes will be resolved in the
 
 | Version | Date | Notes |
 |---|---|---|
+| 0.2.0-alpha | 2026-04-24 | Added image-to-image processing clause and Qwen-Image-Edit provenance note |
 | 0.1.0-alpha | 2026-04-21 | Initial alpha Terms — single-owner personal project |
 
 ---

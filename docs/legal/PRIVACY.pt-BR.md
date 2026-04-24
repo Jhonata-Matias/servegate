@@ -3,9 +3,9 @@
 > 🌐 [English](./PRIVACY.md) | **Português (Brasil)**
 
 **Data de vigência:** 2026-04-21
-**Versão:** 0.1.0-alpha
+**Versão:** 0.2.0-alpha
 
-Resumo para devs com pressa: **nós não armazenamos seus prompts nem imagens geradas.** Os logs contêm apenas metadata da request (timestamp, IP, status, timing). API keys são criptografadas at rest.
+Resumo para devs com pressa: **nós não armazenamos seus prompts, imagens submetidas para edit, nem imagens geradas.** Os logs contêm apenas metadata da request (timestamp, IP, status, timing). API keys são criptografadas at rest.
 
 ---
 
@@ -48,6 +48,7 @@ O owner acessa isso via a billing API do RunPod para revisão mensal de custo. S
 O seguinte **NUNCA é logado, armazenado ou persistido** pelo gateway:
 
 - ❌ **Conteúdo do prompt** — suas strings de prompt são encaminhadas para o RunPod e descartadas imediatamente após a response
+- ❌ **Imagens submetidas para edit** — `input_image_b64` é processado apenas in-flight e não é logado, retido ou usado para melhoria de modelo
 - ❌ **Bytes da imagem gerada** — o payload `image_b64` passa pelo gateway sem logging; descartado após a response
 - ❌ **Corpos de request** de qualquer forma (prompt + params)
 - ❌ **Corpos de response** além dos HTTP status codes
@@ -70,7 +71,7 @@ O seguinte **NUNCA é logado, armazenado ou persistido** pelo gateway:
                               │ (date→N)    │           │ (in-memory)  │
                               └─────────────┘           └──────────────┘
 
-In-flight: prompt + image_b64
+In-flight: prompt + image_b64, e input_image_b64 para jobs de edit
 Logged:    apenas metadata (sem conteúdo de body)
 Stored:    nada (nem prompt nem imagem persistidos server-side)
 ```
@@ -82,10 +83,10 @@ O Serviço usa estes terceiros. Ao usar o Serviço, você aceita o processamento
 | Provider | Propósito | O que eles veem | Política de privacidade |
 |---|---|---|---|
 | **Cloudflare** | Hospedagem do gateway (Workers + KV) | IP, metadata de request, contador de rate limit | https://www.cloudflare.com/privacypolicy/ |
-| **RunPod** | Inferência GPU (modelo FLUX) | Conteúdo do prompt (in-flight), imagem gerada (in-flight) | https://www.runpod.io/legal/privacy-policy |
+| **RunPod** | Inferência GPU (modelos FLUX e Qwen-Image-Edit) | Conteúdo do prompt, imagem submetida para edit, imagem gerada (todos apenas in-flight) | https://www.runpod.io/legal/privacy-policy |
 | **Hugging Face** | Download dos pesos do modelo (durante cold init do worker) | N/A em runtime | https://huggingface.co/privacy |
 
-**Nota sobre RunPod:** o Serviço faz proxy do seu prompt para o RunPod para inferência. O RunPod processa prompts in-flight conforme a política de privacidade deles. O owner não configura nenhum logging de conteúdo de prompt no lado RunPod.
+**Nota sobre RunPod:** o Serviço faz proxy de prompts e, para jobs de edit, imagens submetidas para o worker RunPod Serverless existente. Nenhum provider separado de API hospedada de image-edit recebe a imagem. O owner não configura logging de conteúdo de prompt ou imagem no lado RunPod.
 
 ## Seus direitos (LGPD Brasil + GDPR EU)
 
@@ -130,6 +131,7 @@ A Declaração de Privacidade pode ser atualizada. Mudanças materiais serão an
 
 | Versão | Data | Notas |
 |---|---|---|
+| 0.2.0-alpha | 2026-04-24 | Adicionada clareza de privacidade para image-to-image: imagens de input não são logadas, retidas ou usadas para melhoria de modelo |
 | 0.1.0-alpha | 2026-04-21 | Declaração de Privacidade inicial do alpha — logs apenas de metadata, sem retenção de prompt/imagem |
 
 ---

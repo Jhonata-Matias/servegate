@@ -1,0 +1,197 @@
+{
+  "_comment": "Known-good fixture of ComfyUI v0.3.62 node registry for class_types referenced by serverless/handler.py. Purpose: prevent tautological test assertions (QA Round 3 F7 / TD-3.1.4). Source of truth verified 2026-04-24 by direct fetch of https://raw.githubusercontent.com/comfyanonymous/ComfyUI/v0.3.62/nodes.py + comfy_extras/nodes_qwen.py. When Dockerfile COMFY_REF changes, regenerate this fixture from the new ComfyUI version. Schema: class_type -> { inputs: { required: {name: type_or_enum_list} }, outputs: [...] }. Enum values for type parameters are captured as arrays to enable test validation.",
+  "_source_ref": {
+    "comfyui_version": "v0.3.62",
+    "nodes_py": "https://raw.githubusercontent.com/comfyanonymous/ComfyUI/v0.3.62/nodes.py",
+    "nodes_qwen_py": "https://raw.githubusercontent.com/comfyanonymous/ComfyUI/v0.3.62/comfy_extras/nodes_qwen.py",
+    "verified_at": "2026-04-24",
+    "verified_by": "@dev (Round 3 F7 remediation)"
+  },
+  "UNETLoader": {
+    "inputs": {
+      "required": {
+        "unet_name": "STRING",
+        "weight_dtype": ["default", "fp8_e4m3fn", "fp8_e4m3fn_fast", "fp8_e5m2"]
+      }
+    },
+    "outputs": ["MODEL"]
+  },
+  "DualCLIPLoader": {
+    "inputs": {
+      "required": {
+        "clip_name1": "STRING",
+        "clip_name2": "STRING",
+        "type": ["sdxl", "sd3", "flux", "hunyuan_video", "hidream", "hunyuan_image"]
+      }
+    },
+    "outputs": ["CLIP"]
+  },
+  "CLIPLoader": {
+    "inputs": {
+      "required": {
+        "clip_name": "STRING",
+        "type": [
+          "stable_diffusion",
+          "stable_cascade",
+          "sd3",
+          "stable_audio",
+          "mochi",
+          "ltxv",
+          "pixart",
+          "cosmos",
+          "lumina2",
+          "wan",
+          "hidream",
+          "chroma",
+          "ace",
+          "omnigen2",
+          "qwen_image",
+          "hunyuan_image"
+        ]
+      }
+    },
+    "outputs": ["CLIP"]
+  },
+  "VAELoader": {
+    "inputs": {
+      "required": {
+        "vae_name": "STRING"
+      }
+    },
+    "outputs": ["VAE"]
+  },
+  "LoadImage": {
+    "inputs": {
+      "required": {
+        "image": "STRING"
+      }
+    },
+    "outputs": ["IMAGE", "MASK"]
+  },
+  "LoraLoader": {
+    "inputs": {
+      "required": {
+        "model": "MODEL",
+        "clip": "CLIP",
+        "lora_name": "STRING",
+        "strength_model": "FLOAT",
+        "strength_clip": "FLOAT"
+      }
+    },
+    "outputs": ["MODEL", "CLIPPY_CLIP"]
+  },
+  "VAEEncode": {
+    "inputs": {
+      "required": {
+        "pixels": "IMAGE",
+        "vae": "VAE"
+      }
+    },
+    "outputs": ["LATENT"]
+  },
+  "CLIPTextEncode": {
+    "inputs": {
+      "required": {
+        "text": "STRING",
+        "clip": "CLIP"
+      }
+    },
+    "outputs": ["CONDITIONING"]
+  },
+  "TextEncodeQwenImageEdit": {
+    "_source": "comfy_extras/nodes_qwen.py",
+    "inputs": {
+      "required": {
+        "clip": "CLIP",
+        "prompt": "STRING"
+      },
+      "optional": {
+        "vae": "VAE",
+        "image": "IMAGE"
+      }
+    },
+    "outputs": ["CONDITIONING"]
+  },
+  "KSampler": {
+    "inputs": {
+      "required": {
+        "model": "MODEL",
+        "seed": "INT",
+        "steps": "INT",
+        "cfg": "FLOAT",
+        "sampler_name": [
+          "euler",
+          "euler_cfg_pp",
+          "euler_ancestral",
+          "euler_ancestral_cfg_pp",
+          "heun",
+          "heunpp2",
+          "dpm_2",
+          "dpm_2_ancestral",
+          "lms",
+          "dpm_fast",
+          "dpm_adaptive",
+          "dpmpp_2s_ancestral",
+          "dpmpp_sde",
+          "dpmpp_sde_gpu",
+          "dpmpp_2m",
+          "dpmpp_2m_sde",
+          "dpmpp_2m_sde_gpu",
+          "dpmpp_3m_sde",
+          "dpmpp_3m_sde_gpu",
+          "ddpm",
+          "lcm",
+          "ipndm",
+          "ipndm_v",
+          "deis",
+          "ddim",
+          "uni_pc",
+          "uni_pc_bh2"
+        ],
+        "scheduler": [
+          "normal",
+          "karras",
+          "exponential",
+          "sgm_uniform",
+          "simple",
+          "ddim_uniform",
+          "beta",
+          "linear_quadratic"
+        ],
+        "positive": "CONDITIONING",
+        "negative": "CONDITIONING",
+        "latent_image": "LATENT",
+        "denoise": "FLOAT"
+      }
+    },
+    "outputs": ["LATENT"]
+  },
+  "VAEDecode": {
+    "inputs": {
+      "required": {
+        "samples": "LATENT",
+        "vae": "VAE"
+      }
+    },
+    "outputs": ["IMAGE"]
+  },
+  "SaveImage": {
+    "inputs": {
+      "required": {
+        "images": "IMAGE",
+        "filename_prefix": "STRING"
+      }
+    },
+    "outputs": []
+  },
+  "EmptyLatentImage": {
+    "inputs": {
+      "required": {
+        "width": "INT",
+        "height": "INT",
+        "batch_size": "INT"
+      }
+    },
+    "outputs": ["LATENT"]
+  }
+}

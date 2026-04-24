@@ -11,9 +11,30 @@ export interface GenerateInput {
   seed?: number;
 }
 
+export type EditImageInput = Buffer | Uint8Array | Blob | string;
+
+export interface EditInput {
+  prompt: string;
+  image: EditImageInput;
+  strength?: number;
+  seed?: number;
+  steps?: number;
+  aspect_ratio?: string;
+  autoDownsample?: boolean;
+}
+
 export interface GenerateMetadata {
   seed: number;
   elapsed_ms: number;
+  qwen_generated_width?: number;
+  qwen_generated_height?: number;
+  output_width?: number;
+  output_height?: number;
+  input_width?: number;
+  input_height?: number;
+  source_width?: number;
+  source_height?: number;
+  input_downsampled?: boolean;
 }
 
 export interface GenerateOutput {

@@ -49,6 +49,8 @@ export {
 export type {
   ClientConstructorArgs,
   ClientOptions,
+  EditImageInput,
+  EditInput,
   GenerateInput,
   GenerateMetadata,
   GenerateOutput,

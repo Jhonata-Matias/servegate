@@ -3,7 +3,7 @@
 **Status:** Alpha  
 **Base URL:** `https://gemma4-gateway.jhonata-matias.workers.dev`
 
-This is the canonical HTTP contract for the async gateway introduced in `v0.2.0`. For TypeScript consumers, prefer the SDK in [`sdk/`](../../sdk/README.md).
+This is the canonical HTTP contract for the async gateway introduced in `v0.2.0` and extended with image-to-image edit in `v0.3.0`. For TypeScript consumers, prefer the SDK in [`sdk/`](../../sdk/README.md).
 
 ## Overview
 
@@ -13,7 +13,10 @@ The gateway no longer blocks on image generation. The contract is now:
 2. `GET /jobs/{job_id}` polls until the job completes or reaches a terminal state
 3. `POST /` is removed and returns a migration pointer
 
-All requests require `X-API-Key`.
+All requests require `X-API-Key`. `POST /jobs` supports two request variants:
+
+- Text-to-image: no `input_image_b64` field; routes to the existing FLUX.1-schnell workflow.
+- Image-to-image edit: includes `input_image_b64`; routes to Qwen-Image-Edit.
 
 ## Quickstart
 
@@ -90,7 +93,7 @@ Completed response:
 
 ### `POST /jobs`
 
-Submits a generation request to RunPod asynchronously.
+Submits a generation or edit request to RunPod asynchronously.
 
 #### Headers
 
@@ -99,7 +102,7 @@ Submits a generation request to RunPod asynchronously.
 | `X-API-Key` | Yes | Shared gateway credential |
 | `Content-Type: application/json` | Yes | Request body must be JSON |
 
-#### Request body
+#### Text-to-image request body
 
 ```json
 {
@@ -118,6 +121,73 @@ Submits a generation request to RunPod asynchronously.
 | `width` | integer | Yes | Positive integer |
 | `height` | integer | Yes | Positive integer |
 | `seed` | integer | No | Optional deterministic seed |
+
+#### Image-to-image edit request body
+
+```json
+{
+  "prompt": "make the jacket green while keeping the background unchanged",
+  "input_image_b64": "<base64 PNG/JPEG/WebP>",
+  "strength": 0.85,
+  "steps": 8,
+  "seed": 42
+}
+```
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `prompt` | string | Yes | Non-empty edit instruction. Be explicit about regions that should stay unchanged. |
+| `input_image_b64` | string | Yes | Base64-encoded PNG, JPEG, or WebP. Data URIs are accepted by the handler, but raw base64 is preferred. |
+| `strength` | number | No | Denoise strength in `(0.0, 1.0]`; default `0.85`. Lower values preserve more of the source image. |
+| `steps` | integer | No | Default `8` for the Lightning LoRA path; accepted range `4-50`. |
+| `seed` | integer | No | Optional deterministic seed. |
+
+Validation rules:
+
+- Exact `1:1` input images are rejected with `400` and `error: "invalid_aspect_ratio"`. Use a non-square crop.
+- Decoded image payload must be `<= 8 MB`.
+- Inputs above `1,048,576` pixels are defensively downsampled server-side while preserving aspect ratio.
+- MIME type is verified from image magic bytes; only PNG, JPEG, and WebP are accepted.
+- `width` and `height` are not accepted for edit jobs; source image dimensions drive the workflow.
+
+Known gotchas:
+
+- Qwen-Image-Edit can drift aspect ratio internally. The handler resizes the final PNG back to the effective input dimensions with Pillow `LANCZOS`.
+- Backgrounds can be rewritten if the prompt is vague. Use instructions such as "keep the background unchanged".
+- Sequential edits can degrade quality. Prefer one comprehensive edit prompt over many chained edits.
+- HEIC/HEIF is not accepted in `v0.3.0`; convert to PNG/JPEG/WebP before submit.
+
+SDK example:
+
+```typescript
+import { FluxClient } from '@jhonata-matias/flux-client';
+
+const client = new FluxClient({ apiKey, gatewayUrl });
+const result = await client.edit({
+  prompt: 'make the jacket green while keeping the background unchanged',
+  image: inputBuffer,
+  strength: 0.85,
+  steps: 8,
+});
+
+console.log(result.output.metadata.output_width, result.output.metadata.output_height);
+```
+
+cURL example:
+
+```bash
+INPUT_IMAGE_B64="$(base64 -w 0 input.png)"
+
+curl -i -X POST https://gemma4-gateway.jhonata-matias.workers.dev/jobs \
+  -H "X-API-Key: $GATEWAY_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"prompt\": \"make the jacket green while keeping the background unchanged\",
+    \"input_image_b64\": \"$INPUT_IMAGE_B64\",
+    \"strength\": 0.85,
+    \"steps\": 8
+  }"
+```
 
 #### Success response
 
@@ -185,6 +255,18 @@ Status: `404`
 ### `401 invalid_api_key`
 
 Authentication fails before any submit quota is consumed.
+
+### `400 invalid_aspect_ratio`
+
+Returned by edit jobs when the source image is exactly square.
+
+```json
+{
+  "error": "invalid_aspect_ratio",
+  "message": "Qwen-Image-Edit rejects exact 1:1 input images; use a non-square crop",
+  "code": 400
+}
+```
 
 ### `429 rate_limit_exceeded`
 
@@ -254,7 +336,7 @@ Headers returned on gateway responses:
 
 ## SDK Notes
 
-`@jhonata-matias/flux-client@0.2.0` preserves `generate()` but now uses this submit/poll contract internally.
+`@jhonata-matias/flux-client@0.3.0` exposes both `generate()` and additive `edit()`. Both use this submit/poll contract internally.
 
 Typed terminal errors exposed by the SDK:
 

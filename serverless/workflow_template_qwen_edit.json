@@ -1,0 +1,93 @@
+{
+  "_comment": "Reference Qwen-Image-Edit workflow for handler.py:build_qwen_edit_workflow(). Round 3 F7 remediation: class_types verified against ComfyUI v0.3.62 (pinned in Dockerfile) — see serverless/tests/fixtures/comfyui-v0_3_62-object-info.json. Placeholders ${prompt} / ${input_image_filename} / ${strength} / ${seed} / ${steps} are substituted at runtime. input_image_filename is the basename of a PNG written to ComfyUI's input dir (COMFY_INPUT_DIR); the handler manages write + cleanup. ADR-0003 keeps this additive to workflow_template.json (FLUX.1-schnell T2I path untouched per AC6).",
+  "10": {
+    "class_type": "UNETLoader",
+    "inputs": {
+      "unet_name": "qwen_image_edit_fp8_e4m3fn.safetensors",
+      "weight_dtype": "fp8_e4m3fn"
+    }
+  },
+  "11": {
+    "class_type": "CLIPLoader",
+    "inputs": {
+      "clip_name": "qwen_2.5_vl_7b_fp8_scaled.safetensors",
+      "type": "qwen_image"
+    }
+  },
+  "12": {
+    "class_type": "VAELoader",
+    "inputs": {
+      "vae_name": "qwen_image_vae.safetensors"
+    }
+  },
+  "13": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "${input_image_filename}"
+    }
+  },
+  "14": {
+    "class_type": "LoraLoader",
+    "inputs": {
+      "model": ["10", 0],
+      "clip": ["11", 0],
+      "lora_name": "qwen_image_lightning_8steps_lora.safetensors",
+      "strength_model": 1.0,
+      "strength_clip": 1.0
+    }
+  },
+  "15": {
+    "class_type": "VAEEncode",
+    "inputs": {
+      "pixels": ["13", 0],
+      "vae": ["12", 0]
+    }
+  },
+  "16": {
+    "class_type": "TextEncodeQwenImageEdit",
+    "inputs": {
+      "clip": ["14", 1],
+      "prompt": "${prompt}",
+      "vae": ["12", 0],
+      "image": ["13", 0]
+    }
+  },
+  "17": {
+    "class_type": "TextEncodeQwenImageEdit",
+    "inputs": {
+      "clip": ["14", 1],
+      "prompt": "",
+      "vae": ["12", 0],
+      "image": ["13", 0]
+    }
+  },
+  "18": {
+    "class_type": "KSampler",
+    "inputs": {
+      "seed": "${seed}",
+      "steps": "${steps}",
+      "cfg": 1.0,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "denoise": "${strength}",
+      "model": ["14", 0],
+      "positive": ["16", 0],
+      "negative": ["17", 0],
+      "latent_image": ["15", 0]
+    }
+  },
+  "19": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": ["18", 0],
+      "vae": ["12", 0]
+    }
+  },
+  "20": {
+    "class_type": "SaveImage",
+    "inputs": {
+      "images": ["19", 0],
+      "filename_prefix": "qwen-edit"
+    }
+  }
+}

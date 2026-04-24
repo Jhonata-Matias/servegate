@@ -4,6 +4,10 @@
 
 TypeScript SDK para o gateway de geração de imagens FLUX do projeto **servegate** (ex-gemma4). Encapsula chamadas ao gateway autenticado (Story 2.5), trata cold-start realista (~130s, ADR-0001 Path A) via `warmup()` + polling assíncrono transparente, e expõe error classes tipadas para UX flows diferenciados.
 
+## v0.3.0 — Image editing (2026-04-24)
+
+`v0.3.0` adds `client.edit()` for image-to-image edits through the same async submit/poll gateway contract. This is strictly additive: `generate()`, `GenerateInput`, `GenerateOutput`, and typed errors remain compatible with `v0.2.x`.
+
 ## ⚠️ v0.2.0 — Breaking change (2026-04-23)
 
 `v0.2.0` migra o SDK para o contrato **async submit/poll** do gateway (`POST /jobs` + `GET /jobs/{id}`). Consumers do `v0.1.x` precisam atualizar — o gateway não responde mais no endpoint legado `POST /`.
@@ -104,6 +108,46 @@ Dispara request mínima para pre-aquecer worker. Retorna `{ duration_ms, was_col
 
 Gera imagem. Valida input strict (rejeita `steps=0`, `width=0`, etc. com `ValidationError` antes de network). Retry-with-backoff em 5xx/timeout/network; throw imediato em 401/429.
 
+#### `edit(input: EditInput): Promise<GenerateOutput>`
+
+Edita uma imagem existente usando Qwen-Image-Edit. Reusa o mesmo submit/poll de `generate()`; o SDK envia `input_image_b64` para acionar a branch i2i no handler.
+
+```typescript
+import { FluxClient, ValidationError } from '@jhonata-matias/flux-client';
+import { readFileSync, writeFileSync } from 'node:fs';
+
+const client = new FluxClient({ apiKey: process.env.GATEWAY_API_KEY!, gatewayUrl: process.env.GATEWAY_URL! });
+
+try {
+  const result = await client.edit({
+    prompt: 'make the jacket green while keeping the background unchanged',
+    image: readFileSync('input.png'),
+    strength: 0.85,
+    steps: 8,
+    seed: 42,
+  });
+  writeFileSync('edited.png', Buffer.from(result.output.image_b64, 'base64'));
+  console.log(result.output.metadata.output_width, result.output.metadata.output_height);
+} catch (e) {
+  if (e instanceof ValidationError) console.error(e.field, e.reason);
+  else throw e;
+}
+```
+
+`EditInput.image` accepts `Buffer`, `Uint8Array`, `Blob`, or raw base64 string. Client-side validation rejects:
+
+- exact `1:1` images, because Qwen-Image-Edit has a documented square-input coherence issue
+- decoded payloads over `8 MB`
+- images over `1 MP`, unless `autoDownsample: true` is passed in Node.js with optional `sharp` installed
+- unsupported magic bytes; only PNG, JPEG, and WebP are accepted
+- `strength` outside `(0.0, 1.0]` or `steps` outside `4-50`
+
+Troubleshooting guidance:
+
+- If the output looks zoomed or shifted, the handler still resizes the final PNG to the effective input dimensions and reports both Qwen-generated and output dimensions in metadata.
+- If backgrounds change unexpectedly, make the prompt explicit: "keep the background unchanged".
+- If you need HEIC/HEIF from mobile uploads, convert to PNG/JPEG/WebP before calling `edit()`.
+
 #### `isWarm(): boolean`
 
 Pure state check (zero network) — `true` se warmup ou generate sucedeu nos últimos `warmThresholdMs`.
@@ -167,10 +211,15 @@ npm run pack:dry     # validate tarball contents
 
 - [API Reference](../docs/api/reference.md) — raw HTTP contract
 - [Developer Onboarding](../docs/usage/dev-onboarding.md) — access request + first call
+- [ADR-0003](../docs/architecture/adr-0003-image-to-image-model-selection.md) — Qwen-Image-Edit model selection
 - Epic 2 PRD: `docs/prd/epic-2-consumer-integration.md`
 - ADR-0001 (Path A cold-start strategy): `docs/architecture/adr-0001-flux-cold-start.md`
 - Gateway (Story 2.5): `docs/stories/2.5.gateway-rate-limit-cloudflare.story.md`
 - This SDK story: `docs/stories/2.2.typescript-sdk-flux-client.story.md`
+
+## Model License Provenance
+
+The SDK remains MIT licensed. Image editing inference is powered by self-hosted Qwen-Image-Edit components documented in ADR-0003: Qwen-Image-Edit UNet, Qwen2.5-VL encoder, and Qwen VAE are Apache 2.0. The Lightning 8-step LoRA artifact must be verified by `@devops` before upload; if a compatible LoRA is not available, the deployment falls back to the 50-step Apache-only path.
 
 ## Contact
 

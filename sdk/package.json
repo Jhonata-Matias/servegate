@@ -1,6 +1,6 @@
 {
   "name": "@jhonata-matias/flux-client",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "TypeScript SDK for the servegate FLUX image-generation gateway. Uses async submit/poll under the hood and exposes typed errors (TimeoutError, RateLimitError, ValidationError, AuthError, NetworkError). Repo: Jhonata-Matias/servegate.",
   "type": "module",
   "main": "./dist/index.cjs",
@@ -21,6 +21,7 @@
   "files": [
     "dist",
     "README.md",
+    "README.pt-BR.md",
     "LICENSE"
   ],
   "engines": {
