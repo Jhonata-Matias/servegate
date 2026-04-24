@@ -10,12 +10,12 @@ adr: "adr-0003-image-to-image-model-selection"
 review:
   reviewer: "@qa (Quinn)"
   date: "2026-04-24"
-  round: 3
+  round: 4
   command: "*review-build 3.1"
-  method: "Round 3 — focused regression review triggered by @devops deploy-halt evidence (.aiox/notes/story-3.1-deploy-halt-2026-04-24.md). Re-verified against ComfyUI v0.3.62 (pinned) + v0.19.3 (latest) source + authenticated GitHub Code Search API + local custom_nodes inspection. Finding stands: F7 invented class_types. Rounds 1+2 accepted AC2 on pattern-match evidence (handler emits names documented in ADR-0003) without verifying against a real ComfyUI node registry."
+  method: "Round 4 — re-verification after F7 remediation (commit 9deee22) and pod smoke evidence (.aiox/notes/smoke-3.1/story-3.1-pod-smoke-evidence-2026-04-24.md). Validated: (1) 42/42 pytest green locally (34 prior + 8 non-tautological new); (2) commit diff a909447→9deee22 confirms T2I build_workflow unchanged (AC6 preserved); (3) pod smoke on RTX 4090 RunPod pod g2n9fucfvdy3kn ran full Qwen workflow via handler's build_qwen_edit_workflow() against live ComfyUI /object_info — all 10 class_types resolved, zero node_errors, 88.2s cold-start inference completed, output 720×480 matches input dims natively via TextEncodeQwenImageEdit image reference."
 
-verdict: "FAIL"
-score: 52
+verdict: "PASS"
+score: 94
 previous_rounds:
   - round: 1
     date: "2026-04-24"
@@ -27,8 +27,14 @@ previous_rounds:
     score: 92
     revoked: true
     revocation_reason: "AC2 correctness was not verified against a real ComfyUI registry. Static pattern-match evidence (handler emits names per ADR text) is insufficient for a workflow that must execute against ComfyUI at runtime. Round 3 F7 proves the class_types do not exist in any public ComfyUI distribution."
-blocking: true
-upgrade_path: "Round 3 FAIL — returns to @dev for F7 remediation. Requires handler rework (replace 4 invented class_types with real core ComfyUI loaders OR author a custom-node package), Dockerfile update (COMFY_REF bump likely + custom_nodes/ install), test rework (tautological tests → real ComfyUI registry validation), live pod smoke before re-handoff to @qa. Estimated wall-time: 4-8h depending on remediation path chosen. See .aiox/notes/story-3.1-deploy-halt-2026-04-24.md for detailed remediation options A/B/C."
+  - round: 3
+    date: "2026-04-24"
+    verdict: "FAIL"
+    score: 52
+    resolved_in: round_4
+    resolution_summary: "F7 remediated in commit 9deee22 by replacing 4 invented class_types with real core ComfyUI v0.3.62 nodes (UNETLoader, CLIPLoader[type=qwen_image], VAELoader, LoadImage + TextEncodeQwenImageEdit for conditioning). Zero COMFY_REF bump needed — v0.3.62 already supported everything. Tests rewritten against known-good fixture. Pod smoke @devops 2026-04-24 proved graph executes end-to-end on RTX 4090."
+blocking: false
+upgrade_path: "Round 4 PASS unlocks @devops Task 10: build serverless:0.2.0 Docker image, deploy to RunPod serverless endpoint (parallel strategy recommended to preserve production), smoke live T2I (SHA-256 byte-identical via production-warm worker) + smoke live i2i (handler end-to-end vs endpoint), publish SDK v0.3.0, tag v0.3.0-alpha, PR to main, GitHub Release, landing page update. Task 1 (volume upload + NOTICE deployment) already completed by @devops during pod smoke on 2026-04-24."
 
 # ============================================================================
 # Acceptance Criteria traceability (8 ACs)
@@ -46,9 +52,9 @@ acceptance_criteria:
 
   - id: AC2
     name: "Qwen workflow graph implemented"
-    status: FAIL
-    round_3_override: true
-    previous_status_rounds_1_2: PASS
+    status: PASS
+    round_4_override: true
+    previous_status_round_3: FAIL
     evidence_round_3:
       - "CRITICAL: serverless/handler.py:153-165 uses 4 class_type strings that DO NOT exist in ComfyUI core v0.3.62 (pinned in Dockerfile:21) nor v0.19.3 (latest, verified 2026-04-24 via raw GitHub fetch of nodes.py + comfy_extras/nodes_qwen.py)"
       - "Invented class_types: QwenImageEditDiffusionModelLoader (node 10), QwenImageEditCLIPLoader (node 11), QwenImageEditVAELoader (node 12), LoadImageBase64 (node 13)"
@@ -59,10 +65,17 @@ acceptance_criteria:
       - "Prior evidence 'serverless/handler.py:143-210 — build_qwen_edit_workflow() with all specified nodes' remains factually true but was insufficient — confirmed the handler emits names specified in ADR-0003 but did not verify those names resolve against a real ComfyUI registry"
       - "Prior evidence 'serverless/tests/test_handler_qwen_workflow.py exists for workflow validation' — re-inspected: tests are TAUTOLOGICAL. test_qwen_edit_workflow_contains_required_node_classes asserts the handler returns the same strings the story specified; no ComfyUI registry lookup; no live workflow submission; no /object_info endpoint verification"
       - "workflow_template_qwen_edit.json reference file replicates the 4 invented class_types verbatim — reinforcing the same gap, not catching it"
-    score: 1
+    score: 10
     finding_ref: F7
-    severity: CRITICAL
-    impact: "Any real inference request routed to the i2i branch will fail at /prompt submission with ComfyUI NODE_CLASS_MAPPINGS KeyError. Story is un-deployable. AC2 (Qwen workflow graph implemented) is materially unmet despite code existing."
+    severity: RESOLVED_ROUND_4
+    round_4_evidence:
+      - "commit 9deee22: build_qwen_edit_workflow() rewritten with real ComfyUI v0.3.62 class_types (UNETLoader, CLIPLoader[type=qwen_image], VAELoader, LoadImage, TextEncodeQwenImageEdit, LoraLoader, VAEEncode, KSampler, VAEDecode, SaveImage)"
+      - "Live /object_info query on ComfyUI v0.3.62-compatible runtime (actually v0.19.3 on smoke pod; both versions have the same class_types and qwen_image enum value in CLIPLoader) returned YES for all 10 class_types emitted by the handler"
+      - "Pod smoke (g2n9fucfvdy3kn, RTX 4090 US-IL-1, 2026-04-24): submitted workflow via handler.build_qwen_edit_workflow() with 720×480 input, 8-step Lightning LoRA, strength 0.85. Submit response: {node_errors: {}} — no KeyError. Inference completed in 88.2s cold-start. Output 720×480 PNG generated."
+      - "42/42 pytest green including 8 new non-tautological tests validating every class_type + enum value against fixtures/comfyui-v0_3_62-object-info.json (captured from upstream nodes.py + comfy_extras/nodes_qwen.py)"
+      - "Evidence file: .aiox/notes/smoke-3.1/story-3.1-pod-smoke-evidence-2026-04-24.md + qwen-smoke-input.png + qwen-smoke-output.png (gitignored runtime evidence)"
+    prior_round_3_severity: CRITICAL_BLOCKING
+    impact_now: "F7 fully resolved. Handler emits ONLY class_types present in real ComfyUI. Live inference confirmed end-to-end. Zero deploy risk from graph correctness."
 
   - id: AC3
     name: "Input validation rules enforced"
@@ -150,17 +163,19 @@ acceptance_criteria:
 
   - id: AC8
     name: "Apache 2.0 provenance documented"
-    status: CONCERNS
+    status: PASS
+    round_4_override: true
+    previous_status_rounds_1_2_3: CONCERNS
     evidence:
-      - "docs/legal/QWEN_IMAGE_EDIT_NOTICE.md exists (new file) listing all 4 components with licenses + sources"
+      - "docs/legal/QWEN_IMAGE_EDIT_NOTICE.md — all 4 components listed with verified Apache 2.0 licenses + source URLs (commit 19e8f52): UNet (Qwen/Qwen-Image-Edit), VAE (Qwen/Qwen-Image), CLIP (Qwen), Lightning LoRA (lightx2v/Qwen-Image-Lightning)"
       - "sdk/CHANGELOG.md v0.3.0 License section notes upstream Qwen Apache 2.0 provenance"
       - "sdk/package.json license unchanged MIT — correct per ADR-0003 (MIT SDK distribution compatible with Apache 2.0 upstream weights)"
-    concerns:
-      - "F3 (MEDIUM): QWEN_IMAGE_EDIT_NOTICE.md explicit first line: 'This file is the source TEMPLATE for /runpod-volume/ComfyUI/NOTICE.md created during Story 3.1 deployment' — the actual deployed NOTICE on network volume does NOT exist yet (Task 1 HALT @devops)."
-      - "F3-related: Lightning LoRA license entry marked 'Pending @devops verification before upload' — if non-Apache-compatible, fallback 50-step path must be exercised."
-      - "Strict interpretation of AC8 ('network volume gets a new NOTICE.md file listing all Qwen components') requires deployed file, not just template. Template is the deliverable @dev can produce; deployed NOTICE is @devops Task 1 HALT scope."
-    score: 7
-    path_to_close: "@devops Task 1 completion (network-volume upload) MUST include real NOTICE.md deployment from this template. Before Task 10 Release, @qa re-verifies and upgrades AC8 score to 10."
+    round_4_evidence:
+      - "Lightning LoRA license verified 2026-04-24 via direct WebFetch of HuggingFace model card (lightx2v/Qwen-Image-Lightning): explicit `License: apache-2.0` — no license risk, fallback 50-step path NOT needed"
+      - "F3 CLOSED: NOTICE.md deployed to real network volume at /runpod-volume/ComfyUI/NOTICE.md (mounted as /workspace/ComfyUI/NOTICE.md on smoke pod) during @devops 2026-04-24 smoke operation. Evidence: .aiox/notes/smoke-3.1/story-3.1-pod-smoke-evidence-2026-04-24.md section 'NOTICE.md deployment'"
+      - "All 4 artifacts also deployed to volume in this same operation (closes Task 1 HALT): models/unet/qwen_image_edit_fp8_e4m3fn.safetensors (20GB), models/vae/qwen_image_vae.safetensors (243MB), models/clip/qwen_2.5_vl_7b_fp8_scaled.safetensors (8.8GB), models/loras/qwen_image_lightning_8steps_lora.safetensors (1.6GB, renamed from upstream Qwen-Image-Lightning-8steps-V1.0.safetensors to match handler constant)"
+    score: 10
+    note: "Template marker on first line of NOTICE.md ('This file is the source TEMPLATE...') is present in the deployed file and is minor cosmetic; low-priority cleanup opportunity for future deploys but not blocking. Strict AC8 requirement met: deployed file exists with verified licenses for all components."
 
 # ============================================================================
 # Non-Functional Requirements
@@ -564,21 +579,68 @@ verdict_history:
     gate_decision_final: FAIL
     remediation_estimated_wall_time: "4-8h @dev rework + 30-60min @qa Round 4 review"
 
+  - round: 4
+    date: "2026-04-24"
+    verdict: "PASS"
+    score: 94
+    reviewer: "@qa (Quinn)"
+    commit_at_review: 9deee22
+    triggered_by: "@dev F7 remediation (commit 9deee22) + @devops pod smoke evidence (.aiox/notes/smoke-3.1/)"
+    round_3_resolution: true
+    summary: "Round 3 F7 CRITICAL fully resolved. F3 (NOTICE.md deployed) closed. AC2 upgraded 1→10 based on runtime-verified evidence (ComfyUI /object_info registry + 88.2s live inference on RTX 4090 pod). AC8 upgraded 7→10 (deployed NOTICE + Lightning LoRA Apache 2.0 verified via HF model card). Zero COMFY_REF bump needed — v0.3.62 already supports qwen_image CLIPLoader + TextEncodeQwenImageEdit. AC6 T2I byte-identical baseline SHA-256 preserved (hardcoded 'f94d48b407...' unchanged; handler.build_workflow diff-empty vs a909447). Tests: 42/42 pytest green (34 prior + 8 new non-tautological validating against serverless/tests/fixtures/comfyui-v0_3_62-object-info.json). Cost of validation: ~$0.46 (one-off pod g2n9fucfvdy3kn created + terminated). TD-3.1.4 (tautological test meta-gap) structurally addressed via fixture pattern."
+    findings_closure_summary:
+      F1: "CLOSED (unchanged from R2) — error sanitization"
+      F2: "DEFERRED TD-3.1.2 (unchanged) — LOW non-breaking"
+      F3: "CLOSED — NOTICE.md deployed at /runpod-volume/ComfyUI/NOTICE.md with Lightning LoRA Apache 2.0 verified"
+      F4: "CLOSED (unchanged)"
+      F5: "DEFERRED TD-3.1.3 (unchanged)"
+      F6: "GREEN (unchanged)"
+      F7: "CLOSED — commit 9deee22 + pod smoke runtime verification"
+    score_delta_breakdown:
+      - "AC coverage 25%: 3.0 → 9.81 — AC2 1→10, AC8 7→10, others unchanged; weighted 0.750 → 2.453 (delta +1.703)"
+      - "Security/privacy 15%: 9.0 → 9.0 — unchanged"
+      - "Reliability/regression 15%: 9.8 → 10 — AC6 re-confirmed; delta +0.030"
+      - "Documentation 15%: 9.0 → 9.0 — unchanged"
+      - "Pattern adherence 10%: 6.5 → 9.5 — real ComfyUI nodes used; delta +0.300"
+      - "Evidence quality 10%: 4.0 → 9.5 — live registry validation + fixture + live inference; delta +0.550"
+      - "Process adherence 5%: 9.5 → 9.5 — unchanged"
+      - "DoD completeness 5%: 3.0 → 7.0 — Task 1 closed by @devops smoke; Task 10 still HALT but not a failure; delta +0.200"
+      - "Total weighted: 5.22 → 9.42 (raw); 52 → 94 (percentage) — verdict PASS"
+    next_actions:
+      - owner: "@devops"
+        action: "Task 10 — build Docker image ghcr.io/jhonata-matias/gemma4-flux-serverless:0.2.0 from commit 9deee22, deploy to RunPod serverless endpoint (parallel strategy recommended: create gemma4-flux-serverless-v0_2_0 template + gemma4-flux-serverless-v020 endpoint; smoke both T2I + i2i; if green, PATCH prod endpoint templateId for atomic swap). Then: npm publish SDK v0.3.0 to GitHub Packages, git tag v0.3.0-alpha, gh pr create --base main, GitHub Release with migration notes, landing page update."
+        blocks: "Story 3.1 Done transition + SDK consumer availability"
+        requires: "Round 4 PASS (this verdict) + existing commits on feature/3.1-qwen-image-edit-i2i (19e8f52, 9deee22)"
+      - owner: "@devops"
+        action: "Push commit 9deee22 to origin/feature/3.1-qwen-image-edit-i2i (part of Task 10 workflow)"
+        blocks: "PR merge to main"
+      - owner: "@po"
+        action: "*close-story 3.1 after Task 10 Release confirmed green on production endpoint. Status In Progress → Done. Update Epic 3 PRD v0.2 closure entry + ADR-0003 Change Log with deployment date + commit SHA + release tag v0.3.0-alpha."
+        blocks: "Epic 3 closure tracking"
+    tech_debt_carried:
+      - id: TD-3.1.2
+        status: carried_over_from_round_2
+      - id: TD-3.1.3
+        status: carried_over_from_round_2
+      - id: TD-3.1.4
+        status: STRUCTURALLY_ADDRESSED
+        note: "Fixture-based validation pattern demonstrated in commit 9deee22 is reusable across the framework. Future stories emitting external-system identifiers (ComfyUI class_types, DB schema names, API endpoint paths, etc.) should follow the same pattern: capture known-good reference from the upstream source into a test fixture, validate emitted identifiers against the fixture."
+    gate_decision_final: PASS
+    remediation_wall_time_actual: "~3h — @dev rework (commit 9deee22 inside 1h via WebFetch of ComfyUI source to avoid COMFY_REF bump) + @devops pod provisioning + download + smoke + destroy (40min, $0.46) + @qa Round 4 review (this session)"
+
 # ============================================================================
-# Next actions (Round 3 — supersedes Round 2 next_actions above)
+# Next actions (Round 4 — supersedes all prior next_actions)
 # ============================================================================
 next_actions:
-  - owner: "@dev"
-    action: "Remediate F7 (invented ComfyUI class_types in handler). See finding F7 recommendation + .aiox/notes/story-3.1-deploy-halt-2026-04-24.md for Options A/B/C. Rework handler + tests + Dockerfile (possibly COMFY_REF bump). Run local pod smoke before re-handoff."
-    blocking_for_merge: true
-    effort: "4-8h"
   - owner: "@devops"
-    action: "HOLD Task 1 (~29 GB upload) + Task 10 (build + deploy + publish + PR). All blocked until F7 remediation + Round 4 PASS."
+    action: "Task 10 Release — Docker build + push ghcr.io/jhonata-matias/gemma4-flux-serverless:0.2.0, deploy to RunPod serverless endpoint (parallel strategy: create v0.2.0 template+endpoint → smoke → atomic PATCH of prod endpoint templateId), SDK v0.3.0 publish to GitHub Packages, git tag v0.3.0-alpha + push + PR to main, GitHub Release with migration notes, landing page update to mention i2i capability."
     blocking_for_release: true
-  - owner: "@qa"
-    action: "Round 4 review after @dev rework. Expected: AC2 PASS with live-ComfyUI evidence; AC6 re-confirmation (possibly with new baseline if COMFY_REF bumped); re-enable deploy flow."
-    blocking_for_merge: true
+    effort: "45-60 min"
+  - owner: "@devops"
+    action: "Live smoke on production endpoint: T2I fixed-seed SHA-256 hash equality check against baseline 'f94d48b407f8e3e53c0d20a1bae8576eefe0d29333a689d14c12f33784d2f6ba' (AC6 confirmation post-deploy) + i2i sample (any 720×480 or similar non-square input) verifying dims match + metadata includes qwen_generated_* + output_* fields."
+    blocking_for_release: true
+    effort: "10-15 min"
   - owner: "@po"
-    action: "Revert Story 3.1 Status from 'Ready for Review' to 'InProgress' or similar; notify of regression in verdict; reflect in Epic 3 PRD if needed."
-    blocking_for_merge: false
-    note: "Story file status edits are @po scope per story-lifecycle.md; @qa only updates QA Results section."
+    action: "*close-story 3.1 after Task 10 green — Status In Progress → Done. Update Epic 3 PRD v0.2 closure + ADR-0003 Change Log."
+    blocking_for_release: false
+    effort: "15 min"
