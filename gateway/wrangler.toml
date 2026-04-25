@@ -18,7 +18,9 @@ compatibility_date = "2026-04-01"
 workers_dev = true
 
 [vars]
-CORS_ALLOWED_ORIGIN = "https://gemma4.dev"
+# Self-CORS for production worker — landing/dogfood. Story 4.4 alpha launch may
+# revisit if a public landing domain (gemma4.dev or other) is provisioned.
+CORS_ALLOWED_ORIGIN = "https://gemma4-gateway.jhonata-matias.workers.dev"
 
 # KV namespace for rate-limit counter (key: count:YYYY-MM-DD, TTL 48h)
 # Created via `npm run kv:create` 2026-04-21
