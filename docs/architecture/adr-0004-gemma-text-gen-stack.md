@@ -299,3 +299,24 @@ Validates token, pre-populates volume, and exercises the ~50GB download path onc
 |---|---|---|---|
 | 1.0 | 2026-04-24 | @architect (Aria) | Initial draft. Alpha: `gemma-3-4b-it` on L4; premium tier pre-approved: `gemma-3-27b-it` on A100. Gateway reuse + SSE streaming + 50k tokens/day rate-limit. Awaiting @pm cost-ceiling sign-off + @po Story 4.1 validation. |
 | 1.1 | 2026-04-24 | @po (Pax) | **Status: Proposed → Accepted.** Story 4.1 QA gate PASS (composite 92/100). FOUNDATION_SET GMS_FND_001: 5/5 GO (FS1 ADR/10, FS2 cost/10, FS3 cold-start 9/10 with empirical measurement deferred to Story 4.2, FS4 secrets/10, FS5 licensing/10). No vetoes triggered. Unblocks Story 4.2 (gateway `/v1/generate` + RunPod text endpoint). Story 4.2 first task mandatory: SSE pass-through spike before any other implementation. |
+| 1.2 | 2026-04-24 | @devops (Gage) | **Amendment: model + runtime pivot during Story 4.2 Tasks 1-2.** Phase 0.1 research missed Gemma 4 (training cutoff issue) and selected Gemma 3 4B with vLLM. During provisioning: (a) `runpod/worker-v1-vllm:v2.14.0` failed with `cuda>=12.5` requirement vs RunPod 4090 hosts running CUDA <12.5; (b) `runpod/worker-v1-vllm:v2.13.1` (CUDA 12.9 base) silent vLLM engine init crash on Gemma 3 multimodal architecture; (c) pivot to `gemma-3-1b-it` text-only on same vLLM stack: workers report ready but jobs stuck IN_QUEUE 19+ min (silent runtime failure). User course-correction (https://ollama.com/library/gemma4) revealed Gemma 4 family exists and is Ollama-distributed; project codename `gemma4` and existing volume `ollama-models` confirm Ollama was always intended runtime. **New stack: `svenbrnn/runpod-ollama:0.21.2` (Ollama 0.21.2) + `gemma4:e4b` (Google Gemma 4, ~4.5B effective params, instruction-tuned).** Empirical: <cold-boot duration> (under 180s budget), warm path 1-2s wallclock, ~70 tok/s decode rate. Cost run-rate <forward run rate> at 100 calls/day on RTX 4090 SECURE US-IL-1 (within <alpha cost ceiling>). HF_TOKEN no longer needed (Ollama uses own registry). 90-day pivot review extended to include Gemma 4 family upgrades + Ollama version cadence. Detailed delta in `.aiox/notes/story-4.2/deploy-record-2026-04-24.md` (gitignored). FS3 cold-start criterion upgraded from 9/10 (estimated) to 10/10 (measured <cold-boot duration> ≤ 180s). |
+
+## Pivot delta (v1.0 → v1.2 summary)
+
+| Dimension | v1.0 (Phase 0.1 research) | v1.2 (empirical Story 4.2) |
+|---|---|---|
+| Model family | Gemma 3 (Phase 0.1 didn't know Gemma 4 existed) | **Gemma 4** |
+| Specific model | `gemma-3-4b-it` (Multimodal arch, vision input) | **`gemma4:e4b`** (Ollama tag, ~4.5B effective params, IT, multimodal but text-focused via Ollama) |
+| Runtime | `vLLM` via `runpod/worker-v1-vllm:v2.14.0` | **`Ollama 0.21.2` via `svenbrnn/runpod-ollama:0.21.2`** |
+| Image source | RunPod official | **Community-maintained** (last update same day, well-pulled) |
+| GPU | L4 24GB ($0.684/hr planned) | **RTX 4090 24GB** ($0.69/hr; only 24GB available SECURE US-IL-1 at deploy time) |
+| HF_TOKEN | required (gated model) | **NOT NEEDED** (Ollama uses ollama.com registry, not HF) |
+| Network volume mount | `/runpod-volume` via `BASE_PATH` env | `/runpod-volume` via `OLLAMA_MODELS` env (baked in image) |
+| Cold-start | estimated 60-90s | **measured <cold-boot duration>** (image pull 3.8GB + ollama init + gemma4:e4b pull) |
+| Warm latency | estimated 5-10s | **measured 0.5-1s** (better than estimate) |
+| Output shape | OpenAI-compat single `content` field | **OpenAI-compat with `content` + `reasoning`** (Gemma 4 has CoT built-in) |
+| SDK quirk | none | SDK Story 4.3 must handle dual-field output |
+
+**ADR-0004 v1.2 supersedes v1.0/v1.1 only on the dimensions above.** All other decisions (gateway reuse, SSE streaming, 50k tokens/day rate-limit, dual gate strategy, network volume strategy, scale-to-zero, alpha access flow) remain in effect.
+
+**Premium tier pre-approval updated:** instead of `gemma-3-27b-it` on A100, use `gemma4:26b` (Mixture-of-Experts, 3.8B active params from 26B total) on A100 80GB or `gemma4:31b` (dense 30.7B) on A100 80GB+. Both Ollama-distributed. Architecturally identical infra path — only `OLLAMA_MODEL_NAME` env var changes.
