@@ -17,6 +17,7 @@
     "secret:gateway-key": "wrangler secret put GATEWAY_API_KEY",
     "secret:runpod-key": "wrangler secret put RUNPOD_API_KEY",
     "secret:runpod-endpoint": "wrangler secret put RUNPOD_ENDPOINT_ID",
+    "secret:runpod-text-endpoint": "wrangler secret put RUNPOD_TEXT_ENDPOINT_ID",
     "secret:list": "wrangler secret list"
   },
   "engines": {

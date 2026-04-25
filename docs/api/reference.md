@@ -396,6 +396,103 @@ Typed terminal errors exposed by the SDK:
 
 For image-to-image, the SDK validates the image before any network call when possible. This catches unsupported MIME types, `1:1` aspect ratio, payloads over `8 MB`, and inputs above `1 MP` unless `autoDownsample: true` is used in Node.js with `sharp` available.
 
+## Text Generation
+
+### `POST /v1/generate`
+
+Returns Gemma 4 text completions through the same gateway key. The default response is streaming SSE.
+
+#### Headers
+
+| Header | Required | Description |
+|---|---|---|
+| `X-API-Key` | Yes | Shared gateway credential |
+| `Authorization: Bearer <key>` | Alternative | Accepted when `X-API-Key` is absent |
+| `Content-Type: application/json` | Yes | Request body must be JSON |
+
+#### Request
+
+```json
+{
+  "messages": [
+    { "role": "user", "content": "Say OK" }
+  ],
+  "model": "gemma4:e4b",
+  "max_tokens": 512,
+  "temperature": 0.7,
+  "top_p": 1.0,
+  "stream": true
+}
+```
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `messages` | array | Yes | Roles: `system`, `user`, `assistant`; `content` must be non-empty |
+| `model` | string | No | Defaults to `gemma4:e4b` |
+| `max_tokens` | integer | No | Defaults to `512`; alpha cap `2048` |
+| `temperature` | number | No | Range `0.0-2.0` |
+| `top_p` | number | No | Range `0.0-1.0` |
+| `stream` | boolean | No | Defaults to `true` |
+
+#### Streaming Response
+
+Status: `200 OK`
+
+```http
+Content-Type: text/event-stream
+Cache-Control: no-cache
+Connection: keep-alive
+X-RateLimit-Limit: 50000
+X-RateLimit-Remaining: 49750
+X-RateLimit-Reset: 2026-04-25T00:00:00.000Z
+X-Gateway-Model: gemma4:e4b
+```
+
+Frame shape:
+
+```text
+data: {"object":"chat.completion.chunk","model":"gemma4:e4b","choices":[{"index":0,"delta":{"role":"assistant","content":"OK"},"finish_reason":null}]}
+```
+
+#### Non-Streaming Response
+
+Set `"stream": false`.
+
+```json
+{
+  "object": "chat.completion",
+  "model": "gemma4:e4b",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "OK"
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "total_tokens": 12
+  }
+}
+```
+
+Gemma 4 through Ollama can include `message.reasoning` in non-streaming responses and `delta.reasoning` in streaming chunks. Clients should ignore unknown fields unless they explicitly surface reasoning.
+
+#### Text Error Codes
+
+| HTTP | `error` | Meaning |
+|---:|---|---|
+| 400 | `invalid_json` | Body is not valid JSON |
+| 400 | `missing_messages` | `messages[]` is missing or empty |
+| 400 | `invalid_request` | Field type/range/role validation failed |
+| 401 | `invalid_api_key` | Missing or invalid gateway key |
+| 413 | `request_too_large` | Body exceeds `2 MB` |
+| 429 | `rate_limit_exceeded` | Daily token budget exceeded |
+| 502 | `upstream_error` | Text provider returned an error |
+| 503 | `upstream_unavailable` | Text provider/network unavailable |
+
 ## Related
 
 - Migration guide: [migration-async.md](./migration-async.md)

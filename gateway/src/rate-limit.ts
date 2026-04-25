@@ -1,6 +1,7 @@
-import type { RateLimitState } from './types.js';
+import type { RateLimitState, TokenBudgetState } from './types.js';
 
 const DAILY_LIMIT = 100;
+const TOKEN_DAILY_LIMIT = 50000;
 const KV_TTL_SECONDS = 48 * 60 * 60; // 48h auto-cleanup
 
 /**
@@ -9,6 +10,14 @@ const KV_TTL_SECONDS = 48 * 60 * 60; // 48h auto-cleanup
  */
 export function dayKey(now: Date = new Date()): string {
   return `count:${now.toISOString().slice(0, 10)}`;
+}
+
+/**
+ * Computes the KV key for today's UTC token budget (YYYY-MM-DD).
+ * Parallel namespace to image request count keys.
+ */
+export function tokenDayKey(now: Date = new Date()): string {
+  return `tokens:${now.toISOString().slice(0, 10)}`;
 }
 
 /**
@@ -105,6 +114,81 @@ export async function checkAndRead(
   };
 }
 
+export async function readTokenBudget(
+  kv: KVNamespace,
+  now: Date = new Date(),
+): Promise<TokenBudgetState> {
+  const key = tokenDayKey(now);
+  const raw = await kv.get(key);
+  const used = raw ? Number.parseInt(raw, 10) || 0 : 0;
+
+  return {
+    used,
+    remaining: Math.max(0, TOKEN_DAILY_LIMIT - used),
+    resetAt: nextUtcMidnightIso(now),
+    secondsUntilReset: secondsUntilNextUtcMidnight(now),
+  };
+}
+
+/**
+ * Checks whether estimated text tokens fit the daily budget before provider call.
+ *
+ * This mirrors checkAndIncrement's KV trade-off: Cloudflare KV is eventually
+ * consistent, so alpha concurrency can overshoot slightly under races.
+ */
+export async function checkTokenBudgetAndReserve(
+  kv: KVNamespace,
+  approxTokens: number,
+  now: Date = new Date(),
+): Promise<{ state: TokenBudgetState; allowed: boolean }> {
+  const raw = await kv.get(tokenDayKey(now));
+  const used = raw ? Number.parseInt(raw, 10) || 0 : 0;
+  const resetAt = nextUtcMidnightIso(now);
+  const secondsUntilReset = secondsUntilNextUtcMidnight(now);
+  const reservation = Math.max(0, Math.ceil(approxTokens));
+
+  if (used + reservation > TOKEN_DAILY_LIMIT) {
+    return {
+      allowed: false,
+      state: {
+        used,
+        remaining: Math.max(0, TOKEN_DAILY_LIMIT - used),
+        resetAt,
+        secondsUntilReset,
+      },
+    };
+  }
+
+  return {
+    allowed: true,
+    state: {
+      used,
+      remaining: TOKEN_DAILY_LIMIT - used,
+      resetAt,
+      secondsUntilReset,
+    },
+  };
+}
+
+export async function recordTokenUsage(
+  kv: KVNamespace,
+  tokens: number,
+  now: Date = new Date(),
+): Promise<TokenBudgetState> {
+  const key = tokenDayKey(now);
+  const raw = await kv.get(key);
+  const used = raw ? Number.parseInt(raw, 10) || 0 : 0;
+  const nextUsed = Math.max(0, used + Math.max(0, Math.ceil(tokens)));
+  await kv.put(key, String(nextUsed), { expirationTtl: KV_TTL_SECONDS });
+
+  return {
+    used: nextUsed,
+    remaining: Math.max(0, TOKEN_DAILY_LIMIT - nextUsed),
+    resetAt: nextUtcMidnightIso(now),
+    secondsUntilReset: secondsUntilNextUtcMidnight(now),
+  };
+}
+
 /**
  * Builds a 429 Response with Retry-After header + structured body.
  */
@@ -127,4 +211,4 @@ export function buildRateLimitResponse(state: RateLimitState): Response {
   );
 }
 
-export { DAILY_LIMIT };
+export { DAILY_LIMIT, TOKEN_DAILY_LIMIT };

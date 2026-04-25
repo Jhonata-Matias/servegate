@@ -8,6 +8,7 @@
 # - GATEWAY_API_KEY — generated random (openssl rand -hex 32)
 # - RUNPOD_API_KEY  — same as serverless/.env (Story 2.1)
 # - RUNPOD_ENDPOINT_ID — endpoint ID from Story 2.1 deploy
+# - RUNPOD_TEXT_ENDPOINT_ID — text endpoint ID from Story 4.2 deploy
 
 name = "gemma4-gateway"
 main = "src/index.ts"
@@ -15,6 +16,9 @@ compatibility_date = "2026-04-01"
 
 # Free tier: 100k requests/day, 10ms CPU per request — way over our 100/day budget
 workers_dev = true
+
+[vars]
+CORS_ALLOWED_ORIGIN = "https://gemma4.dev"
 
 # KV namespace for rate-limit counter (key: count:YYYY-MM-DD, TTL 48h)
 # Created via `npm run kv:create` 2026-04-21
@@ -35,6 +39,9 @@ id = "b3799bff71cc4d9c8e28bcf27d963eab"
 [env.preview]
 name = "gemma4-gateway-preview"
 workers_dev = true
+
+[env.preview.vars]
+CORS_ALLOWED_ORIGIN = "https://gemma4.dev"
 
 [[env.preview.kv_namespaces]]
 binding = "RATE_LIMIT_KV"
