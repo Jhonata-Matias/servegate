@@ -68,3 +68,4 @@ squads/
 .env.example
 AGENTS.md
 .aiox/notes/story-4.2/deploy-record-*.md
+.aiox/notes/story-4.2/ac11-smoke-evidence-*.md
