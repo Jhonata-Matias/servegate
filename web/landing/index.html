@@ -147,12 +147,12 @@
                 <div class="relative z-20 mt-10">
                     <span class="px-3 py-1 mb-6 inline-block rounded-full text-xs font-mono font-medium bg-accent/10 text-accent border border-accent/20">Alpha Status</span>
                     <h1 class="text-6xl md:text-8xl lg:text-[7rem] font-semibold tracking-tighter leading-[0.9] text-white">
-                        <span class="text-reveal-wrapper"><span class="text-reveal-content delay-100">Image API</span></span><br/>
-                        <span class="text-reveal-wrapper"><span class="text-reveal-content delay-200 text-transparent bg-clip-text bg-gradient-to-r from-accent to-accentLight">Reference</span></span>
+                        <span class="text-reveal-wrapper"><span class="text-reveal-content delay-100">Image + Text</span></span><br/>
+                        <span class="text-reveal-wrapper"><span class="text-reveal-content delay-200 text-transparent bg-clip-text bg-gradient-to-r from-accent to-accentLight">API Reference</span></span>
                     </h1>
 
                     <p class="mt-8 text-muted text-lg md:text-xl max-w-xl font-light reveal delay-400">
-                        O contrato HTTP canônico para gerar imagens com FLUX.1-schnell e editar imagens com Qwen-Image-Edit. O gateway opera via submit/poll assíncrono: um endpoint para T2I e i2i, sem bloquear a sua thread.
+                        O contrato HTTP canônico para gerar imagens com FLUX.1-schnell, editar imagens com Qwen-Image-Edit e gerar texto com Gemma 4. Imagens usam submit/poll assíncrono; texto usa streaming SSE no mesmo gateway autenticado.
                     </p>
 
                     <div class="mt-12 flex items-center gap-6 reveal delay-500 relative z-30">
@@ -195,8 +195,8 @@
                 <div class="flashlight-card row-span-1 p-10 flex flex-col justify-between reveal delay-400 group relative overflow-hidden" onmousemove="const rect = this.getBoundingClientRect(); this.style.setProperty('--mouse-x', `${event.clientX - rect.left}px`); this.style.setProperty('--mouse-y', `${event.clientY - rect.top}px`);">
                     <iconify-icon class="text-4xl text-muted group-hover:text-warning transition-colors duration-500" icon="solar:stopwatch-bold-duotone"></iconify-icon>
                     <div>
-                        <h2 class="text-3xl font-medium tracking-tighter text-white">T2I + I2I</h2>
-                        <span class="text-xs font-mono text-muted mt-2 block uppercase tracking-widest">FLUX generate + Qwen edit</span>
+                        <h2 class="text-3xl font-medium tracking-tighter text-white">T2I + I2I + Text</h2>
+                        <span class="text-xs font-mono text-muted mt-2 block uppercase tracking-widest">FLUX + Qwen + Gemma 4</span>
                     </div>
                     <div class="absolute -bottom-10 -right-10 w-32 h-32 bg-warning opacity-0 group-hover:opacity-10 rounded-full blur-3xl transition-opacity duration-700 pointer-events-none"></div>
                 </div>
@@ -269,13 +269,13 @@ Retry-After: 5
                             <pre class="code-block text-xs">{
   "output": {
     "image_b64": <span class="string">"&lt;base64 PNG&gt;"</span>,
-	    "metadata": {
-	      "seed": 42,
-	      "elapsed_ms": 3100,
-	      "output_width": 720,
-	      "output_height": 480
-	    }
-	  }
+    "metadata": {
+      "seed": 42,
+      "elapsed_ms": 3100,
+      "output_width": 720,
+      "output_height": 480
+    }
+  }
 }</pre>
                         </div>
                     </div>
@@ -311,6 +311,40 @@ Retry-After: 5
     \"steps\": 8,
     \"seed\": 42
   }"</pre>
+                    </div>
+                </div>
+            </div>
+
+            <div class="px-8 md:px-12 mt-10">
+                <div class="glass-panel border border-white/10 rounded-xl p-8 md:p-10 reveal delay-300">
+                    <div class="flex items-center gap-3 mb-6">
+                        <span class="px-3 py-1 rounded bg-info/10 text-info font-mono text-xs font-bold border border-info/20">TEXT</span>
+                        <h3 class="text-2xl font-medium text-white">Gerar texto com Gemma 4</h3>
+                    </div>
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-10 items-start">
+                        <div>
+                            <h4 class="text-xs font-mono text-muted uppercase tracking-widest mb-4">Streaming SSE</h4>
+                            <pre class="code-block text-xs"><span class="keyword">curl</span> -N -sS <span class="string">https://gemma4-gateway.jhonata-matias.workers.dev/v1/generate</span> \
+  -H <span class="string">"Authorization: Bearer $GATEWAY_API_KEY"</span> \
+  -H <span class="string">"Content-Type: application/json"</span> \
+  -d '{
+    "messages": [{"role": "user", "content": "Write one concise haiku about servers."}],
+    "max_tokens": 256,
+    "temperature": 0.7,
+    "stream": true
+  }'</pre>
+                        </div>
+                        <div>
+                            <h4 class="text-xs font-mono text-muted uppercase tracking-widest mb-4">Non-Streaming JSON</h4>
+                            <pre class="code-block text-xs"><span class="keyword">curl</span> -sS <span class="string">https://gemma4-gateway.jhonata-matias.workers.dev/v1/generate</span> \
+  -H <span class="string">"Authorization: Bearer $GATEWAY_API_KEY"</span> \
+  -H <span class="string">"Content-Type: application/json"</span> \
+  -d '{
+    "messages": [{"role": "user", "content": "Say OK"}],
+    "max_tokens": 64,
+    "stream": false
+  }' | <span class="keyword">jq</span></pre>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -368,8 +402,8 @@ Retry-After: 5
                                             <td class="py-3 px-4 text-zinc-500">No</td>
                                         </tr>
                                     </tbody>
-	                                </table>
-	                            </div>
+                                </table>
+                            </div>
                             <h4 class="text-xs font-mono text-muted uppercase tracking-widest mt-8 mb-4">I2I Request Body</h4>
                             <div class="rounded-lg border border-white/10 overflow-hidden">
                                 <table class="w-full text-left text-sm text-zinc-300">
@@ -430,6 +464,10 @@ Retry-After: 5
                             <div class="bg-charcoal border border-white/10 rounded-lg p-5">
                                 <ul class="space-y-4">
                                     <li class="flex flex-col">
+                                        <span class="font-mono text-sm text-white">invalid_image_base64</span>
+                                        <span class="text-xs text-muted mt-1">O campo <code class="font-mono text-zinc-300">input_image_b64</code> não é base64 válido.</span>
+                                    </li>
+                                    <li class="flex flex-col border-t border-white/5 pt-3">
                                         <span class="font-mono text-sm text-white">invalid_aspect_ratio</span>
                                         <span class="text-xs text-muted mt-1">Imagens exatamente <span class="text-white">1:1</span> são rejeitadas. Use crop não quadrado.</span>
                                     </li>
@@ -451,8 +489,106 @@ Retry-After: 5
                     </div>
                 </div>
 
-                <!-- Endpoint: GET /jobs/{job_id} -->
+                <!-- Endpoint: POST /v1/generate -->
                 <div class="glass-card p-8 rounded-xl reveal delay-100">
+                    <div class="flex items-center gap-4 mb-3">
+                        <span class="px-3 py-1 rounded bg-info/20 text-info font-mono text-sm font-bold border border-info/20 shadow-[0_0_15px_rgba(88,166,255,0.25)]">POST</span>
+                        <h3 class="text-2xl font-mono text-white">/v1/generate</h3>
+                    </div>
+                    <p class="text-sm text-zinc-400 mb-8 border-b border-white/10 pb-6">Gera completions de texto com Gemma 4 pelo mesmo gateway autenticado. O padrão é streaming SSE compatível com frames <code class="font-mono text-accent">chat.completion.chunk</code>; use <code class="font-mono text-accent">stream: false</code> para receber JSON completo.</p>
+
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-12">
+                        <div>
+                            <h4 class="text-xs font-mono text-muted uppercase tracking-widest mb-4">Headers</h4>
+                            <div class="rounded-lg border border-white/10 overflow-hidden mb-8">
+                                <table class="w-full text-left text-sm text-zinc-300">
+                                    <thead class="bg-black/50 text-muted font-mono text-xs uppercase">
+                                        <tr><th class="py-3 px-4 border-b border-white/10">Header</th><th class="py-3 px-4 border-b border-white/10">Required</th><th class="py-3 px-4 border-b border-white/10">Notes</th></tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-white/5 bg-charcoal/50">
+                                        <tr class="hover:bg-white/5 transition-colors">
+                                            <td class="py-3 px-4 font-mono text-accentLight">Authorization: Bearer ...</td>
+                                            <td class="py-3 px-4"><span class="text-success font-medium">Yes</span></td>
+                                            <td class="py-3 px-4">Gateway API key</td>
+                                        </tr>
+                                        <tr class="hover:bg-white/5 transition-colors">
+                                            <td class="py-3 px-4 font-mono text-accentLight">Content-Type</td>
+                                            <td class="py-3 px-4"><span class="text-success font-medium">Yes</span></td>
+                                            <td class="py-3 px-4">application/json</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <h4 class="text-xs font-mono text-muted uppercase tracking-widest mb-4">Request Body</h4>
+                            <pre class="code-block text-xs">{
+  "messages": [
+    { "role": "user", "content": "Say OK" }
+  ],
+  "model": <span class="string">"gemma4:e4b"</span>,
+  "max_tokens": 512,
+  "stream": true
+}</pre>
+
+                            <h4 class="text-xs font-mono text-muted uppercase tracking-widest mt-8 mb-4">Text Error Codes</h4>
+                            <div class="rounded-lg border border-white/10 overflow-hidden">
+                                <table class="w-full text-left text-sm text-zinc-300">
+                                    <thead class="bg-black/50 text-muted font-mono text-xs uppercase">
+                                        <tr><th class="py-3 px-4 border-b border-white/10">HTTP</th><th class="py-3 px-4 border-b border-white/10">Error</th><th class="py-3 px-4 border-b border-white/10">Meaning</th></tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-white/5 bg-charcoal/50">
+                                        <tr class="hover:bg-white/5 transition-colors"><td class="py-3 px-4 font-mono">400</td><td class="py-3 px-4 font-mono text-accentLight">missing_messages</td><td class="py-3 px-4">messages[] ausente ou vazio</td></tr>
+                                        <tr class="hover:bg-white/5 transition-colors"><td class="py-3 px-4 font-mono">400</td><td class="py-3 px-4 font-mono text-accentLight">invalid_request</td><td class="py-3 px-4">Tipo, range ou role inválidos</td></tr>
+                                        <tr class="hover:bg-white/5 transition-colors"><td class="py-3 px-4 font-mono">413</td><td class="py-3 px-4 font-mono text-accentLight">request_too_large</td><td class="py-3 px-4">Body acima de 2 MB</td></tr>
+                                        <tr class="hover:bg-white/5 transition-colors"><td class="py-3 px-4 font-mono">401</td><td class="py-3 px-4 font-mono text-accentLight">invalid_api_key</td><td class="py-3 px-4">Chave ausente ou inválida</td></tr>
+                                        <tr class="hover:bg-white/5 transition-colors"><td class="py-3 px-4 font-mono">429</td><td class="py-3 px-4 font-mono text-accentLight">rate_limit_exceeded</td><td class="py-3 px-4">Token budget diário excedido</td></tr>
+                                        <tr class="hover:bg-white/5 transition-colors"><td class="py-3 px-4 font-mono">502</td><td class="py-3 px-4 font-mono text-accentLight">upstream_error</td><td class="py-3 px-4">Provider retornou erro</td></tr>
+                                        <tr class="hover:bg-white/5 transition-colors"><td class="py-3 px-4 font-mono">503</td><td class="py-3 px-4 font-mono text-accentLight">upstream_unavailable</td><td class="py-3 px-4">Provider ou rede indisponível</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <div>
+                            <h4 class="text-xs font-mono text-muted uppercase tracking-widest mb-4">Streaming Response</h4>
+                            <pre class="code-block text-xs mb-8">HTTP/1.1 <span class="keyword text-success">200 OK</span>
+Content-Type: text/event-stream
+X-RateLimit-Limit: 50000
+X-RateLimit-Remaining: 49750
+X-Gateway-Model: gemma4:e4b
+
+data: {"object":"chat.completion.chunk","model":"gemma4:e4b","choices":[{"index":0,"delta":{"role":"assistant"},"finish_reason":null}]}
+
+data: {"object":"chat.completion.chunk","model":"gemma4:e4b","choices":[{"index":0,"delta":{"content":"OK"},"finish_reason":null}]}
+
+data: {"object":"chat.completion.chunk","model":"gemma4:e4b","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}
+
+data: [DONE]</pre>
+
+                            <h4 class="text-xs font-mono text-muted uppercase tracking-widest mb-4">Non-Streaming Response</h4>
+                            <pre class="code-block text-xs">{
+  "object": <span class="string">"chat.completion"</span>,
+  "model": <span class="string">"gemma4:e4b"</span>,
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": <span class="string">"assistant"</span>,
+        "content": <span class="string">"OK"</span>
+      },
+      "finish_reason": <span class="string">"stop"</span>
+    }
+  ],
+  "usage": {
+    "total_tokens": 12
+  }
+}</pre>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Endpoint: GET /jobs/{job_id} -->
+                <div class="glass-card p-8 rounded-xl reveal delay-200">
                     <div class="flex items-center gap-4 mb-3">
                         <span class="px-3 py-1 rounded bg-success/20 text-success font-mono text-sm font-bold border border-success/20 shadow-[0_0_15px_rgba(0,204,102,0.2)]">GET</span>
                         <h3 class="text-2xl font-mono text-white">/jobs/{job_id}</h3>
@@ -609,7 +745,7 @@ Retry-After: 5
                         <div class="flex-1">
                             <h3 class="text-lg font-medium text-white group-hover:text-accent transition-colors">Release v0.3.0-alpha</h3>
                             <p class="text-xs text-muted mt-1 font-mono">Pre-release · 2026-04-24</p>
-                            <p class="text-xs text-zinc-400 mt-2">Release notes do Qwen-Image-Edit, SDK <code class="font-mono">edit()</code> e deploy serverless v0.2.0.</p>
+                            <p class="text-xs text-zinc-400 mt-2">Release notes do Qwen-Image-Edit, SDK <code class="font-mono">edit()</code> v0.3.0 e runtime serverless image-gen v0.2.0.</p>
                         </div>
                     </div>
                 </a>
