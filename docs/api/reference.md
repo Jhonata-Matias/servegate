@@ -1,22 +1,35 @@
-# servegate Image API Reference
+# servegate API Reference
 
 **Status:** Alpha  
 **Base URL:** `https://gemma4-gateway.jhonata-matias.workers.dev`
 
-This is the canonical HTTP contract for the async gateway introduced in `v0.2.0` and extended with image-to-image edit in `v0.3.0`. For TypeScript consumers, prefer the SDK in [`sdk/`](../../sdk/README.md).
+This is the canonical HTTP contract for the gateway. The async image surface was introduced in `v0.2.0`, extended with image-to-image edit in `v0.3.0`, and joined by the text-generation surface (`POST /v1/generate`, Gemma 4) in Story 4.2 of Epic 4 — Gemma Text Generation. For TypeScript consumers of the image side, prefer the SDK in [`sdk/`](../../sdk/README.md); a text-gen SDK addition is planned for Story 4.3.
 
 ## Overview
 
-The gateway no longer blocks on image generation. The contract is now:
+The gateway exposes two parallel surfaces — async images and synchronous-streaming text — under a single base URL and a single shared API-key scheme.
+
+### Image surface (async submit/poll)
 
 1. `POST /jobs` submits a generation request and returns `202`
 2. `GET /jobs/{job_id}` polls until the job completes or reaches a terminal state
 3. `POST /` is removed and returns a migration pointer
 
-All requests require `X-API-Key`. `POST /jobs` supports two request variants:
+`POST /jobs` supports two request variants:
 
 - Text-to-image: no `input_image_b64` field; routes to the existing FLUX.1-schnell workflow.
 - Image-to-image edit: includes `input_image_b64`; routes to Qwen-Image-Edit.
+
+### Text surface (streaming)
+
+1. `POST /v1/generate` returns OpenAI-compatible chat-completion output, default streaming via SSE (`text/event-stream` with `chat.completion.chunk` frames + `data: [DONE]`); pass `stream: false` for a single JSON `chat.completion` payload.
+
+The two surfaces share authentication and CORS handling but use **independent rate-limit buckets** (image: per-day request count; text: per-day token budget). They can be exercised in any order from the same client.
+
+All requests require the gateway API key:
+
+- **Image surface (`POST /jobs`, `GET /jobs/{id}`):** `X-API-Key: $GATEWAY_API_KEY`. Only this header is accepted on the image routes.
+- **Text surface (`POST /v1/generate`):** `Authorization: Bearer $GATEWAY_API_KEY` (preferred, OpenAI-style), with `X-API-Key: $GATEWAY_API_KEY` also accepted as a compatibility header.
 
 ## Quickstart
 
