@@ -1,26 +1,39 @@
-# servegate FLUX API Reference
+# servegate API Reference
 
 **Status:** Alpha  
 **Base URL:** `https://gemma4-gateway.jhonata-matias.workers.dev`
 
-This is the canonical HTTP contract for the async gateway introduced in `v0.2.0` and extended with image-to-image edit in `v0.3.0`. For TypeScript consumers, prefer the SDK in [`sdk/`](../../sdk/README.md).
+This is the canonical HTTP contract for the gateway. The async image surface was introduced in `v0.2.0`, extended with image-to-image edit in `v0.3.0`, and joined by the text-generation surface (`POST /v1/generate`, Gemma 4) in Story 4.2 of Epic 4 — Gemma Text Generation. For TypeScript consumers of the image side, prefer the SDK in [`sdk/`](../../sdk/README.md); a text-gen SDK addition is planned for Story 4.3.
 
 ## Overview
 
-The gateway no longer blocks on image generation. The contract is now:
+The gateway exposes two parallel surfaces — async images and synchronous-streaming text — under a single base URL and a single shared API-key scheme.
+
+### Image surface (async submit/poll)
 
 1. `POST /jobs` submits a generation request and returns `202`
 2. `GET /jobs/{job_id}` polls until the job completes or reaches a terminal state
 3. `POST /` is removed and returns a migration pointer
 
-All requests require `X-API-Key`. `POST /jobs` supports two request variants:
+`POST /jobs` supports two request variants:
 
 - Text-to-image: no `input_image_b64` field; routes to the existing FLUX.1-schnell workflow.
 - Image-to-image edit: includes `input_image_b64`; routes to Qwen-Image-Edit.
 
+### Text surface (streaming)
+
+1. `POST /v1/generate` returns OpenAI-compatible chat-completion output, default streaming via SSE (`text/event-stream` with `chat.completion.chunk` frames + `data: [DONE]`); pass `stream: false` for a single JSON `chat.completion` payload.
+
+The two surfaces share authentication and CORS handling but use **independent rate-limit buckets** (image: per-day request count; text: per-day token budget). They can be exercised in any order from the same client.
+
+All requests require the gateway API key:
+
+- **Image surface (`POST /jobs`, `GET /jobs/{id}`):** `X-API-Key: $GATEWAY_API_KEY`. Only this header is accepted on the image routes.
+- **Text surface (`POST /v1/generate`):** `Authorization: Bearer $GATEWAY_API_KEY` (preferred, OpenAI-style), with `X-API-Key: $GATEWAY_API_KEY` also accepted as a compatibility header.
+
 ## Quickstart
 
-### 1. Submit a job
+### 1a. Submit a text-to-image job
 
 ```bash
 curl -i -X POST https://gemma4-gateway.jhonata-matias.workers.dev/jobs \
@@ -54,6 +67,27 @@ X-RateLimit-Reset: 2026-04-24T00:00:00.000Z
 }
 ```
 
+### 1b. Submit an image-to-image edit job
+
+For edits, send the source image as `input_image_b64` in the same `POST /jobs` endpoint. The presence of that field selects the Qwen-Image-Edit branch.
+
+```bash
+INPUT_IMAGE_B64="$(base64 -w 0 input.png)"
+
+curl -i -X POST https://gemma4-gateway.jhonata-matias.workers.dev/jobs \
+  -H "X-API-Key: $GATEWAY_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"prompt\": \"make the jacket green while keeping the background unchanged\",
+    \"input_image_b64\": \"$INPUT_IMAGE_B64\",
+    \"strength\": 0.85,
+    \"steps\": 8,
+    \"seed\": 42
+  }"
+```
+
+The submit response is the same `202 Accepted` shape as text-to-image. Use the returned `job_id` with `GET /jobs/{job_id}`.
+
 ### 2. Poll for completion
 
 ```bash
@@ -83,17 +117,26 @@ Completed response:
     "image_b64": "<base64 PNG>",
     "metadata": {
       "seed": 42,
-      "elapsed_ms": 3100
+      "elapsed_ms": 3100,
+      "output_width": 720,
+      "output_height": 480,
+      "qwen_generated_width": 736,
+      "qwen_generated_height": 480
     }
   }
 }
 ```
 
+The dimension fields are present for edit jobs. Text-to-image jobs return the existing metadata fields only.
+
 ## Endpoints
 
 ### `POST /jobs`
 
-Submits a generation or edit request to RunPod asynchronously.
+Submits a generation or edit request to RunPod asynchronously. The route is selected by payload shape:
+
+- no `input_image_b64` field -> FLUX.1-schnell text-to-image
+- includes `input_image_b64` -> Qwen-Image-Edit image-to-image
 
 #### Headers
 
@@ -149,6 +192,7 @@ Validation rules:
 - Inputs above `1,048,576` pixels are defensively downsampled server-side while preserving aspect ratio.
 - MIME type is verified from image magic bytes; only PNG, JPEG, and WebP are accepted.
 - `width` and `height` are not accepted for edit jobs; source image dimensions drive the workflow.
+- Output is always returned as inline base64 PNG through `GET /jobs/{job_id}`.
 
 Known gotchas:
 
@@ -188,6 +232,21 @@ curl -i -X POST https://gemma4-gateway.jhonata-matias.workers.dev/jobs \
     \"steps\": 8
   }"
 ```
+
+#### Edit validation error codes
+
+All edit validation failures use a stable `error` code and include `code: 400` in the handler output. The SDK surfaces local equivalents as `ValidationError` before submit when possible.
+
+| Error | Meaning |
+|---|---|
+| `invalid_image_base64` | `input_image_b64` is missing, empty, malformed, or a non-base64 data URI |
+| `image_too_large` | Decoded image payload is larger than `8 MB` |
+| `unsupported_mime_type` | Magic bytes are not PNG, JPEG, or WebP |
+| `invalid_image` | Bytes passed signature checks but Pillow could not read the image |
+| `invalid_aspect_ratio` | Source image is exactly square (`1:1`) |
+| `invalid_i2i_parameters` | Edit request included `width` or `height`; source image dimensions are used instead |
+| `invalid_steps` | Edit `steps` is outside `4-50` |
+| `invalid_strength` | `strength` is outside `(0.0, 1.0]` |
 
 #### Success response
 
@@ -348,8 +407,108 @@ Typed terminal errors exposed by the SDK:
 | `NetworkError` | Client-to-gateway network/request failure |
 | `ValidationError` | Invalid local input before submit |
 
+For image-to-image, the SDK validates the image before any network call when possible. This catches unsupported MIME types, `1:1` aspect ratio, payloads over `8 MB`, and inputs above `1 MP` unless `autoDownsample: true` is used in Node.js with `sharp` available.
+
+## Text Generation
+
+### `POST /v1/generate`
+
+Returns Gemma 4 text completions through the same gateway key. The default response is streaming SSE.
+
+#### Headers
+
+| Header | Required | Description |
+|---|---|---|
+| `X-API-Key` | Yes | Shared gateway credential |
+| `Authorization: Bearer <key>` | Alternative | Accepted when `X-API-Key` is absent |
+| `Content-Type: application/json` | Yes | Request body must be JSON |
+
+#### Request
+
+```json
+{
+  "messages": [
+    { "role": "user", "content": "Say OK" }
+  ],
+  "model": "gemma4:e4b",
+  "max_tokens": 512,
+  "temperature": 0.7,
+  "top_p": 1.0,
+  "stream": true
+}
+```
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `messages` | array | Yes | Roles: `system`, `user`, `assistant`; `content` must be non-empty |
+| `model` | string | No | Defaults to `gemma4:e4b` |
+| `max_tokens` | integer | No | Defaults to `512`; alpha cap `2048` |
+| `temperature` | number | No | Range `0.0-2.0` |
+| `top_p` | number | No | Range `0.0-1.0` |
+| `stream` | boolean | No | Defaults to `true` |
+
+#### Streaming Response
+
+Status: `200 OK`
+
+```http
+Content-Type: text/event-stream
+Cache-Control: no-cache
+Connection: keep-alive
+X-RateLimit-Limit: 50000
+X-RateLimit-Remaining: 49750
+X-RateLimit-Reset: 2026-04-25T00:00:00.000Z
+X-Gateway-Model: gemma4:e4b
+```
+
+Frame shape:
+
+```text
+data: {"object":"chat.completion.chunk","model":"gemma4:e4b","choices":[{"index":0,"delta":{"role":"assistant","content":"OK"},"finish_reason":null}]}
+```
+
+#### Non-Streaming Response
+
+Set `"stream": false`.
+
+```json
+{
+  "object": "chat.completion",
+  "model": "gemma4:e4b",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "OK"
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "total_tokens": 12
+  }
+}
+```
+
+Gemma 4 through Ollama can include `message.reasoning` in non-streaming responses and `delta.reasoning` in streaming chunks. Clients should ignore unknown fields unless they explicitly surface reasoning.
+
+#### Text Error Codes
+
+| HTTP | `error` | Meaning |
+|---:|---|---|
+| 400 | `invalid_json` | Body is not valid JSON |
+| 400 | `missing_messages` | `messages[]` is missing or empty |
+| 400 | `invalid_request` | Field type/range/role validation failed |
+| 401 | `invalid_api_key` | Missing or invalid gateway key |
+| 413 | `request_too_large` | Body exceeds `2 MB` |
+| 429 | `rate_limit_exceeded` | Daily token budget exceeded |
+| 502 | `upstream_error` | Text provider returned an error |
+| 503 | `upstream_unavailable` | Text provider/network unavailable |
+
 ## Related
 
 - Migration guide: [migration-async.md](./migration-async.md)
 - ADR: [adr-0002-async-gateway-pattern.md](../architecture/adr-0002-async-gateway-pattern.md)
+- Image-to-image ADR: [adr-0003-image-to-image-model-selection.md](../architecture/adr-0003-image-to-image-model-selection.md)
 - Cold-start rationale: [adr-0001-flux-cold-start.md](../architecture/adr-0001-flux-cold-start.md)

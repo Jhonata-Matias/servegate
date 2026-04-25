@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8" />
     <meta content="width=device-width, initial-scale=1.0" name="viewport" />
-    <title>flux servegate (API v0.2.0)</title>
+    <title>flux servegate (API v0.3.0)</title>
 
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://code.iconify.design/iconify-icon/1.0.7/iconify-icon.min.js"></script>
@@ -140,19 +140,19 @@
         <section id="hero" class="relative z-10 grid grid-cols-1 md:grid-cols-12 border-b border-white/10 min-h-[85vh]">
             <div class="col-span-1 md:col-span-8 border-b md:border-b-0 md:border-r border-white/10 relative overflow-hidden flex flex-col justify-center p-8 md:p-20">
                 <div class="absolute top-10 w-full flex justify-between px-10 items-center opacity-50 z-20">
-                    <span class="text-xs font-mono text-muted tracking-widest">GATEWAY V0.2.0</span>
+                    <span class="text-xs font-mono text-muted tracking-widest">GATEWAY V0.3.0</span>
                     <iconify-icon class="text-xl text-white animate-spin-slow" icon="solar:star-fall-linear"></iconify-icon>
                 </div>
 
                 <div class="relative z-20 mt-10">
                     <span class="px-3 py-1 mb-6 inline-block rounded-full text-xs font-mono font-medium bg-accent/10 text-accent border border-accent/20">Alpha Status</span>
                     <h1 class="text-6xl md:text-8xl lg:text-[7rem] font-semibold tracking-tighter leading-[0.9] text-white">
-                        <span class="text-reveal-wrapper"><span class="text-reveal-content delay-100">FLUX API</span></span><br/>
-                        <span class="text-reveal-wrapper"><span class="text-reveal-content delay-200 text-transparent bg-clip-text bg-gradient-to-r from-accent to-accentLight">Reference</span></span>
+                        <span class="text-reveal-wrapper"><span class="text-reveal-content delay-100">Image + Text</span></span><br/>
+                        <span class="text-reveal-wrapper"><span class="text-reveal-content delay-200 text-transparent bg-clip-text bg-gradient-to-r from-accent to-accentLight">API Reference</span></span>
                     </h1>
 
                     <p class="mt-8 text-muted text-lg md:text-xl max-w-xl font-light reveal delay-400">
-                        O contrato HTTP canônico para a API de geração de imagens descentralizada via RunPod. A nova arquitetura do gateway (v0.2.0) opera de forma assíncrona, não bloqueando a sua thread e escalando eficientemente.
+                        O contrato HTTP canônico para gerar imagens com FLUX.1-schnell, editar imagens com Qwen-Image-Edit e gerar texto com Gemma 4. Imagens usam submit/poll assíncrono; texto usa streaming SSE no mesmo gateway autenticado.
                     </p>
 
                     <div class="mt-12 flex items-center gap-6 reveal delay-500 relative z-30">
@@ -195,8 +195,8 @@
                 <div class="flashlight-card row-span-1 p-10 flex flex-col justify-between reveal delay-400 group relative overflow-hidden" onmousemove="const rect = this.getBoundingClientRect(); this.style.setProperty('--mouse-x', `${event.clientX - rect.left}px`); this.style.setProperty('--mouse-y', `${event.clientY - rect.top}px`);">
                     <iconify-icon class="text-4xl text-muted group-hover:text-warning transition-colors duration-500" icon="solar:stopwatch-bold-duotone"></iconify-icon>
                     <div>
-                        <h2 class="text-3xl font-medium tracking-tighter text-white">100 / Dia</h2>
-                        <span class="text-xs font-mono text-muted mt-2 block uppercase tracking-widest">Submit Quota Daily Limit</span>
+                        <h2 class="text-3xl font-medium tracking-tighter text-white">T2I + I2I + Text</h2>
+                        <span class="text-xs font-mono text-muted mt-2 block uppercase tracking-widest">FLUX + Qwen + Gemma 4</span>
                     </div>
                     <div class="absolute -bottom-10 -right-10 w-32 h-32 bg-warning opacity-0 group-hover:opacity-10 rounded-full blur-3xl transition-opacity duration-700 pointer-events-none"></div>
                 </div>
@@ -207,16 +207,16 @@
         <section id="quickstart" class="relative z-10 border-b border-white/10 pt-20 pb-20">
             <div class="px-8 md:px-12 mb-12">
                 <div class="section-header reveal">01 // Quickstart</div>
-                <h2 class="text-4xl md:text-5xl font-medium tracking-tight text-white reveal delay-100">Gerando a primeira imagem</h2>
+                <h2 class="text-4xl md:text-5xl font-medium tracking-tight text-white reveal delay-100">Gerando e editando imagens</h2>
             </div>
             
             <div class="grid grid-cols-1 lg:grid-cols-2 border-t border-white/10">
                 <div class="p-8 md:p-12 border-b lg:border-b-0 lg:border-r border-white/10 glass-panel reveal">
                     <div class="flex items-baseline gap-4 mb-4">
                         <span class="flex items-center justify-center w-6 h-6 rounded bg-accent/20 text-accent font-mono text-sm font-bold border border-accent/30">1</span>
-                        <h3 class="text-2xl font-medium">Submeter um request</h3>
+                        <h3 class="text-2xl font-medium">Submeter geração T2I</h3>
                     </div>
-                    <p class="text-muted text-sm mb-6">Submeta um job de geração e aguarde um retorno <span class="text-white font-mono text-xs bg-white/10 px-1 rounded">202 Accepted</span>.</p>
+                    <p class="text-muted text-sm mb-6">Submeta um job de text-to-image e aguarde um retorno <span class="text-white font-mono text-xs bg-white/10 px-1 rounded">202 Accepted</span>.</p>
                     
                     <pre class="code-block mb-6"><span class="keyword">curl</span> -i -X POST <span class="string">https://gemma4-gateway.jhonata-matias.workers.dev/jobs</span> \
   -H <span class="string">"X-API-Key: $GATEWAY_API_KEY"</span> \
@@ -271,10 +271,79 @@ Retry-After: 5
     "image_b64": <span class="string">"&lt;base64 PNG&gt;"</span>,
     "metadata": {
       "seed": 42,
-      "elapsed_ms": 3100
+      "elapsed_ms": 3100,
+      "output_width": 720,
+      "output_height": 480
     }
   }
 }</pre>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="px-8 md:px-12 mt-10">
+                <div class="glass-panel border border-white/10 rounded-xl p-8 md:p-10 reveal delay-200">
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-10 items-start">
+                        <div>
+                            <div class="flex items-center gap-3 mb-4">
+                                <span class="px-3 py-1 rounded bg-success/10 text-success font-mono text-xs font-bold border border-success/20">I2I</span>
+                                <h3 class="text-2xl font-medium text-white">Editar uma imagem existente</h3>
+                            </div>
+                            <p class="text-sm text-zinc-400 leading-relaxed mb-5">Use o mesmo <code class="font-mono text-accent">POST /jobs</code>. O campo <code class="font-mono text-accent">input_image_b64</code> seleciona Qwen-Image-Edit; o resultado continua chegando por polling em <code class="font-mono text-accent">GET /jobs/{job_id}</code>.</p>
+                            <ul class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs text-zinc-400">
+                                <li class="border border-white/10 rounded p-3 bg-black/20"><span class="text-white font-mono">PNG/JPEG/WebP</span><br/>verificado por magic bytes</li>
+                                <li class="border border-white/10 rounded p-3 bg-black/20"><span class="text-white font-mono">&lt;= 8 MB</span><br/>payload decodado</li>
+                                <li class="border border-white/10 rounded p-3 bg-black/20"><span class="text-white font-mono">&lt;= 1 MP</span><br/>downsample defensivo</li>
+                                <li class="border border-white/10 rounded p-3 bg-black/20"><span class="text-white font-mono">sem 1:1</span><br/>use crop não quadrado</li>
+                            </ul>
+                        </div>
+
+                        <pre class="code-block text-xs"><span class="keyword">INPUT_IMAGE_B64</span>=<span class="string">"$(base64 -w 0 input.png)"</span>
+
+<span class="keyword">curl</span> -i -X POST <span class="string">https://gemma4-gateway.jhonata-matias.workers.dev/jobs</span> \
+  -H <span class="string">"X-API-Key: $GATEWAY_API_KEY"</span> \
+  -H <span class="string">"Content-Type: application/json"</span> \
+  -d "{
+    \"prompt\": \"make the jacket green while keeping the background unchanged\",
+    \"input_image_b64\": \"$INPUT_IMAGE_B64\",
+    \"strength\": 0.85,
+    \"steps\": 8,
+    \"seed\": 42
+  }"</pre>
+                    </div>
+                </div>
+            </div>
+
+            <div class="px-8 md:px-12 mt-10">
+                <div class="glass-panel border border-white/10 rounded-xl p-8 md:p-10 reveal delay-300">
+                    <div class="flex items-center gap-3 mb-6">
+                        <span class="px-3 py-1 rounded bg-info/10 text-info font-mono text-xs font-bold border border-info/20">TEXT</span>
+                        <h3 class="text-2xl font-medium text-white">Gerar texto com Gemma 4</h3>
+                    </div>
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-10 items-start">
+                        <div>
+                            <h4 class="text-xs font-mono text-muted uppercase tracking-widest mb-4">Streaming SSE</h4>
+                            <pre class="code-block text-xs"><span class="keyword">curl</span> -N -sS <span class="string">https://gemma4-gateway.jhonata-matias.workers.dev/v1/generate</span> \
+  -H <span class="string">"Authorization: Bearer $GATEWAY_API_KEY"</span> \
+  -H <span class="string">"Content-Type: application/json"</span> \
+  -d '{
+    "messages": [{"role": "user", "content": "Write one concise haiku about servers."}],
+    "max_tokens": 256,
+    "temperature": 0.7,
+    "stream": true
+  }'</pre>
+                        </div>
+                        <div>
+                            <h4 class="text-xs font-mono text-muted uppercase tracking-widest mb-4">Non-Streaming JSON</h4>
+                            <pre class="code-block text-xs"><span class="keyword">curl</span> -sS <span class="string">https://gemma4-gateway.jhonata-matias.workers.dev/v1/generate</span> \
+  -H <span class="string">"Authorization: Bearer $GATEWAY_API_KEY"</span> \
+  -H <span class="string">"Content-Type: application/json"</span> \
+  -d '{
+    "messages": [{"role": "user", "content": "Say OK"}],
+    "max_tokens": 64,
+    "stream": false
+  }' | <span class="keyword">jq</span></pre>
                         </div>
                     </div>
                 </div>
@@ -296,11 +365,11 @@ Retry-After: 5
                         <span class="px-3 py-1 rounded bg-accent/20 text-accent font-mono text-sm font-bold border border-accent/20 shadow-[0_0_15px_rgba(29,127,229,0.3)]">POST</span>
                         <h3 class="text-2xl font-mono text-white">/jobs</h3>
                     </div>
-                    <p class="text-sm text-zinc-400 mb-8 border-b border-white/10 pb-6">Submit de geração de imagens de forma assíncrona. Esta rota consome o Rate Limit diário e retorna um ID de job para rastreamento.</p>
+                    <p class="text-sm text-zinc-400 mb-8 border-b border-white/10 pb-6">Submit assíncrono para text-to-image ou image-to-image. Sem <code class="font-mono text-accent">input_image_b64</code> usa FLUX.1-schnell; com esse campo usa Qwen-Image-Edit. Esta rota consome o Rate Limit diário e retorna um ID de job para rastreamento.</p>
 
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-12">
                         <div>
-                            <h4 class="text-xs font-mono text-muted uppercase tracking-widest mb-4">Request Body</h4>
+                            <h4 class="text-xs font-mono text-muted uppercase tracking-widest mb-4">T2I Request Body</h4>
                             <div class="rounded-lg border border-white/10 overflow-hidden">
                                 <table class="w-full text-left text-sm text-zinc-300">
                                     <thead class="bg-black/50 text-muted font-mono text-xs uppercase">
@@ -335,6 +404,41 @@ Retry-After: 5
                                     </tbody>
                                 </table>
                             </div>
+                            <h4 class="text-xs font-mono text-muted uppercase tracking-widest mt-8 mb-4">I2I Request Body</h4>
+                            <div class="rounded-lg border border-white/10 overflow-hidden">
+                                <table class="w-full text-left text-sm text-zinc-300">
+                                    <thead class="bg-black/50 text-muted font-mono text-xs uppercase">
+                                        <tr><th class="py-3 px-4 border-b border-white/10">Field</th><th class="py-3 px-4 border-b border-white/10">Type</th><th class="py-3 px-4 border-b border-white/10">Required</th></tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-white/5 bg-charcoal/50">
+                                        <tr class="hover:bg-white/5 transition-colors">
+                                            <td class="py-3 px-4 font-mono text-accentLight">prompt</td>
+                                            <td class="py-3 px-4">string</td>
+                                            <td class="py-3 px-4"><span class="text-success font-medium">Yes</span> (edit instruction)</td>
+                                        </tr>
+                                        <tr class="hover:bg-white/5 transition-colors">
+                                            <td class="py-3 px-4 font-mono text-accentLight">input_image_b64</td>
+                                            <td class="py-3 px-4">string</td>
+                                            <td class="py-3 px-4"><span class="text-success font-medium">Yes</span> (PNG/JPEG/WebP)</td>
+                                        </tr>
+                                        <tr class="hover:bg-white/5 transition-colors">
+                                            <td class="py-3 px-4 font-mono text-zinc-500">strength</td>
+                                            <td class="py-3 px-4">number</td>
+                                            <td class="py-3 px-4 text-zinc-500">No (default 0.85)</td>
+                                        </tr>
+                                        <tr class="hover:bg-white/5 transition-colors">
+                                            <td class="py-3 px-4 font-mono text-zinc-500">steps</td>
+                                            <td class="py-3 px-4">integer</td>
+                                            <td class="py-3 px-4 text-zinc-500">No (default 8)</td>
+                                        </tr>
+                                        <tr class="hover:bg-white/5 transition-colors">
+                                            <td class="py-3 px-4 font-mono text-zinc-500">seed</td>
+                                            <td class="py-3 px-4">integer</td>
+                                            <td class="py-3 px-4 text-zinc-500">No</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
 
                         <div>
@@ -355,24 +459,148 @@ Retry-After: 5
                                     </li>
                                 </ul>
                             </div>
+
+                            <h4 class="text-xs font-mono text-muted uppercase tracking-widest mt-8 mb-4">I2I Validation</h4>
+                            <div class="bg-charcoal border border-white/10 rounded-lg p-5">
+                                <ul class="space-y-4">
+                                    <li class="flex flex-col">
+                                        <span class="font-mono text-sm text-white">invalid_image_base64</span>
+                                        <span class="text-xs text-muted mt-1">O campo <code class="font-mono text-zinc-300">input_image_b64</code> não é base64 válido.</span>
+                                    </li>
+                                    <li class="flex flex-col border-t border-white/5 pt-3">
+                                        <span class="font-mono text-sm text-white">invalid_aspect_ratio</span>
+                                        <span class="text-xs text-muted mt-1">Imagens exatamente <span class="text-white">1:1</span> são rejeitadas. Use crop não quadrado.</span>
+                                    </li>
+                                    <li class="flex flex-col border-t border-white/5 pt-3">
+                                        <span class="font-mono text-sm text-white">image_too_large</span>
+                                        <span class="text-xs text-muted mt-1">Payload decodado precisa ser <span class="text-white">&lt;= 8 MB</span>.</span>
+                                    </li>
+                                    <li class="flex flex-col border-t border-white/5 pt-3">
+                                        <span class="font-mono text-sm text-white">unsupported_mime_type</span>
+                                        <span class="text-xs text-muted mt-1">Apenas PNG, JPEG e WebP por magic bytes.</span>
+                                    </li>
+                                    <li class="flex flex-col border-t border-white/5 pt-3">
+                                        <span class="font-mono text-sm text-white">invalid_steps / invalid_strength</span>
+                                        <span class="text-xs text-muted mt-1"><code class="font-mono text-zinc-300">steps</code> aceita 4-50; <code class="font-mono text-zinc-300">strength</code> aceita 0.0 &lt; x &lt;= 1.0.</span>
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Endpoint: POST /v1/generate -->
+                <div class="glass-card p-8 rounded-xl reveal delay-100">
+                    <div class="flex items-center gap-4 mb-3">
+                        <span class="px-3 py-1 rounded bg-info/20 text-info font-mono text-sm font-bold border border-info/20 shadow-[0_0_15px_rgba(88,166,255,0.25)]">POST</span>
+                        <h3 class="text-2xl font-mono text-white">/v1/generate</h3>
+                    </div>
+                    <p class="text-sm text-zinc-400 mb-8 border-b border-white/10 pb-6">Gera completions de texto com Gemma 4 pelo mesmo gateway autenticado. O padrão é streaming SSE compatível com frames <code class="font-mono text-accent">chat.completion.chunk</code>; use <code class="font-mono text-accent">stream: false</code> para receber JSON completo.</p>
+
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-12">
+                        <div>
+                            <h4 class="text-xs font-mono text-muted uppercase tracking-widest mb-4">Headers</h4>
+                            <div class="rounded-lg border border-white/10 overflow-hidden mb-8">
+                                <table class="w-full text-left text-sm text-zinc-300">
+                                    <thead class="bg-black/50 text-muted font-mono text-xs uppercase">
+                                        <tr><th class="py-3 px-4 border-b border-white/10">Header</th><th class="py-3 px-4 border-b border-white/10">Required</th><th class="py-3 px-4 border-b border-white/10">Notes</th></tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-white/5 bg-charcoal/50">
+                                        <tr class="hover:bg-white/5 transition-colors">
+                                            <td class="py-3 px-4 font-mono text-accentLight">Authorization: Bearer ...</td>
+                                            <td class="py-3 px-4"><span class="text-success font-medium">Yes</span></td>
+                                            <td class="py-3 px-4">Gateway API key</td>
+                                        </tr>
+                                        <tr class="hover:bg-white/5 transition-colors">
+                                            <td class="py-3 px-4 font-mono text-accentLight">Content-Type</td>
+                                            <td class="py-3 px-4"><span class="text-success font-medium">Yes</span></td>
+                                            <td class="py-3 px-4">application/json</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <h4 class="text-xs font-mono text-muted uppercase tracking-widest mb-4">Request Body</h4>
+                            <pre class="code-block text-xs">{
+  "messages": [
+    { "role": "user", "content": "Say OK" }
+  ],
+  "model": <span class="string">"gemma4:e4b"</span>,
+  "max_tokens": 512,
+  "stream": true
+}</pre>
+
+                            <h4 class="text-xs font-mono text-muted uppercase tracking-widest mt-8 mb-4">Text Error Codes</h4>
+                            <div class="rounded-lg border border-white/10 overflow-hidden">
+                                <table class="w-full text-left text-sm text-zinc-300">
+                                    <thead class="bg-black/50 text-muted font-mono text-xs uppercase">
+                                        <tr><th class="py-3 px-4 border-b border-white/10">HTTP</th><th class="py-3 px-4 border-b border-white/10">Error</th><th class="py-3 px-4 border-b border-white/10">Meaning</th></tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-white/5 bg-charcoal/50">
+                                        <tr class="hover:bg-white/5 transition-colors"><td class="py-3 px-4 font-mono">400</td><td class="py-3 px-4 font-mono text-accentLight">missing_messages</td><td class="py-3 px-4">messages[] ausente ou vazio</td></tr>
+                                        <tr class="hover:bg-white/5 transition-colors"><td class="py-3 px-4 font-mono">400</td><td class="py-3 px-4 font-mono text-accentLight">invalid_request</td><td class="py-3 px-4">Tipo, range ou role inválidos</td></tr>
+                                        <tr class="hover:bg-white/5 transition-colors"><td class="py-3 px-4 font-mono">413</td><td class="py-3 px-4 font-mono text-accentLight">request_too_large</td><td class="py-3 px-4">Body acima de 2 MB</td></tr>
+                                        <tr class="hover:bg-white/5 transition-colors"><td class="py-3 px-4 font-mono">401</td><td class="py-3 px-4 font-mono text-accentLight">invalid_api_key</td><td class="py-3 px-4">Chave ausente ou inválida</td></tr>
+                                        <tr class="hover:bg-white/5 transition-colors"><td class="py-3 px-4 font-mono">429</td><td class="py-3 px-4 font-mono text-accentLight">rate_limit_exceeded</td><td class="py-3 px-4">Token budget diário excedido</td></tr>
+                                        <tr class="hover:bg-white/5 transition-colors"><td class="py-3 px-4 font-mono">502</td><td class="py-3 px-4 font-mono text-accentLight">upstream_error</td><td class="py-3 px-4">Provider retornou erro</td></tr>
+                                        <tr class="hover:bg-white/5 transition-colors"><td class="py-3 px-4 font-mono">503</td><td class="py-3 px-4 font-mono text-accentLight">upstream_unavailable</td><td class="py-3 px-4">Provider ou rede indisponível</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <div>
+                            <h4 class="text-xs font-mono text-muted uppercase tracking-widest mb-4">Streaming Response</h4>
+                            <pre class="code-block text-xs mb-8">HTTP/1.1 <span class="keyword text-success">200 OK</span>
+Content-Type: text/event-stream
+X-RateLimit-Limit: 50000
+X-RateLimit-Remaining: 49750
+X-Gateway-Model: gemma4:e4b
+
+data: {"object":"chat.completion.chunk","model":"gemma4:e4b","choices":[{"index":0,"delta":{"role":"assistant"},"finish_reason":null}]}
+
+data: {"object":"chat.completion.chunk","model":"gemma4:e4b","choices":[{"index":0,"delta":{"content":"OK"},"finish_reason":null}]}
+
+data: {"object":"chat.completion.chunk","model":"gemma4:e4b","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}
+
+data: [DONE]</pre>
+
+                            <h4 class="text-xs font-mono text-muted uppercase tracking-widest mb-4">Non-Streaming Response</h4>
+                            <pre class="code-block text-xs">{
+  "object": <span class="string">"chat.completion"</span>,
+  "model": <span class="string">"gemma4:e4b"</span>,
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": <span class="string">"assistant"</span>,
+        "content": <span class="string">"OK"</span>
+      },
+      "finish_reason": <span class="string">"stop"</span>
+    }
+  ],
+  "usage": {
+    "total_tokens": 12
+  }
+}</pre>
                         </div>
                     </div>
                 </div>
 
                 <!-- Endpoint: GET /jobs/{job_id} -->
-                <div class="glass-card p-8 rounded-xl reveal delay-100">
+                <div class="glass-card p-8 rounded-xl reveal delay-200">
                     <div class="flex items-center gap-4 mb-3">
                         <span class="px-3 py-1 rounded bg-success/20 text-success font-mono text-sm font-bold border border-success/20 shadow-[0_0_15px_rgba(0,204,102,0.2)]">GET</span>
                         <h3 class="text-2xl font-mono text-white">/jobs/{job_id}</h3>
                     </div>
-                    <p class="text-sm text-zinc-400 mb-8 border-b border-white/10 pb-6">Faz pooling do estado de um job submetido. Este endpoint <span class="text-success font-bold">não consome</span> quota ou limite diário.</p>
+                    <p class="text-sm text-zinc-400 mb-8 border-b border-white/10 pb-6">Faz polling do estado de um job submetido. Este endpoint <span class="text-success font-bold">não consome</span> quota ou limite diário.</p>
 
                     <h4 class="text-xs font-mono text-muted uppercase tracking-widest mb-4">Mapeamento de Retorno (States)</h4>
                     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                         <div class="p-5 bg-success/5 border border-success/20 rounded relative hover:bg-success/10 transition-colors">
                             <span class="text-xs font-mono text-success drop-shadow-[0_0_5px_rgba(0,204,102,0.8)]">200 OK</span>
                             <div class="mt-2 text-sm text-white">Sucesso</div>
-                            <div class="mt-1 text-xs text-zinc-400 font-mono">{ output: ... }</div>
+                            <div class="mt-1 text-xs text-zinc-400 font-mono">{ output: image_b64, metadata }</div>
                         </div>
 
                         <div class="p-5 bg-warning/5 border border-warning/20 rounded relative hover:bg-warning/10 transition-colors">
@@ -412,7 +640,7 @@ Retry-After: 5
                         <div class="flex justify-between items-center mb-1">
                             <span class="font-mono text-warning text-sm">429 rate_limit_exceeded</span>
                         </div>
-                        <p class="text-xs text-zinc-400">Quota de uso exaurida, limite diário atigindo (100 jobs/dia).</p>
+                        <p class="text-xs text-zinc-400">Quota de uso exaurida, limite diário atingido (100 jobs/dia).</p>
                     </div>
 
                     <div class="p-5 border-l-2 border-danger bg-black/40">
@@ -434,7 +662,14 @@ Retry-After: 5
                             <span class="font-mono text-white text-sm">400 invalid_json</span>
                             <span class="font-mono text-white text-sm">500 config_error</span>
                         </div>
-                        <p class="text-xs text-zinc-400">Payload mal formato no Body, ou erro persistente mascara do upstream do RunPod.</p>
+                        <p class="text-xs text-zinc-400">Payload malformado no body, ou erro persistente mascarado do upstream do RunPod.</p>
+                    </div>
+
+                    <div class="p-5 border-l-2 border-accent bg-black/40">
+                        <div class="flex justify-between items-center mb-1">
+                            <span class="font-mono text-accent text-sm">400 i2i_validation</span>
+                        </div>
+                        <p class="text-xs text-zinc-400">Chamadas <code class="font-mono text-zinc-300">edit()</code> podem retornar <code class="font-mono text-zinc-300">invalid_image_base64</code>, <code class="font-mono text-zinc-300">image_too_large</code>, <code class="font-mono text-zinc-300">unsupported_mime_type</code>, <code class="font-mono text-zinc-300">invalid_aspect_ratio</code>, <code class="font-mono text-zinc-300">invalid_steps</code> ou <code class="font-mono text-zinc-300">invalid_strength</code>.</p>
                     </div>
                 </div>
 
@@ -444,7 +679,7 @@ Retry-After: 5
                         <h3 class="text-xl font-medium text-white">SDK Client TypeScript</h3>
                     </div>
                     <p class="text-sm text-zinc-300 mb-6 leading-relaxed">
-                        O pacote <code class="font-mono text-accent bg-accent/10 px-2 py-0.5 rounded border border-accent/20">@jhonata-matias/flux-client@0.3.0</code> abstrai de forma elegante toda essa camada de pooling nos métodos <code class="font-mono text-zinc-300">generate()</code> (text-to-image) e <code class="font-mono text-zinc-300">edit()</code> (image-to-image via Qwen-Image-Edit self-hosted, Apache 2.0) retornando os seguintes tratamentos nativos:
+                        O pacote <code class="font-mono text-accent bg-accent/10 px-2 py-0.5 rounded border border-accent/20">@jhonata-matias/flux-client@0.3.0</code> abstrai o polling nos métodos <code class="font-mono text-zinc-300">generate()</code> (text-to-image) e <code class="font-mono text-zinc-300">edit()</code> (image-to-image via Qwen-Image-Edit self-hosted, Apache 2.0) retornando os seguintes tratamentos nativos:
                     </p>
                     <ul class="space-y-4">
                         <li class="flex items-start gap-3 border-b border-white/5 pb-3">
@@ -465,7 +700,7 @@ Retry-After: 5
                             <iconify-icon icon="solar:shield-warning-bold-duotone" class="text-pink-500 mt-0.5"></iconify-icon> 
                             <div>
                                 <span class="font-bold text-sm text-white">NetworkError / ValidationError</span>
-                                <p class="text-xs text-zinc-400">Falha ao iniciar payload na base local.</p>
+                                <p class="text-xs text-zinc-400">Falha de rede ou validação local antes do submit. Para <code class="font-mono text-zinc-300">edit()</code>, o SDK valida MIME, 1:1, 8 MB e 1 MP antes da chamada quando possível.</p>
                             </div>
                         </li>
                     </ul>
@@ -493,13 +728,24 @@ Retry-After: 5
                     </div>
                 </a>
 
-                <a href="https://github.com/Jhonata-Matias/servegate/releases/tag/v0.2.0-alpha" target="_blank" rel="noopener" data-resource="release" class="group glass-card p-6 rounded-xl block transition-all hover:border-accent/30 cursor-pointer">
+                <a href="https://github.com/Jhonata-Matias/servegate/blob/main/docs/api/reference.md" target="_blank" rel="noopener" data-resource="api" class="group glass-card p-6 rounded-xl block transition-all hover:border-accent/30 cursor-pointer">
+                    <div class="flex items-start gap-4">
+                        <iconify-icon class="text-3xl text-success" icon="solar:document-text-bold-duotone"></iconify-icon>
+                        <div class="flex-1">
+                            <h3 class="text-lg font-medium text-white group-hover:text-accent transition-colors">API Reference</h3>
+                            <p class="text-xs text-muted mt-1 font-mono">docs/api/reference.md</p>
+                            <p class="text-xs text-zinc-400 mt-2">Contrato HTTP completo: T2I, i2i, polling, validação e erros.</p>
+                        </div>
+                    </div>
+                </a>
+
+                <a href="https://github.com/Jhonata-Matias/servegate/releases/tag/v0.3.0-alpha" target="_blank" rel="noopener" data-resource="release" class="group glass-card p-6 rounded-xl block transition-all hover:border-accent/30 cursor-pointer">
                     <div class="flex items-start gap-4">
                         <iconify-icon class="text-3xl text-accent" icon="solar:tag-horizontal-bold-duotone"></iconify-icon>
                         <div class="flex-1">
-                            <h3 class="text-lg font-medium text-white group-hover:text-accent transition-colors">Release v0.2.0-alpha</h3>
-                            <p class="text-xs text-muted mt-1 font-mono">Pre-release · 2026-04-23</p>
-                            <p class="text-xs text-zinc-400 mt-2">Release notes completos do async refactor + SDK breaking changes (<code class="font-mono">ColdStartError</code> → <code class="font-mono">TimeoutError</code>).</p>
+                            <h3 class="text-lg font-medium text-white group-hover:text-accent transition-colors">Release v0.3.0-alpha</h3>
+                            <p class="text-xs text-muted mt-1 font-mono">Pre-release · 2026-04-24</p>
+                            <p class="text-xs text-zinc-400 mt-2">Release notes do Qwen-Image-Edit, SDK <code class="font-mono">edit()</code> v0.3.0 e runtime serverless image-gen v0.2.0.</p>
                         </div>
                     </div>
                 </a>
@@ -521,7 +767,7 @@ Retry-After: 5
                         <div class="flex-1">
                             <h3 class="text-lg font-medium text-white group-hover:text-accent transition-colors">Developer Onboarding</h3>
                             <p class="text-xs text-muted mt-1 font-mono">EN + pt-BR <span class="text-zinc-600">(ambos no modal)</span></p>
-                            <p class="text-xs text-zinc-400 mt-2">5 passos ~15min: access request → <code class="font-mono">npm install</code> → primeira imagem.</p>
+                            <p class="text-xs text-zinc-400 mt-2">5 passos ~15min: access request → <code class="font-mono">npm install</code> → primeira geração ou edição.</p>
                         </div>
                     </div>
                 </a>
@@ -537,13 +783,13 @@ Retry-After: 5
                     </div>
                 </a>
 
-                <a href="https://github.com/Jhonata-Matias/servegate/blob/main/docs/architecture/adr-0002-async-gateway-pattern.md" target="_blank" rel="noopener" data-resource="adr" class="group glass-card p-6 rounded-xl block transition-all hover:border-accent/30 cursor-pointer">
+                <a href="https://github.com/Jhonata-Matias/servegate/blob/main/docs/architecture/adr-0003-image-to-image-model-selection.md" target="_blank" rel="noopener" data-resource="adr" class="group glass-card p-6 rounded-xl block transition-all hover:border-accent/30 cursor-pointer">
                     <div class="flex items-start gap-4">
                         <iconify-icon class="text-3xl text-pink-500" icon="solar:diagram-down-bold-duotone"></iconify-icon>
                         <div class="flex-1">
-                            <h3 class="text-lg font-medium text-white group-hover:text-accent transition-colors">ADR-0002 Async Pattern</h3>
+                            <h3 class="text-lg font-medium text-white group-hover:text-accent transition-colors">ADR-0003 Image-to-Image</h3>
                             <p class="text-xs text-muted mt-1 font-mono">Architectural Decision Record</p>
-                            <p class="text-xs text-zinc-400 mt-2">Por que async submit/poll? Contexto do timeout cliff 60s (Worker) vs ~130s cold start.</p>
+                            <p class="text-xs text-zinc-400 mt-2">Decisão de modelo, licença Apache 2.0, validações e gotchas do Qwen-Image-Edit.</p>
                         </div>
                     </div>
                 </a>
@@ -551,7 +797,7 @@ Retry-After: 5
 
             <div class="mt-16 mx-8 md:mx-12 pt-10 border-t border-white/5 text-center">
                 <p class="text-xs font-mono text-muted uppercase tracking-widest">servegate · Alpha · MIT License</p>
-                <p class="text-xs text-zinc-500 mt-2">Gateway em produção desde 2026-04-23 · SDK v0.2.0 published em GitHub Packages</p>
+                <p class="text-xs text-zinc-500 mt-2">Gateway em produção desde 2026-04-23 · SDK v0.3.0 published em GitHub Packages</p>
                 <a href="https://github.com/Jhonata-Matias/servegate" target="_blank" rel="noopener" class="inline-flex items-center gap-2 mt-4 text-xs font-mono text-accent hover:underline">
                     <iconify-icon icon="mdi:github"></iconify-icon>
                     github.com/Jhonata-Matias/servegate →
@@ -624,11 +870,16 @@ Retry-After: 5
                     githubUrl: `https://github.com/${REPO}`,
                     resolveBase: blob('README.md'),
                 },
+                api: {
+                    title: 'API Reference · servegate',
+                    rawUrl: raw('docs/api/reference.md'),
+                    githubUrl: blob('docs/api/reference.md'),
+                },
                 release: {
-                    title: 'Release v0.2.0-alpha',
+                    title: 'Release v0.3.0-alpha',
                     type: 'release',
-                    tag: 'v0.2.0-alpha',
-                    githubUrl: `https://github.com/${REPO}/releases/tag/v0.2.0-alpha`,
+                    tag: 'v0.3.0-alpha',
+                    githubUrl: `https://github.com/${REPO}/releases/tag/v0.3.0-alpha`,
                     resolveBase: `https://github.com/${REPO}/blob/${BRANCH}/`,
                 },
                 migration: {
@@ -647,9 +898,9 @@ Retry-After: 5
                     githubUrl: blob('sdk/CHANGELOG.md'),
                 },
                 adr: {
-                    title: 'ADR-0002 — Async Gateway Pattern',
-                    rawUrl: raw('docs/architecture/adr-0002-async-gateway-pattern.md'),
-                    githubUrl: blob('docs/architecture/adr-0002-async-gateway-pattern.md'),
+                    title: 'ADR-0003 — Image-to-Image Model Selection',
+                    rawUrl: raw('docs/architecture/adr-0003-image-to-image-model-selection.md'),
+                    githubUrl: blob('docs/architecture/adr-0003-image-to-image-model-selection.md'),
                 },
             };
 

@@ -38,7 +38,40 @@
 
 ## 📌 Follow-ups
 
-_(empty)_
+### FU-4.2.1 — KV writes/day monitoring + alert at 80% of free-tier ceiling
+
+- **Priority:** 🟡 Medium
+- **Related Story:** 4.2 (Gemma Gateway + RunPod text endpoint)
+- **Source:** @po Pax review on 2026-04-24 — user question about Cloudflare gateway security + free-tier rate-limit ceiling
+- **Context:** Cloudflare Workers KV free-tier hard-cap is **1,000 writes/day per account** (CF docs 2026). Each gateway call (image submit OR text generate) costs ~2 KV writes (`count:` increment + `tokens:` post-flight accounting). At 200 calls/day combined alpha policy we sit at ~20% of quota; 500 calls/day ≈ 100% (service breaks silently — KV writes throttle, rate-limit logic produces stale data).
+- **Description:** Add daily observability check to gateway:
+  - Read `count:YYYY-MM-DD` and `tokens:YYYY-MM-DD` cumulative writes-equivalent metrics
+  - Emit `alert: kv_write_budget_high` log event when daily writes approach 800 (80% of free-tier 1K/day cap)
+  - Wire notification (GitHub issue auto-create OR Discord webhook OR email — TBD)
+  - Acts as the trigger to upgrade Workers Paid (<incremental cost>, 1M writes/month = 33× headroom)
+- **Suggested Owner:** `@dev` (instrumentation in `gateway/src/log.ts` or new `gateway/src/observability.ts`)
+- **Estimated Effort:** ~2h implementation + ~30min alert wiring
+- **Tags:** observability, rate-limit, free-tier, cost-control, story-4.2, epic-4
+- **Trigger:** Story 4.2 close OR first month of Story 4.4 (alpha launch) — whichever comes first
+- **Created:** 2026-04-24 by `@po` (Pax)
+
+### FU-4.3.1 — Workers Paid upgrade pre-flight before per-key rate-limit lands
+
+- **Priority:** 🟠 High (blocks Story 4.3+ if per-key rate-limit is in scope)
+- **Related Story:** 4.3 (SDK + examples — anticipated per-key rate-limit need per ADR-0004 Implementation Notes)
+- **Source:** @po Pax review on 2026-04-24 — user question about Cloudflare gateway security + free-tier rate-limit ceiling
+- **Context:** When Story 4.3+ implements per-key rate-limit (KV key format `tokens:{api-key-hash}:{date}` per ADR-0004 §Implementation Notes "Future (Story 4.3+): Per-key, multi-tier budgets"), each gateway call costs **3+ KV writes** (global `count:` + global `tokens:` + per-key `tokens:hash:`). Free-tier ceiling drops from ~500 calls/day → ~333 calls/day. Plus Story 4.3 SDK + example traffic typically pushes daily volume up. Need to upgrade infra BEFORE the code change ships.
+- **Description:** Before any Story 4.3 work that adds per-key rate-limit:
+  - Validate budget approval for Workers Paid (<incremental cost> = $60/yr)
+  - @devops upgrades CF account: Workers Free → Workers Paid via dashboard
+  - Verify monthly quota: 10M requests, 1M KV writes — covers 30K calls/day comfortably
+  - Document upgrade in deploy runbook + post-mortem
+- **Suggested Owner:** `@po` (budget approval) + `@devops` (CF account upgrade + verification)
+- **Estimated Effort:** ~30min budget decision + ~10min CF dashboard upgrade + ~10min verification
+- **Tags:** infra-upgrade, rate-limit, paid-tier, cost, blocker-for-4.3, epic-4
+- **Trigger:** Story 4.3 kickoff (before any per-key code change is committed)
+- **Cost Impact:** +<incremental cost> recurring (covered within Phase 0 cost-model headroom: alpha projection $12-15/mo + $5 = $17-20/mo, still well under <alpha cost ceiling>)
+- **Created:** 2026-04-24 by `@po` (Pax)
 
 ---
 
@@ -53,3 +86,4 @@ _(empty)_
 | Date | Author | Change |
 |------|--------|--------|
 | 2026-04-24 | @po (Pax) | Backlog file created. Registered TD-3.1.2 + TD-3.1.3 (both from Story 3.1 Round 2 deferrals). |
+| 2026-04-24 | @po (Pax) | Added FU-4.2.1 (KV writes/day monitoring) + FU-4.3.1 (Workers Paid upgrade pre-flight) following user's gateway security + rate-limit ceiling question on Story 4.2. CF Workers Free hard-cap = 100K req/day + 1K KV writes/day; KV writes is the active constraint at ~500 calls/day combined ceiling. Recommended alpha policy: 300 calls/day combined for 3× headroom. |

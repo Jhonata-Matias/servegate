@@ -18,6 +18,8 @@ export interface Env {
   GATEWAY_API_KEY: string;
   RUNPOD_API_KEY: string;
   RUNPOD_ENDPOINT_ID: string;
+  RUNPOD_TEXT_ENDPOINT_ID?: string;
+  CORS_ALLOWED_ORIGIN?: string;
 }
 
 export interface RateLimitState {
@@ -25,6 +27,66 @@ export interface RateLimitState {
   remaining: number;
   resetAt: string; // ISO-8601
   secondsUntilReset: number;
+}
+
+export interface TokenBudgetState {
+  used: number;
+  remaining: number;
+  resetAt: string; // ISO-8601
+  secondsUntilReset: number;
+}
+
+export type GenerateRole = 'system' | 'user' | 'assistant';
+
+export interface GenerateMessage {
+  role: GenerateRole;
+  content: string;
+}
+
+export interface GenerateRequest {
+  model?: string;
+  messages: GenerateMessage[];
+  max_tokens?: number;
+  temperature?: number;
+  top_p?: number;
+  stream?: boolean;
+}
+
+export interface GenerateResponse {
+  id?: string;
+  object: 'chat.completion';
+  created?: number;
+  model: string;
+  choices: Array<{
+    index: number;
+    message: {
+      role: 'assistant';
+      content: string;
+      reasoning?: string;
+    };
+    finish_reason: string | null;
+  }>;
+  usage?: {
+    prompt_tokens?: number;
+    completion_tokens?: number;
+    total_tokens?: number;
+  };
+}
+
+export interface GenerateStreamChunk {
+  id?: string;
+  object: 'chat.completion.chunk';
+  created?: number;
+  model: string;
+  choices: Array<{
+    index: number;
+    delta: {
+      role?: 'assistant';
+      content?: string;
+      reasoning?: string;
+    };
+    finish_reason: string | null;
+  }>;
 }
 
 // ---------------------------------------------------------------------------
@@ -135,7 +197,15 @@ export type LogEventName =
   | 'job_completed'       // GET /jobs/{id} returned 200 with output
   | 'job_not_found'       // GET /jobs/{id} returned 404
   | 'upstream_unavailable'// RunPod /run or /status failed
-  | 'legacy_endpoint_rejected'; // POST / returned 404 per CON-6 / EC-8
+  | 'legacy_endpoint_rejected' // POST / returned 404 per CON-6 / EC-8
+  // Text generation events (Story 4.2)
+  | 'generate_submitted'
+  | 'generate_rate_limited'
+  | 'generate_completed'
+  | 'generate_stream_aborted'
+  | 'generate_upstream_error'
+  | 'generate_token_record_error'
+  | 'generate_invalid_input';
 
 export interface LogEvent {
   timestamp: number;

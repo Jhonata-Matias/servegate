@@ -1,0 +1,196 @@
+# QA Gate — Story 4.2: Gemma Gateway + RunPod Text Endpoint
+# Updated by @qa (Quinn) via *review-build 4.2 round 3 on 2026-04-25
+
+storyId: "4.2"
+storyTitle: "Gemma Gateway + RunPod Text Endpoint (Ollama + Gemma 4)"
+epic: "epic-4-gemma-text-generation"
+adr: "adr-0004-gemma-text-gen-stack"
+workflow: "wf-gated-model-serve"
+workflow_phases: [1, 2]
+workflow_gates: ["GATEWAY_LIVE (GMS_GW_001)", "BACKEND_LIVE (GMS_BE_001)"]
+
+review:
+  reviewer: "@qa (Quinn)"
+  date: "2026-04-25"
+  round: 3
+  command: "*review-build 4.2 round 3"
+  scope: |
+    Round 3 post-AC11 review. Verified gitignored local evidence file
+    .aiox/notes/story-4.2/ac11-smoke-evidence-2026-04-25.md and supporting
+    deploy-record-2026-04-24.md. Confirmed production deploy, six AC11 smoke
+    scenarios, local gateway typecheck/tests, and CON-text-routing scope guard.
+  previous_rounds:
+    - round: 1
+      date: "2026-04-24"
+      verdict: CONCERNS
+      score: 88
+      blocker: "implementation uncommitted + AC11 pending"
+    - round: 2
+      date: "2026-04-25"
+      verdict: CONCERNS
+      score: 90
+      blocker: "AC11 deploy + smoke evidence pending"
+
+verdict: "PASS"
+score: 94
+gate_status: "GO"
+blocking: false
+upgrade_summary: |
+  CONCERNS 90/100 -> PASS 94/100. AC11 is now evidenced and accepted:
+  production deploy succeeded, six smoke scenarios passed, protected image-gen
+  paths remained isolated, and there are no CRITICAL/HIGH findings.
+
+phase_results:
+  phase_0_load_context: PASS
+  phase_1_subtasks_verified: PASS
+  phase_2_environment: PASS
+  phase_3_automated_tests: PASS
+  phase_4_browser: NA
+  phase_5_database: NA
+  phase_6_code_review: PASS
+  phase_7_regression: PASS
+  phase_8_report: PASS
+  phase_9_implementation_plan: NA
+  phase_10_signal: PASS
+
+acceptance_criteria:
+  - id: AC1
+    name: "Pre-flight setup completed"
+    status: PASS
+    evidence: ".aiox/notes/story-4.2/deploy-record-2026-04-24.md"
+
+  - id: AC2
+    name: "RunPod text endpoint provisioned"
+    status: PASS_WITH_DEVIATIONS
+    notes: "ADR-0004 v1.2 pivot accepted: Ollama worker + gemma4:e4b on RTX 4090 instead of original vLLM/Gemma 3 path."
+    evidence: ".aiox/notes/story-4.2/deploy-record-2026-04-24.md"
+
+  - id: AC3
+    name: "SSE pass-through spike"
+    status: PASS
+    notes: "Direct RunPod <direct warm TTFB>, CF preview <gateway warm TTFB>, <edge overhead> < 200ms."
+    evidence: ".aiox/notes/story-4.2/spike-sse-passthrough-2026-04-24.md"
+
+  - id: AC4
+    name: "Gateway module isolation"
+    status: PASS
+    notes: "Protected paths runpod.ts/storage.ts/auth.ts/log.ts remain zero diff; serverless/ and sdk/ untouched."
+
+  - id: AC5
+    name: "/v1/generate contract"
+    status: PASS
+    notes: "Validation, streaming, non-streaming, error mapping, and text rate-limit headers verified. Default model is gemma4:e4b per ADR pivot."
+
+  - id: AC6
+    name: "Token-budget rate-limit"
+    status: PASS
+    notes: "checkTokenBudget, recordTokenUsage, readTokenBudget, tokenDayKey implemented; 429 smoke passed with X-RateLimit-Remaining=0."
+
+  - id: AC7
+    name: "CORS preflight + auth reuse"
+    status: PASS
+    notes: "Production CORS origin set to self-worker URL; Authorization Bearer and X-API-Key paths covered without auth.ts edits."
+
+  - id: AC8
+    name: "Client-abort wiring"
+    status: PASS
+    notes: "request.signal threaded to upstream; AC11 abort smoke left no stuck RunPod workers."
+
+  - id: AC9
+    name: "Env bindings + wrangler.toml"
+    status: PASS
+    notes: "RUNPOD_TEXT_ENDPOINT_ID and CORS_ALLOWED_ORIGIN configured; production deploy version <WORKER_VERSION> live."
+
+  - id: AC10
+    name: "Tests"
+    status: PASS
+    notes: "Gateway typecheck clean; Vitest 9 files / 85 tests passing in Round 3 local re-run."
+
+  - id: AC11
+    name: "Production deploy + E2E smoke tests"
+    status: PASS
+    notes: |
+      Evidence file is gitignored and locally readable:
+      .aiox/notes/story-4.2/ac11-smoke-evidence-2026-04-25.md.
+      Six smoke scenarios accepted:
+      1. streaming: PASS, HTTP 200, <warm TTFB>, 7 SSE frames
+      2. non-streaming: PASS, HTTP 200, OpenAI chat.completion shape, usage.total_tokens=62
+      3. rate-limit: PASS, seeded token KV returned HTTP 429 with remaining=0
+      4. cold-start: PASS via deploy-record first boot <cold-boot duration>< 180s budget; gateway worker-id propagation is LOW observability gap
+      5. client-abort: PASS, curl timeout at 3s and no zombie RunPod workers
+      6. image-gen regression: PASS, POST /jobs 202 and GET /jobs/{id} 202; image rate-limit remains 100
+
+  - id: AC12
+    name: "Documentation"
+    status: PASS
+    notes: "Deploy runbook, external quickstart, and API reference updated."
+
+  - id: AC13
+    name: "Dual QA gates"
+    status: PASS
+    notes: "GATEWAY_LIVE 5/5 PASS; BACKEND_LIVE 5/5 PASS; no vetoes."
+
+issues:
+  critical: []
+  high: []
+  medium: []
+  low:
+    - id: L3
+      desc: "docs/api/reference.md title still says Image API Reference though it now includes text."
+      action: "Cosmetic rename to API Reference in future docs pass."
+    - id: L4
+      desc: "Formal coverage report was not generated; functional tests cover the new paths."
+      action: "Optional: install @vitest/coverage-v8 and capture coverage in later hardening pass."
+    - id: L5
+      desc: "Gateway does not propagate X-Runpod-Worker-Id on text responses."
+      action: "Optional observability enhancement; cold-start latency is still evidenced via deploy-record."
+
+verification:
+  local:
+    typecheck: "PASS — npm run typecheck in gateway/"
+    tests: "PASS — npm test in gateway/; 9 files / 85 tests"
+    scope_guard: "PASS — zero diff on gateway/src/runpod.ts, gateway/src/storage.ts, gateway/src/auth.ts, gateway/src/log.ts, serverless/, sdk/"
+  evidence:
+    ac11_smoke: ".aiox/notes/story-4.2/ac11-smoke-evidence-2026-04-25.md (gitignored)"
+    deploy_record: ".aiox/notes/story-4.2/deploy-record-2026-04-24.md (gitignored)"
+    code_review: "docs/qa/coderabbit-reports/4.2-pre-pr-round2-2026-04-25.md"
+
+decision_matrix:
+  GATEWAY_LIVE:
+    criteria_pass: 5
+    criteria_partial: 0
+    criteria_pending: 0
+    criteria_fail: 0
+    vetoes_triggered: 0
+    verdict: "PASS"
+
+  BACKEND_LIVE:
+    criteria_pass: 5
+    criteria_partial: 0
+    criteria_pending: 0
+    criteria_fail: 0
+    vetoes_triggered: 0
+    verdict: "PASS"
+
+  composite: "PASS / GO"
+
+veto_evaluation:
+  - condition: "provider_url_accessible_without_auth"
+    triggered: false
+    evidence: "RUNPOD_API_KEY remains internal; no provider URL/token exposed in client errors."
+  - condition: "any_security_checklist_item_fails"
+    triggered: false
+    evidence: "Round 1/2 security checks + CodeRabbit showed 0 CRITICAL/HIGH."
+  - condition: "rate_limit_leaks_across_keys"
+    triggered: false
+    evidence: "Image limit remains 100; text token budget remains 50000; namespaces isolated."
+  - condition: "cold_start_p95 > 3 * budget"
+    triggered: false
+    evidence: "First boot <cold-boot duration>; veto threshold 540s."
+
+references:
+  story: "docs/stories/4.2.gemma-gateway-and-worker.story.md"
+  qa_report: "docs/qa/4.2-review-build.md"
+  ac11_smoke_evidence: ".aiox/notes/story-4.2/ac11-smoke-evidence-2026-04-25.md"
+  deploy_record: ".aiox/notes/story-4.2/deploy-record-2026-04-24.md"
+  code_review: "docs/qa/coderabbit-reports/4.2-pre-pr-round2-2026-04-25.md"

@@ -1,6 +1,6 @@
 # servegate API Reference — Landing Page
 
-Standalone single-page HTML landing rendering the servegate API reference (async submit/poll contract). Deployed to Vercel as the public "docs front door".
+Standalone single-page HTML landing rendering the servegate API reference (async submit/poll contract for T2I and i2i). Deployed to Vercel as the public "docs front door".
 
 ## File layout
 
@@ -57,10 +57,10 @@ Or use any static server (`live-server`, VS Code Live Server extension, etc.).
 The landing covers:
 
 - **Hero:** status badges, CTAs to quickstart + GitHub repo
-- **Quickstart:** 2-step async submit/poll curl example
-- **Endpoints reference:** `POST /jobs` and `GET /jobs/{job_id}` full schemas
-- **Errors & SDK:** error codes (401/429/502/504/400/500) + TypeScript SDK error classes (`TimeoutError` with `.cause` discriminator, `RateLimitError`, `AuthError`, `NetworkError`, `ValidationError`)
-- **Resources:** repo, release, migration guide, dev onboarding, CHANGELOG, ADR-0002
+- **Quickstart:** async submit/poll curl examples for text-to-image and image-to-image edit
+- **Endpoints reference:** `POST /jobs` T2I/i2i variants and `GET /jobs/{job_id}` full schemas
+- **Errors & SDK:** error codes (401/429/502/504/400/500), i2i validation failures, and TypeScript SDK error classes (`TimeoutError` with `.cause` discriminator, `RateLimitError`, `AuthError`, `NetworkError`, `ValidationError`)
+- **Resources:** repo, API reference, release, migration guide, dev onboarding, CHANGELOG, ADR-0003
 
 ## Updating content after gateway/SDK changes
 

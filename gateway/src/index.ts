@@ -21,6 +21,7 @@
  */
 
 import { validateAuth } from './auth.js';
+import { handleCorsPreflight, handleGenerate } from './generate.js';
 import { getClientIp, log } from './log.js';
 import {
   buildRateLimitResponse,
@@ -36,7 +37,7 @@ const POLL_RETRY_AFTER_SECONDS = 5;
 const GENERATION_TIMEOUT_S = 280; // aligned with RunPod COMFY_GENERATION_TIMEOUT_S (FR-4)
 
 export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
+  async fetch(request: Request, env: Env, ctx?: ExecutionContext): Promise<Response> {
     const start = Date.now();
     const ip = getClientIp(request);
     const url = new URL(request.url);
@@ -44,6 +45,16 @@ export default {
     const pathname = url.pathname;
 
     // -------- Routing ----------------------------------------------------
+    // Global CORS preflight for image + text clients
+    if (method === 'OPTIONS') {
+      return handleCorsPreflight(env);
+    }
+
+    // POST /v1/generate — text generation SSE/non-streaming endpoint
+    if (method === 'POST' && pathname === '/v1/generate') {
+      return handleGenerate(request, env, ctx);
+    }
+
     // POST /jobs — new async submit
     if (method === 'POST' && pathname === '/jobs') {
       return handleSubmit(request, env, ip, start);

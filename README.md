@@ -2,22 +2,22 @@
 
 > 🌐 **English** | [Português (Brasil)](./README.pt-BR.md)
 
-**FLUX image-generation API — alpha, authenticated, rate-limited.**
+**FLUX text-to-image + Qwen-Image-Edit API — alpha, authenticated, rate-limited.**
 
 > Formerly `gemma4`. Renamed to reflect the generalized gateway-to-serverless-model pattern. The Cloudflare Worker hostname `gemma4-gateway.jhonata-matias.workers.dev` remains unchanged for SDK compatibility.
 
 [![status: alpha](https://img.shields.io/badge/status-alpha-orange)](./docs/legal/TERMS.md)
 [![license: MIT](https://img.shields.io/badge/license-MIT-blue)](./sdk/LICENSE)
 [![gateway: live](https://img.shields.io/badge/gateway-live-green)](https://gemma4-gateway.jhonata-matias.workers.dev)
-[![SDK: v0.2.0](https://img.shields.io/badge/sdk-v0.2.0-brightgreen)](./sdk/README.md)
+[![SDK: v0.3.0](https://img.shields.io/badge/sdk-v0.3.0-brightgreen)](./sdk/README.md)
 [![API: async submit/poll](https://img.shields.io/badge/api-async%20submit%2Fpoll-blue)](./docs/api/migration-async.md)
 
 ---
 
 ## What is this?
 
-- **A serverless FLUX.1-schnell image-generation API** fronted by an authenticated Cloudflare Worker gateway.
-- **For whom:** TypeScript/Node.js developers who want to generate images programmatically without hosting GPU infrastructure.
+- **A serverless image API** fronted by an authenticated Cloudflare Worker gateway: FLUX.1-schnell for text-to-image and Qwen-Image-Edit for image-to-image edits.
+- **For whom:** TypeScript/Node.js developers who want to generate or edit images programmatically without hosting GPU infrastructure.
 - **Current status:** Alpha (invite-only). 100 images/day global rate limit. No SLA. Breaking changes expected.
 
 ## Quickstart
@@ -41,7 +41,19 @@ until OUT=$(curl -sf https://gemma4-gateway.jhonata-matias.workers.dev/jobs/$JOB
 echo "$OUT" | tr -d '"' | base64 -d > out.png
 ```
 
-For the TypeScript path (recommended): `npm install @jhonata-matias/flux-client@^0.2.0` then call `client.generate(...)` — polling is internal. See [Developer Onboarding](./docs/usage/dev-onboarding.md).
+Image-to-image uses the same endpoint. Add `input_image_b64` to route the job to Qwen-Image-Edit:
+
+```bash
+INPUT_IMAGE_B64="$(base64 -w 0 input.png)"
+
+JOB=$(curl -sX POST https://gemma4-gateway.jhonata-matias.workers.dev/jobs \
+  -H "X-API-Key: $GATEWAY_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d "{\"prompt\":\"make the jacket green while keeping the background unchanged\",\"input_image_b64\":\"$INPUT_IMAGE_B64\",\"strength\":0.85,\"steps\":8}" \
+  | jq -r '.job_id')
+```
+
+For the TypeScript path (recommended): `npm install @jhonata-matias/flux-client@^0.3.0` then call `client.generate(...)` or `client.edit(...)` — polling is internal. See [Developer Onboarding](./docs/usage/dev-onboarding.md).
 
 ## Links
 
@@ -51,6 +63,7 @@ For the TypeScript path (recommended): `npm install @jhonata-matias/flux-client@
 | API Reference | [docs/api/reference.md](./docs/api/reference.md) |
 | Async Migration Guide | [docs/api/migration-async.md](./docs/api/migration-async.md) |
 | TypeScript SDK | [sdk/README.md](./sdk/README.md) |
+| Image-to-image ADR | [docs/architecture/adr-0003-image-to-image-model-selection.md](./docs/architecture/adr-0003-image-to-image-model-selection.md) |
 | Python / Colab example | [examples/colab/README.md](./examples/colab/README.md) |
 | Terms of Use | [docs/legal/TERMS.md](./docs/legal/TERMS.md) |
 | Privacy Statement | [docs/legal/PRIVACY.md](./docs/legal/PRIVACY.md) |
