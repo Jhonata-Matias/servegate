@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
-  checkTokenBudgetAndReserve,
+  checkTokenBudget,
   readTokenBudget,
   recordTokenUsage,
   TOKEN_DAILY_LIMIT,
@@ -26,28 +26,31 @@ describe('tokenDayKey', () => {
   });
 });
 
-describe('checkTokenBudgetAndReserve', () => {
+describe('checkTokenBudget', () => {
   const now = new Date('2026-04-24T12:00:00Z');
 
   it('allows when estimate fits under budget', async () => {
     const kv = makeKv('1000');
-    const result = await checkTokenBudgetAndReserve(kv, 2000, now);
+    const result = await checkTokenBudget(kv, 2000, now);
 
     expect(result.allowed).toBe(true);
     expect(result.state.used).toBe(1000);
     expect(result.state.remaining).toBe(TOKEN_DAILY_LIMIT - 1000);
+    // READ-ONLY: pre-flight must NOT write — see rate-limit.ts checkTokenBudget docstring + gateway-decision.md §5
+    expect(kv.put).not.toHaveBeenCalled();
   });
 
   it('allows exact budget boundary', async () => {
     const kv = makeKv(String(TOKEN_DAILY_LIMIT - 500));
-    const result = await checkTokenBudgetAndReserve(kv, 500, now);
+    const result = await checkTokenBudget(kv, 500, now);
 
     expect(result.allowed).toBe(true);
+    expect(kv.put).not.toHaveBeenCalled();
   });
 
   it('rejects when estimate exceeds budget', async () => {
     const kv = makeKv(String(TOKEN_DAILY_LIMIT - 499));
-    const result = await checkTokenBudgetAndReserve(kv, 500, now);
+    const result = await checkTokenBudget(kv, 500, now);
 
     expect(result.allowed).toBe(false);
     expect(result.state.remaining).toBe(499);

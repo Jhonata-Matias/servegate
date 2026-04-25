@@ -10,7 +10,7 @@ https://gemma4-gateway.jhonata-matias.workers.dev
 
 ```bash
 curl -N -sS https://gemma4-gateway.jhonata-matias.workers.dev/v1/generate \
-  -H "X-API-Key: $GATEWAY_API_KEY" \
+  -H "Authorization: Bearer $GATEWAY_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
     "messages": [{"role": "user", "content": "Write one concise haiku about servers."}],

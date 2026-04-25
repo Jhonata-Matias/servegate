@@ -19,6 +19,9 @@ export async function forwardToTextEndpoint(
   if (!env.RUNPOD_TEXT_ENDPOINT_ID) {
     throw new TextUpstreamError('text endpoint id missing', 'network');
   }
+  if (!env.RUNPOD_API_KEY) {
+    throw new TextUpstreamError('text API key missing', 'network');
+  }
 
   const url = `https://api.runpod.ai/v2/${env.RUNPOD_TEXT_ENDPOINT_ID}/openai/v1/chat/completions`;
   const init: RequestInit = {

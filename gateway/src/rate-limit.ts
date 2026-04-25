@@ -131,12 +131,17 @@ export async function readTokenBudget(
 }
 
 /**
- * Checks whether estimated text tokens fit the daily budget before provider call.
+ * Checks whether estimated text tokens fit the daily budget before the provider call.
  *
- * This mirrors checkAndIncrement's KV trade-off: Cloudflare KV is eventually
- * consistent, so alpha concurrency can overshoot slightly under races.
+ * READ-ONLY BY DESIGN. The exact budget update happens post-flight via
+ * `recordTokenUsage` in `ctx.waitUntil(...)` after upstream `usage.total_tokens`
+ * is known. See `gemma-gateway-decision.md` §5 — KV eventual-consistency tradeoff
+ * is accepted (≤10% concurrent overshoot, same model as the image-gen counter
+ * from Epic 2 Story 2.5 R7). Adding a pre-flight `kv.put` here would double the
+ * KV writes per call (eats free-tier quota; see backlog FU-4.2.1) without
+ * preventing the race that Cloudflare KV is eventually consistent on globally.
  */
-export async function checkTokenBudgetAndReserve(
+export async function checkTokenBudget(
   kv: KVNamespace,
   approxTokens: number,
   now: Date = new Date(),

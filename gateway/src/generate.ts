@@ -1,7 +1,7 @@
 import { validateAuth } from './auth.js';
 import { getClientIp, log } from './log.js';
 import {
-  checkTokenBudgetAndReserve,
+  checkTokenBudget,
   recordTokenUsage,
   TOKEN_DAILY_LIMIT,
 } from './rate-limit.js';
@@ -60,7 +60,7 @@ export async function handleGenerate(
 
   const body = validation.value;
   const approxTokens = estimateMaxPossibleTokens(rawBody, body.max_tokens ?? DEFAULT_MAX_TOKENS);
-  const { state: tokenState, allowed } = await checkTokenBudgetAndReserve(env.RATE_LIMIT_KV, approxTokens);
+  const { state: tokenState, allowed } = await checkTokenBudget(env.RATE_LIMIT_KV, approxTokens);
   if (!allowed) {
     log({
       timestamp: Date.now(),
@@ -280,7 +280,19 @@ function recordAsync(ctx: WaitUntilContext | undefined, env: Env, tokens: number
     ctx.waitUntil(work);
     return;
   }
-  work.catch(() => undefined);
+  // Fallback for test harness or unusual runtimes lacking ExecutionContext.
+  // Production CF Worker fetch handler always supplies ctx, so this path
+  // should never run live — log if it ever does so the failure isn't silent.
+  work.catch(() => {
+    log({
+      timestamp: Date.now(),
+      event: 'generate_upstream_error',
+      ip: null,
+      status: 500,
+      elapsed_ms: 0,
+      error_code: 'token_record_async_failed',
+    });
+  });
 }
 
 function generateError(
