@@ -12,20 +12,26 @@ workflow_gates: ["GATEWAY_LIVE (GMS_GW_001)", "BACKEND_LIVE (GMS_BE_001)"]
 
 review:
   reviewer: "@qa (Quinn)"
-  date: "2026-04-24"
-  round: 1
+  date: "2026-04-25"
+  round: 2
   command: "*review-build 4.2"
   scope: |
-    10-phase structured QA review per qa-review-build.md task.
-    Branch: feature/4.2-gemma-gateway-worker @ 0669a59 (Tasks 1-2 docs commit).
-    Working tree: ~250 LOC implementation + 18 new tests + 2 runbooks +
-    docs/api/reference.md changes — uncommitted.
-    Verified: typecheck clean, 85/85 tests pass, scope guard held perfectly,
-    security 8/8 pass, AC3 SSE spike PASS evidence reviewed, BACKEND_LIVE
-    confirmed via @devops deploy-record (cold 156s, warm 1-2s).
+    Round 2 re-review post-commit f87bc13 (feat(gateway): /v1/generate text endpoint
+    + token budget rate-limit). Branch: feature/4.2-gemma-gateway-worker @ f87bc13.
+    Re-verified: typecheck clean, 85/85 tests pass, CON-text-routing scope guard held
+    in commit (zero diff on protected files), CodeRabbit pre-PR scan 7 findings
+    (0 CRITICAL, 0 HIGH after contextual analysis, 4 MEDIUM, 3 LOW).
+    M1 RESOLVED. M3 (AC11 deploy + 6 E2E smokes) STILL PENDING.
+
+  previous_rounds:
+    - round: 1
+      date: "2026-04-24"
+      verdict: CONCERNS
+      score: 88
+      blocker: "M1 commit + M3 AC11 deploy + L1 CORS env"
 
 verdict: "CONCERNS"
-score: 88
+score: 90  # +2 from Round 1: M1 commit resolved, CodeRabbit run clean of CRITICAL/HIGH
 gate_status: "Conditional GO"
 blocking: false
 upgrade_path: |
