@@ -204,6 +204,7 @@ export type LogEventName =
   | 'generate_completed'
   | 'generate_stream_aborted'
   | 'generate_upstream_error'
+  | 'generate_token_record_error'
   | 'generate_invalid_input';
 
 export interface LogEvent {

@@ -286,7 +286,7 @@ function recordAsync(ctx: WaitUntilContext | undefined, env: Env, tokens: number
   work.catch(() => {
     log({
       timestamp: Date.now(),
-      event: 'generate_upstream_error',
+      event: 'generate_token_record_error',
       ip: null,
       status: 500,
       elapsed_ms: 0,
