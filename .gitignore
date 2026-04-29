@@ -53,6 +53,9 @@ test-onboarding/
 # User-local experiments (unrelated to servegate)
 contabhub_design_system.html
 
+# Private mirror staging (originals destined to servegate-planning)
+.planning-mirror/
+
 # AIOX framework artifacts (local-only, not for public repo consumers)
 # Owner workflow tooling — not relevant to external SDK/API users
 .ai/
