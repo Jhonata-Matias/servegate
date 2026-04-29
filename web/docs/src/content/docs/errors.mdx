@@ -1,0 +1,90 @@
+---
+title: Errors
+description: HTTP error taxonomy returned by the servegate gateway, plus i2i_validation variants (including the field discriminator for multi-image i2i) and the SDK error class mapping.
+---
+
+import { Aside, Badge } from '@astrojs/starlight/components';
+
+The gateway returns standard HTTP status codes. The SDK maps them to a strict class taxonomy with `cause` discriminators so callers can branch precisely.
+
+## HTTP status codes
+
+| HTTP | Code | Meaning |
+|---|---|---|
+| `400` | `invalid_json` | Body is not valid JSON or violates schema |
+| `400` | `invalid_request` | Type, range, or role invalid (text endpoint) |
+| `400` | `missing_messages` | `messages[]` absent or empty (text endpoint) |
+| `400` | `i2i_validation` | i2i input failed validation — see [variants below](#i2i_validation) |
+| `401` | `invalid_api_key` | Header authentication failed |
+| `413` | `request_too_large` | Body above 2 MB (text endpoint) |
+| `429` | `rate_limit_exceeded` | Daily quota exhausted (image: 100 jobs/day; text: token budget) |
+| `500` | `config_error` | Persistent upstream config failure masked by the gateway |
+| `502` | `bad_gateway` / `upstream_error` | RunPod returned 5xx or network unreachable |
+| `503` | `upstream_unavailable` | Provider or network unreachable (text endpoint) |
+| `504` | `generation_timeout` | RunPod marked `TIMED_OUT` (job exceeded `COMFY_GENERATION_TIMEOUT_S=280`) |
+
+## `i2i_validation`
+
+Calls to `POST /jobs` with `input_image_b64` (and optionally `input_image_b64_2`) can fail with `400 i2i_validation`. The response body carries an inner code identifying which constraint was violated.
+
+| Code | Reason |
+|---|---|
+| `invalid_image_base64` | The `input_image_b64` (or `input_image_b64_2`) field is not valid base64 |
+| `unsupported_mime_type` | Decoded payload is not PNG, JPEG, or WebP per magic-bytes check |
+| `image_too_large` | Decoded payload exceeds **8 MB** |
+| `invalid_aspect_ratio` | Aspect ratio is exactly **1:1** (rejected — use a non-square crop) |
+| `invalid_steps` | `steps` outside `4-50` |
+| `invalid_strength` | `strength` outside `0.0 < x ≤ 1.0` |
+
+### `field` discriminator (multi-image i2i)
+
+<Badge text="Since SDK 0.4.0" variant="note" />
+
+When the SDK validates a multi-image `edit()` call and rejects the second image, the thrown `ValidationError` carries `field: 'image2'`. The same applies for server-side rejection on the gateway: response bodies for multi-image i2i errors include `"field": "image2"` to attribute the error to the correct input. Single-image errors (or errors on the first image of a multi-image call) carry `"field": "image"`.
+
+```json
+{
+  "error": "i2i_validation",
+  "code": "image_too_large",
+  "field": "image2",
+  "message": "input_image_b64_2 exceeds 8 MB after decode (12.4 MB observed)"
+}
+```
+
+This lets your handler attribute the failure to the specific input without parsing message strings:
+
+```ts
+catch (err) {
+  if (err instanceof ValidationError && err.field === 'image2') {
+    return notifyUser('The second reference image is invalid: ' + err.cause);
+  }
+  // ...
+}
+```
+
+## SDK error class mapping
+
+| Gateway response | SDK class | Discriminator |
+|---|---|---|
+| `200 OK` (job completed) | — | — |
+| `202 Accepted` (still running) | — (handled internally by polling loop) | — |
+| `400 i2i_validation` | `ValidationError` | `field` (`'image' \| 'image2'`) + `cause` (e.g., `'image_too_large'`) |
+| `400 invalid_request` (text) | `ValidationError` | `cause: 'invalid_request'` |
+| `401 invalid_api_key` | `AuthError` | — |
+| `429 rate_limit_exceeded` | `RateLimitError` | `retryAfterSec` |
+| `500 config_error` | `FluxClientError` | `cause: 'config_error'` |
+| `502 bad_gateway` / `upstream_error` | `FluxClientError` | `cause: 'bad_gateway'` |
+| `503 upstream_unavailable` | `FluxClientError` | `cause: 'upstream_unavailable'` |
+| `504 generation_timeout` | `TimeoutError` | `cause: 'gateway_504'` |
+| Network failure (DNS, TCP) | `NetworkError` | — |
+| SDK poll budget exhausted | `TimeoutError` | `cause: 'poll_exhausted'` |
+| RunPod execution timeout (~280s) | `TimeoutError` | `cause: 'runpod_timeout'` |
+
+<Aside type="tip">
+For multi-image i2i specifically, branching on `err instanceof ValidationError && err.field === 'image2'` is the cleanest way to surface "second image was the problem" UX without coupling to error message strings.
+</Aside>
+
+## See also
+
+- [API Reference](/api/) — full request/response schemas
+- [SDK Reference](/sdk/) — typed client usage examples

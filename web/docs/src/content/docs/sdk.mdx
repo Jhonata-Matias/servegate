@@ -1,0 +1,144 @@
+---
+title: SDK (TypeScript)
+description: '@jhonata-matias/flux-client wraps the servegate gateway with a typed client — generate() for text-to-image, edit() for single- or multi-image i2i, and a strict error taxonomy with cause discriminators.'
+---
+
+import { Tabs, TabItem, Aside, Badge } from '@astrojs/starlight/components';
+
+`@jhonata-matias/flux-client` is the official TypeScript client. It wraps the async submit/poll loop so callers get a single `await` per generation, plus a strict error taxonomy that maps gateway HTTP codes to typed exceptions.
+
+<Badge text="Latest: 0.4.0" variant="success" /> &nbsp; <Badge text="Multi-image i2i" variant="note" />
+
+## Install
+
+The package is published on **GitHub Packages** under the `@jhonata-matias` scope. Configure your registry first:
+
+```bash
+# .npmrc — at repo root or ~/.npmrc
+@jhonata-matias:registry=https://npm.pkg.github.com
+//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}
+```
+
+Then install:
+
+```bash
+pnpm add @jhonata-matias/flux-client
+# or: npm install @jhonata-matias/flux-client
+```
+
+## Configure
+
+```ts
+import { FluxClient } from '@jhonata-matias/flux-client';
+
+const client = new FluxClient({
+  apiKey: process.env.GATEWAY_API_KEY!,
+  baseUrl: 'https://gemma4-gateway.jhonata-matias.workers.dev',
+});
+```
+
+## `generate()` — text-to-image
+
+```ts
+const out = await client.generate({
+  prompt: 'a peaceful zen garden with cherry blossoms, photorealistic',
+  steps: 4,
+  width: 1024,
+  height: 1024,
+  seed: 42,
+});
+
+// out.imageB64    — decoded base64 PNG
+// out.metadata    — { seed, elapsed_ms, output_width, output_height, ... }
+```
+
+## `edit()` — image-to-image
+
+The `edit()` method accepts a single reference image or, since `0.4.0`, an optional second reference image for the multi-image Qwen-Image-Edit path.
+
+<Tabs>
+<TabItem label="Single image">
+```ts
+import fs from 'node:fs/promises';
+
+const image = await fs.readFile('./input.png');
+
+const out = await client.edit({
+  prompt: 'make the jacket green while keeping the background unchanged',
+  image,                 // Buffer, Uint8Array, or { base64: string }
+  strength: 0.85,        // optional — default 0.85
+  steps: 8,              // optional — default 8
+  seed: 42,              // optional
+});
+
+// out.imageB64
+// out.metadata — single-image shape (no `_2` fields)
+```
+</TabItem>
+<TabItem label="Multi-image (NEW in 0.4.0)">
+```ts
+import fs from 'node:fs/promises';
+
+const person = await fs.readFile('./person.png');
+const outfit = await fs.readFile('./outfit.png');
+
+const out = await client.edit({
+  prompt: 'dress the person in image 1 with the outfit from image 2',
+  image: person,
+  image2: outfit,        // NEW — opt-in second reference image
+  strength: 0.85,
+  steps: 8,
+});
+
+// out.metadata now includes `_2`-suffixed fields:
+//   input_width_2, input_height_2,
+//   source_width_2, source_height_2, input_downsampled_2
+// confirming the multi-image branch executed.
+```
+
+The SDK shares validation rules across both images (PNG / JPEG / WebP magic bytes, ≤ 8 MB decoded, non-square aspect ratio, ≤ 1 MP with optional `autoDownsample`). A validation failure on the second image surfaces with `field: 'image2'` so callers can attribute the error to the correct input.
+</TabItem>
+</Tabs>
+
+<Aside type="tip">
+The SDK is forward-compatible: a `0.4.0` client calling a `0.3.x` server with `image` only continues to work. A `0.4.0` client calling a `0.3.x` server with `image2` will receive `i2i_validation` from the server because the `TextEncodeQwenImageEditPlus` node isn't deployed there.
+</Aside>
+
+## Error classes
+
+All errors descend from `FluxClientError`. Each has a `cause` discriminator for fine-grained handling.
+
+| Class | When | Notable `cause` values |
+|---|---|---|
+| `TimeoutError` | Job didn't complete in time | `poll_exhausted` (SDK budget), `gateway_504` (worker), `runpod_timeout` (~280s RunPod) |
+| `RateLimitError` | `HTTP 429` from gateway | — |
+| `AuthError` | `HTTP 401` from gateway | — |
+| `NetworkError` | Transport-level failure | — |
+| `ValidationError` | Local pre-flight check failed | `field: 'image' \| 'image2'`, plus a reason: `unsupported_mime_type`, `image_too_large`, `invalid_aspect_ratio`, `invalid_steps`, `invalid_strength`, etc. |
+
+<Aside type="note" title="`field` discriminator on ValidationError">
+When the SDK validates a multi-image `edit()` call and rejects the second image (e.g., a 10 MB PNG), the thrown `ValidationError` carries `field: 'image2'`. This lets your error handler surface the correct input back to the user without parsing message strings.
+</Aside>
+
+### Example handler
+
+```ts
+try {
+  const out = await client.edit({ prompt, image, image2 });
+  return out.imageB64;
+} catch (err) {
+  if (err instanceof ValidationError) {
+    // err.field === 'image' | 'image2'
+    // err.cause === 'unsupported_mime_type' | 'image_too_large' | ...
+    return notifyUser(`Problem with ${err.field}: ${err.cause}`);
+  }
+  if (err instanceof RateLimitError) return retryLater(err.retryAfterSec);
+  if (err instanceof TimeoutError && err.cause === 'poll_exhausted') return showSpinnerLonger();
+  throw err;
+}
+```
+
+## See also
+
+- [Errors reference](/errors/) — full HTTP error taxonomy and SDK class mapping
+- [Changelog on GitHub](https://github.com/Jhonata-Matias/servegate/blob/main/sdk/CHANGELOG.md)
