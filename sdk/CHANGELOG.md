@@ -22,6 +22,25 @@ During alpha (v0.x), the following applies:
 - Add 4 missing coverage tests (NetworkError direct, warmup timeout, linear backoff, safeReadJson failure)
 - Add `@vitest/coverage-v8` devDep
 
+## [0.4.0] — 2026-04-29
+
+### Added
+
+- Added optional `EditInput.image2?: EditImageInput` for multi-image i2i. When provided, the request payload includes `input_image_b64_2` so the gateway/handler can route to the `TextEncodeQwenImageEditPlus` workflow with two reference images.
+- Added optional dimension fields on `GenerateMetadata` for the second image: `input_width_2`, `input_height_2`, `source_width_2`, `source_height_2`, `input_downsampled_2`.
+
+### Changed
+
+- Refactored edit input validation: `image` and `image2` share the same rules (PNG/JPEG/WebP magic bytes, ≤ 8 MB decoded, non-square, ≤ 1 MP with optional `autoDownsample`). Errors raised for the second image surface with `field: 'image2'` for clear diagnostics.
+
+### Backwards compatibility
+
+- 100% backwards compatible. Existing `edit({prompt, image})` calls continue to use `TextEncodeQwenImageEdit` (single-image path) with no payload changes.
+
+### Operator notes (server-side)
+
+- This SDK release pairs with a serverless handler upgrade to `qwen_image_edit_2509_fp8_e4m3fn.safetensors` and a ComfyUI revision exposing `TextEncodeQwenImageEditPlus`. The SDK is forward-compatible: 1-image calls work against any deployment of the gateway/handler at v0.3.x or later; 2-image calls require the 2509 weights + Plus node to be deployed.
+
 ## [0.3.0] — 2026-04-24
 
 ### Added
