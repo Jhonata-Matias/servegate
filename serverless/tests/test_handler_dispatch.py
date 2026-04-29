@@ -92,3 +92,36 @@ def test_i2i_payload_routes_to_qwen_workflow(monkeypatch, tmp_path):
     assert result["metadata"]["qwen_generated_height"] == 128
     assert result["metadata"]["output_width"] == 640
     assert result["metadata"]["output_height"] == 360
+
+
+def test_i2i_payload_with_second_image_routes_to_qwen_plus_workflow(monkeypatch, tmp_path):
+    seen: dict[str, object] = {}
+    patch_runtime(monkeypatch, image_bytes(128, 128), seen)
+    monkeypatch.setattr(handler_module, "COMFY_INPUT_DIR", str(tmp_path))
+
+    result = handler_module.handler(
+        {
+            "id": "job-i2i-two-images",
+            "input": {
+                "prompt": "blend image 1 with image 2",
+                "input_image_b64": image_b64(640, 360),
+                "input_image_b64_2": image_b64(720, 480),
+                "seed": 42,
+            },
+        }
+    )
+
+    workflow = seen["workflow"]
+    assert isinstance(workflow, dict)
+    load_image_nodes = [node for node in workflow.values() if node["class_type"] == "LoadImage"]
+    assert len(load_image_nodes) == 2
+    loaded_filenames = [node["inputs"]["image"] for node in load_image_nodes]
+    assert len(set(loaded_filenames)) == 2
+    assert all(name.startswith("qwen-edit-") and name.endswith(".png") for name in loaded_filenames)
+    assert not any((tmp_path / name).exists() for name in loaded_filenames)
+
+    assert workflow["16"]["class_type"] == "TextEncodeQwenImageEditPlus"
+    assert workflow["16"]["inputs"]["image1"] == ["13", 0]
+    assert workflow["16"]["inputs"]["image2"] == ["21", 0]
+    assert result["metadata"]["input_width_2"] == 720
+    assert result["metadata"]["input_height_2"] == 480

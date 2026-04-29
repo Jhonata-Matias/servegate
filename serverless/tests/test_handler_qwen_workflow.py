@@ -65,6 +65,41 @@ def test_qwen_edit_workflow_matches_reference_template():
     assert actual == expected
 
 
+def test_qwen_edit_workflow_uses_single_image_encoder_by_default():
+    workflow = build_qwen_edit_workflow("prompt", "qwen-edit-a.png", 0.85, 42, 8)
+
+    load_image_nodes = [node for node in workflow.values() if node["class_type"] == "LoadImage"]
+    assert len(load_image_nodes) == 1
+    assert workflow["16"]["class_type"] == "TextEncodeQwenImageEdit"
+    assert workflow["16"]["inputs"]["image"] == ["13", 0]
+    assert "TextEncodeQwenImageEditPlus" not in [node["class_type"] for node in workflow.values()]
+
+
+def test_qwen_edit_workflow_uses_plus_encoder_for_two_images():
+    workflow = build_qwen_edit_workflow(
+        "blend image 1 with image 2",
+        "qwen-edit-a.png",
+        0.85,
+        42,
+        8,
+        input_image_filename_2="qwen-edit-b.png",
+    )
+
+    load_image_nodes = {
+        nid: node for nid, node in workflow.items() if node["class_type"] == "LoadImage"
+    }
+    assert len(load_image_nodes) == 2
+    assert load_image_nodes["13"]["inputs"]["image"] == "qwen-edit-a.png"
+    assert load_image_nodes["21"]["inputs"]["image"] == "qwen-edit-b.png"
+
+    positive_node = workflow[workflow["18"]["inputs"]["positive"][0]]
+    assert positive_node["class_type"] == "TextEncodeQwenImageEditPlus"
+    assert positive_node["inputs"]["image1"] == ["13", 0]
+    assert positive_node["inputs"]["image2"] == ["21", 0]
+    assert "image_1" not in positive_node["inputs"]
+    assert "image_2" not in positive_node["inputs"]
+
+
 # ===========================================================================
 # F7 regression guard — class_types must resolve against real ComfyUI registry
 # ===========================================================================
@@ -91,6 +126,22 @@ def test_every_class_type_exists_in_comfyui_registry():
         f"F7 regression: workflow emits class_type(s) not in ComfyUI v0.3.62 registry: {unknown}. "
         f"Either add them to the Dockerfile via custom_nodes install OR replace with a registered class."
     )
+
+
+def test_multi_image_plus_class_type_exists_in_comfyui_registry():
+    registry = load_registry()
+    workflow = build_qwen_edit_workflow("prompt", "a.png", 0.85, 42, 8, input_image_filename_2="b.png")
+
+    unknown = [
+        (nid, node["class_type"])
+        for nid, node in workflow.items()
+        if node["class_type"] not in registry
+    ]
+    assert not unknown, f"workflow emits class_type(s) not in verified ComfyUI registry: {unknown}"
+
+    plus_inputs = registry["TextEncodeQwenImageEditPlus"]["inputs"]["optional"]
+    assert {"image1", "image2", "image3"}.issubset(plus_inputs)
+    assert "image_1" not in plus_inputs
 
 
 def test_clip_loader_type_is_valid_enum_value():
@@ -134,6 +185,20 @@ def test_ksampler_sampler_and_scheduler_are_valid_enum_values():
 def test_node_references_resolve_within_workflow():
     """Every input that references another node must point to a node that exists."""
     workflow = build_qwen_edit_workflow("prompt", "f.png", 0.85, 42, 8)
+    node_ids = set(workflow.keys())
+
+    dangling_refs = []
+    for nid, node in workflow.items():
+        for input_key, input_value in node["inputs"].items():
+            if isinstance(input_value, list) and len(input_value) == 2 and isinstance(input_value[0], str):
+                referenced_node = input_value[0]
+                if referenced_node not in node_ids:
+                    dangling_refs.append(f"node {nid}.{input_key} -> node {referenced_node} (not found)")
+    assert not dangling_refs, f"Dangling node references in workflow: {dangling_refs}"
+
+
+def test_multi_image_node_references_resolve_within_workflow():
+    workflow = build_qwen_edit_workflow("prompt", "f.png", 0.85, 42, 8, input_image_filename_2="g.png")
     node_ids = set(workflow.keys())
 
     dangling_refs = []

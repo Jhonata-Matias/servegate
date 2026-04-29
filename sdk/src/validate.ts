@@ -12,6 +12,7 @@ const MAX_EDIT_STEPS = 50;
 export interface NormalizedEditRequest {
   prompt: string;
   input_image_b64: string;
+  input_image_b64_2?: string;
   strength?: number;
   seed?: number;
   steps?: number;
@@ -115,7 +116,36 @@ export async function validateAndNormalizeEditInput(input: unknown): Promise<Nor
     throw new ValidationError({ field: 'steps', reason: `must be between ${MIN_EDIT_STEPS} and ${MAX_EDIT_STEPS}` });
   }
 
-  let bytes = await normalizeImageToBytes(obj.image);
+  const inputImageB64 = await normalizeEditImage(obj.image, 'image', obj.autoDownsample);
+  const inputImageB642 = obj.image2 === undefined
+    ? undefined
+    : await normalizeEditImage(obj.image2, 'image2', obj.autoDownsample);
+
+  const request: NormalizedEditRequest = {
+    prompt: obj.prompt.trim(),
+    input_image_b64: inputImageB64,
+  };
+  if (inputImageB642 !== undefined) request.input_image_b64_2 = inputImageB642;
+  if (obj.strength !== undefined) request.strength = obj.strength;
+  if (obj.seed !== undefined) request.seed = obj.seed;
+  if (obj.steps !== undefined) request.steps = obj.steps;
+  if (obj.aspect_ratio !== undefined) request.aspect_ratio = obj.aspect_ratio;
+  return request;
+}
+
+async function normalizeEditImage(value: unknown, field: 'image' | 'image2', autoDownsample?: boolean): Promise<string> {
+  try {
+    return await normalizeEditImageUnchecked(value, autoDownsample);
+  } catch (e) {
+    if (field !== 'image' && e instanceof ValidationError) {
+      throw new ValidationError({ field, reason: e.reason });
+    }
+    throw e;
+  }
+}
+
+async function normalizeEditImageUnchecked(value: unknown, autoDownsample?: boolean): Promise<string> {
+  let bytes = await normalizeImageToBytes(value);
   let meta = parseImageMeta(bytes);
 
   if (meta.width === meta.height) {
@@ -126,7 +156,7 @@ export async function validateAndNormalizeEditInput(input: unknown): Promise<Nor
   }
 
   if (meta.width * meta.height > MAX_EDIT_INPUT_PIXELS) {
-    if (!obj.autoDownsample) {
+    if (!autoDownsample) {
       throw new ValidationError({
         field: 'image',
         reason: 'must be <= 1 megapixel; downsample first or pass autoDownsample: true in a Node.js runtime with sharp installed',
@@ -138,16 +168,7 @@ export async function validateAndNormalizeEditInput(input: unknown): Promise<Nor
       throw new ValidationError({ field: 'image', reason: 'sharp downsample did not reduce image to <= 1 megapixel' });
     }
   }
-
-  const request: NormalizedEditRequest = {
-    prompt: obj.prompt.trim(),
-    input_image_b64: bytesToBase64(bytes),
-  };
-  if (obj.strength !== undefined) request.strength = obj.strength;
-  if (obj.seed !== undefined) request.seed = obj.seed;
-  if (obj.steps !== undefined) request.steps = obj.steps;
-  if (obj.aspect_ratio !== undefined) request.aspect_ratio = obj.aspect_ratio;
-  return request;
+  return bytesToBase64(bytes);
 }
 
 function validateOptionalNumber(value: unknown, field: string): void {

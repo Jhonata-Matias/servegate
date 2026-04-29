@@ -1,11 +1,12 @@
 {
-  "_comment": "Known-good fixture of ComfyUI v0.3.62 node registry for class_types referenced by serverless/handler.py. Purpose: prevent tautological test assertions (QA Round 3 F7 / TD-3.1.4). Source of truth verified 2026-04-24 by direct fetch of https://raw.githubusercontent.com/comfyanonymous/ComfyUI/v0.3.62/nodes.py + comfy_extras/nodes_qwen.py. When Dockerfile COMFY_REF changes, regenerate this fixture from the new ComfyUI version. Schema: class_type -> { inputs: { required: {name: type_or_enum_list} }, outputs: [...] }. Enum values for type parameters are captured as arrays to enable test validation.",
+  "_comment": "Known-good fixture of ComfyUI node registry for class_types referenced by serverless/handler.py. Base graph class_types were verified against v0.3.62 for QA Round 3 F7 / TD-3.1.4. TextEncodeQwenImageEditPlus was verified against ComfyUI mainline nodes_qwen.py on 2026-04-29 for Qwen-Image-Edit 2509 multi-image support. When Dockerfile COMFY_REF changes, regenerate this fixture from the new ComfyUI version. Schema: class_type -> { inputs: { required/optional: {name: type_or_enum_list} }, outputs: [...] }. Enum values for type parameters are captured as arrays to enable test validation.",
   "_source_ref": {
     "comfyui_version": "v0.3.62",
     "nodes_py": "https://raw.githubusercontent.com/comfyanonymous/ComfyUI/v0.3.62/nodes.py",
     "nodes_qwen_py": "https://raw.githubusercontent.com/comfyanonymous/ComfyUI/v0.3.62/comfy_extras/nodes_qwen.py",
-    "verified_at": "2026-04-24",
-    "verified_by": "@dev (Round 3 F7 remediation)"
+    "nodes_qwen_mainline_py": "https://raw.githubusercontent.com/comfyanonymous/ComfyUI/master/comfy_extras/nodes_qwen.py",
+    "verified_at": "2026-04-29",
+    "verified_by": "Codex"
   },
   "UNETLoader": {
     "inputs": {
@@ -108,6 +109,22 @@
       "optional": {
         "vae": "VAE",
         "image": "IMAGE"
+      }
+    },
+    "outputs": ["CONDITIONING"]
+  },
+  "TextEncodeQwenImageEditPlus": {
+    "_source": "comfy_extras/nodes_qwen.py mainline",
+    "inputs": {
+      "required": {
+        "clip": "CLIP",
+        "prompt": "STRING"
+      },
+      "optional": {
+        "vae": "VAE",
+        "image1": "IMAGE",
+        "image2": "IMAGE",
+        "image3": "IMAGE"
       }
     },
     "outputs": ["CONDITIONING"]
