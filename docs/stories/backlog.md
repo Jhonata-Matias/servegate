@@ -77,7 +77,19 @@
 
 ## ✨ Enhancements
 
-_(empty)_
+### ENH-2.9 — Refactor landing into Astro Starlight docs portal
+
+- **Priority:** 🟡 Medium
+- **Related Story:** Future Story 2.9 (docs portal). Derived from Story 2.3 (web-demo-nextjs-vercel) + Story 2.7 (pt-BR-dev-docs) lineage. Trigger: PR #15 multi-image i2i merged — current `web/landing/index.html` (995 LOC single-page marketing) is undersized for the growing API/SDK surface.
+- **Source:** @ux-design-expert (Uma) front-end spec on 2026-04-29 after user reference (RunPod docs portal screenshot) + multi-image feature merge requiring docs update.
+- **Description:** Replace single-page marketing landing at `deploy-lp-one.vercel.app/` with a 3-column docs portal (sidebar nav · centered content · TOC) built with Astro Starlight (MDX content, Pagefind search, Shiki code highlight, dark-only V1). Migration scope V1 = 5 pages (Welcome · Quickstart · API Reference · SDK · Errors). Welcome uses custom card-grid 3×2 replicating RunPod ref. Brand identity preserved (charcoal+teal palette, Geist fonts). Multi-image i2i documented in API · SDK · Errors. New folder `web/docs/`; old landing archived to `web/_archive/landing-pre-docs-2026-04-29/`. Vercel project root cutover from `web/landing/` → `web/docs/`.
+- **Spec:** [`docs/design/landing-docs-portal-refactor.md`](../design/landing-docs-portal-refactor.md) — 7 locked decisions, IA, design tokens (Starlight CSS overrides), 4-phase implementation plan (~9-12h), 9 acceptance criteria, V2 backlog (light theme, versioned docs, Authentication/Concepts/Releases/Resources pages, ADR index, i18n parity), 5 risks with mitigations, 7-step hand-off checklist.
+- **Suggested Owner:** `@dev` (implementation across 4 phases) + `@devops` (Vercel root directory change at cutover) + `@ux-design-expert` (review of Welcome card-grid + content polish)
+- **Estimated Effort:** ~9-12h total (Phase 1 setup ~2h · Phase 2 content migration ~5h · Phase 3 polish ~2h · Phase 4 cutover ~1h)
+- **Tags:** docs, astro-starlight, landing, web-docs, multi-image-i2i, epic-2, consumer-integration
+- **Pre-condition for dev kickoff:** Spec is complete and locked. Recommended: `@sm *draft` to create formal Story 2.9 with this spec as Dev Notes input before `@dev *develop`. Alternative: `@dev *develop-preflight docs/design/landing-docs-portal-refactor.md` directly (faster but bypasses Story validation gate).
+- **Trigger:** Open. Can start any sprint. No external blockers.
+- **Created:** 2026-04-29 by `@po` (Pax) on user request after `@ux-design-expert` (Uma) handed off the front-end spec.
 
 ---
 
@@ -87,3 +99,4 @@ _(empty)_
 |------|--------|--------|
 | 2026-04-24 | @po (Pax) | Backlog file created. Registered TD-3.1.2 + TD-3.1.3 (both from Story 3.1 Round 2 deferrals). |
 | 2026-04-24 | @po (Pax) | Added FU-4.2.1 (KV writes/day monitoring) + FU-4.3.1 (Workers Paid upgrade pre-flight) following user's gateway security + rate-limit ceiling question on Story 4.2. CF Workers Free hard-cap = 100K req/day + 1K KV writes/day; KV writes is the active constraint at ~500 calls/day combined ceiling. Recommended alpha policy: 300 calls/day combined for 3× headroom. |
+| 2026-04-29 | @po (Pax) | Added ENH-2.9 (Refactor landing into Astro Starlight docs portal) following @ux-design-expert spec. Triggered by multi-image i2i merge (PR #15) needing docs update + user reference to RunPod docs portal pattern. Spec at `docs/design/landing-docs-portal-refactor.md`. |
