@@ -1,0 +1,58 @@
+/* servegate docs theme — preserves the landing palette (obsidian/charcoal + blue accent) */
+/* Source of truth: web/landing/index.html Tailwind config (extracted 2026-04-29) */
+
+:root {
+	/* Brand accent — blue, NOT teal */
+	--sl-color-accent-low: rgba(29, 127, 229, 0.12);
+	--sl-color-accent: #1d7fe5;
+	--sl-color-accent-high: #4da3ff;
+
+	/* Surfaces */
+	--sl-color-white: #ffffff;
+	--sl-color-gray-1: #fafafa;
+	--sl-color-gray-2: #d4d4d4;
+	--sl-color-gray-3: #a1a1aa;
+	--sl-color-gray-4: #737373;
+	--sl-color-gray-5: #404040;
+	--sl-color-gray-6: #1c1c1c;
+	--sl-color-black: #050505;
+
+	/* Typography */
+	--sl-font: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+	--sl-font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+/* Force dark theme — light mode is V2 backlog */
+:root[data-theme='light'],
+:root[data-theme='dark'] {
+	--sl-color-bg: #050505;
+	--sl-color-bg-nav: #050505;
+	--sl-color-bg-sidebar: #050505;
+	--sl-color-bg-inline-code: #1c1c1c;
+	--sl-color-hairline-light: rgba(255, 255, 255, 0.05);
+	--sl-color-hairline: rgba(255, 255, 255, 0.10);
+	--sl-color-hairline-shade: rgba(255, 255, 255, 0.15);
+	--sl-color-text: #d4d4d4;
+	--sl-color-text-accent: #4da3ff;
+	--sl-color-text-invert: #050505;
+	--sl-color-bg-accent: #1d7fe5;
+}
+
+/* Inline code: tinted with accent like the landing */
+.sl-markdown-content code:not(pre code):not(:where(.not-content *)) {
+	color: #4da3ff;
+	background: rgba(29, 127, 229, 0.08);
+	border: 1px solid rgba(29, 127, 229, 0.15);
+}
+
+/* Card grid — match landing's glass-card aesthetic */
+starlight-card-grid .card,
+.sl-card-grid > * {
+	border: 1px solid rgba(255, 255, 255, 0.10);
+	background: linear-gradient(135deg, #111111, #050505);
+	transition: border-color 0.2s ease;
+}
+starlight-card-grid .card:hover,
+.sl-card-grid > *:hover {
+	border-color: rgba(29, 127, 229, 0.30);
+}
