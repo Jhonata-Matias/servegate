@@ -1,5 +1,5 @@
 # RunPod Serverless worker for ComfyUI + FLUX.1-schnell
-# Models are NOT baked in — mounted at runtime from /runpod-volume (network volume mqqgzwnfp1)
+# Models are NOT baked in — mounted at runtime from /runpod-volume (RunPod network volume; ID configured via deploy.sh env)
 FROM runpod/pytorch:2.4.0-py3.11-cuda12.4.1-devel-ubuntu22.04
 
 LABEL org.opencontainers.image.source="https://github.com/Jhonata-Matias/servegate" \
