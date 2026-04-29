@@ -50,7 +50,9 @@ This endpoint **does** consume the daily rate-limit quota.
 | `seed` | integer | No | |
 
 <Aside type="note" title="Multi-image i2i">
-When `input_image_b64_2` is provided, the workflow uses `TextEncodeQwenImageEditPlus` with both reference images. The completed response includes additional metadata fields: `input_width_2`, `input_height_2`, `source_width_2`, `source_height_2`, `input_downsampled_2`. Single-image calls (omit `input_image_b64_2`) keep using the original `TextEncodeQwenImageEdit` node — fully backwards-compatible.
+When `input_image_b64_2` is provided, the workflow uses `TextEncodeQwenImageEditPlus` with both reference images. The TypeScript SDK exposes this as the `image2` parameter on `edit()` — the gateway translates `image2` to `input_image_b64_2` over the wire.
+
+The completed response includes additional metadata fields: `input_width_2`, `input_height_2`, `source_width_2`, `source_height_2`, `input_downsampled_2`. Single-image calls (omit `input_image_b64_2` / `image2`) keep using the original `TextEncodeQwenImageEdit` node — fully backwards-compatible.
 </Aside>
 
 ### Response — accepted
