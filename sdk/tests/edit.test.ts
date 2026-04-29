@@ -106,6 +106,37 @@ describe('FluxClient — edit happy path', () => {
     await client.edit({ prompt: 'edit', image: fakePngBytes(320, 240) });
     expect(fetchSpy).toHaveBeenCalledTimes(2);
   });
+
+  it('submits optional second image as input_image_b64_2', async () => {
+    const fetchSpy = vi.fn()
+      .mockResolvedValueOnce(
+        makeResponse(
+          202,
+          { job_id: 'job-edit', status_url: '/jobs/job-edit', est_wait_seconds: 'unknown' },
+          { Location: '/jobs/job-edit', 'Retry-After': '0' },
+        ),
+      )
+      .mockResolvedValueOnce(
+        makeResponse(200, { output: { image_b64: 'OK', metadata: { seed: 1, elapsed_ms: 1 } } }),
+      );
+    const client = new FluxClient({
+      apiKey: 'k',
+      gatewayUrl: 'https://gw.example',
+      options: { fetchImpl: fetchSpy as unknown as typeof fetch },
+    });
+
+    await client.edit({
+      prompt: 'blend image 1 with image 2',
+      image: fakePngBase64(640, 360),
+      image2: fakePngBase64(720, 480),
+    });
+
+    const body = JSON.parse((fetchSpy.mock.calls[0]?.[1] as RequestInit).body as string) as Record<string, unknown>;
+    expect(body['input_image_b64']).toBe(fakePngBase64(640, 360));
+    expect(body['input_image_b64_2']).toBe(fakePngBase64(720, 480));
+    expect(body['image']).toBeUndefined();
+    expect(body['image2']).toBeUndefined();
+  });
 });
 
 describe('FluxClient — edit validation', () => {
@@ -168,13 +199,48 @@ describe('FluxClient — edit validation', () => {
       ValidationError,
     );
   });
+
+  it('rejects invalid base64 in image2 with image2 field', async () => {
+    const client = new FluxClient({ apiKey: 'k', gatewayUrl: 'https://gw.example' });
+    await expect(client.edit({ prompt: 'edit', image: fakePngBase64(640, 360), image2: 'not@@base64' }))
+      .rejects.toMatchObject({ field: 'image2' });
+  });
+
+  it('rejects square image2 with image2 field', async () => {
+    const client = new FluxClient({ apiKey: 'k', gatewayUrl: 'https://gw.example' });
+    await expect(
+      client.edit({ prompt: 'edit', image: fakePngBase64(640, 360), image2: fakePngBase64(512, 512) }),
+    ).rejects.toMatchObject({ field: 'image2' });
+  });
+
+  it('rejects unsupported MIME in image2 with image2 field', async () => {
+    const client = new FluxClient({ apiKey: 'k', gatewayUrl: 'https://gw.example' });
+    await expect(client.edit({ prompt: 'edit', image: fakePngBase64(640, 360), image2: Buffer.from('hello') }))
+      .rejects.toMatchObject({ field: 'image2' });
+  });
+
+  it('rejects decoded payloads over 8MB in image2 with image2 field', async () => {
+    const client = new FluxClient({ apiKey: 'k', gatewayUrl: 'https://gw.example' });
+    await expect(
+      client.edit({
+        prompt: 'edit',
+        image: fakePngBase64(640, 360),
+        image2: new Uint8Array(8 * 1024 * 1024 + 1),
+      }),
+    ).rejects.toMatchObject({ field: 'image2' });
+  });
 });
 
 describe('SDK type additivity', () => {
   it('keeps existing GenerateInput/GenerateOutput assignable and exposes EditInput', () => {
     const generateInput: GenerateInput = { prompt: 'cat', steps: 4, width: 1024, height: 1024 };
     const generateOutput: GenerateOutput = { output: { image_b64: 'x', metadata: { seed: 1, elapsed_ms: 1 } } };
-    const editInput: EditInput = { prompt: 'edit', image: fakePngBase64(640, 360), strength: 0.85 };
+    const editInput: EditInput = {
+      prompt: 'edit',
+      image: fakePngBase64(640, 360),
+      image2: fakePngBase64(720, 480),
+      strength: 0.85,
+    };
 
     expect(generateInput.steps).toBe(4);
     expect(generateOutput.output.metadata.seed).toBe(1);
