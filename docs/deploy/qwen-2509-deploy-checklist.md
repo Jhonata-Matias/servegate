@@ -22,31 +22,48 @@
 
 ## Step 1 — Download Qwen 2509 weights to network volume
 
-**Where:** Inside the RunPod pod that has `/runpod-volume` mounted (the same pod used for development; `pod.sh` provides SSH access).
+**Status:** Completed on 2026-04-29 via a temporary RunPod CPU pod with the network volume mounted. The operational blocker in issue #16 is mitigated; keep this section as the repeatable runbook.
 
-**Goal:** Place `qwen_image_edit_2509_fp8_e4m3fn.safetensors` (~20 GB) alongside the existing v1 weight at `/runpod-volume/ComfyUI/models/diffusion_models/`.
+**Where:** Prefer a temporary RunPod CPU pod in the same datacenter as the network volume. The download is I/O-bound, not GPU-bound, so do not consume scarce GPU capacity just to fetch model weights. Use a RunPod base image with `sshd` configured; minimal images such as `python:3.11-slim` can fail the platform boot handshake.
+
+**Goal:** Place `qwen_image_edit_2509_fp8_e4m3fn.safetensors` (~20 GB) alongside the existing v1 weight at `/runpod-volume/ComfyUI/models/unet/`.
 
 **Keep v1 in place** for instant rollback (revert `QWEN_UNET_NAME` in handler.py + re-bake).
 
 ```bash
-# From WSL/local
-bash pod.sh ssh
+# From WSL/local: create or connect to a temporary CPU pod with /runpod-volume mounted.
+# If falling back to the GPU dev pod, use: bash pod.sh ssh
 
 # Inside pod:
 df -h /runpod-volume                                   # verify ≥ 25 GB free
-cd /runpod-volume/ComfyUI/models/diffusion_models      # adjust if path differs
+cd /runpod-volume/ComfyUI/models/unet
 ls -lh qwen_image_edit_*.safetensors                   # confirm v1 already there
 
-huggingface-cli download Comfy-Org/Qwen-Image-Edit_ComfyUI \
-  split_files/diffusion_models/qwen_image_edit_2509_fp8_e4m3fn.safetensors \
-  --local-dir . --local-dir-use-symlinks False
+python3 - <<'PY'
+from huggingface_hub import hf_hub_download
+
+path = hf_hub_download(
+    repo_id="Comfy-Org/Qwen-Image-Edit_ComfyUI",
+    filename="split_files/diffusion_models/qwen_image_edit_2509_fp8_e4m3fn.safetensors",
+    local_dir=".",
+)
+print(path)
+PY
 
 # Move to top-level if HF places under split_files/
 mv split_files/diffusion_models/qwen_image_edit_2509_fp8_e4m3fn.safetensors . 2>/dev/null || true
 ls -lh qwen_image_edit_2509_fp8_e4m3fn.safetensors     # ~20 GB expected
 ```
 
-**Verification:** SHA-256 of downloaded file should match HuggingFace LFS metadata. If checksums mismatch, re-download.
+**Verification:** SHA-256 and size must match HuggingFace LFS metadata. Current verified values:
+
+```bash
+sha256sum qwen_image_edit_2509_fp8_e4m3fn.safetensors
+# 318568f61951ab9da21100c7b896e3c1da67f0d2efad6421545e022cfaa2b2b4
+
+stat -c%s qwen_image_edit_2509_fp8_e4m3fn.safetensors
+# 20430698424
+```
 
 **Time:** 15-40 min depending on pod bandwidth.
 
@@ -54,13 +71,15 @@ ls -lh qwen_image_edit_2509_fp8_e4m3fn.safetensors     # ~20 GB expected
 
 ## Step 2 — Bump Docker image tag
 
-Edit `serverless/deploy.sh:14-15`:
+**Status:** Completed in this PR. `serverless/deploy.sh` now defaults to the v0.2.1 image/template.
+
+**Why v0.2.1:** `:0.2.0` already existed on RunPod from the prior i2i deployment path. Reusing the mutable tag/template can keep serving a cached worker image, so this deploy uses a patch tag to force a clean template/image rollout.
 
 ```diff
 -IMAGE="${IMAGE:-ghcr.io/jhonata-matias/gemma4-flux-serverless:0.1.0}"
 -TEMPLATE_NAME="${TEMPLATE_NAME:-gemma4-flux-serverless-v0_1_0}"
-+IMAGE="${IMAGE:-ghcr.io/jhonata-matias/gemma4-flux-serverless:0.2.0}"
-+TEMPLATE_NAME="${TEMPLATE_NAME:-gemma4-flux-serverless-v0_2_0}"
++IMAGE="${IMAGE:-ghcr.io/jhonata-matias/gemma4-flux-serverless:0.2.1}"
++TEMPLATE_NAME="${TEMPLATE_NAME:-gemma4-flux-serverless-v0_2_1}"
 ```
 
 Rationale: handler.py changed (multi-image dispatch + Qwen 2509 reference) — this is a non-breaking feature addition, semver minor bump. Template name follows the same convention.
@@ -73,13 +92,13 @@ Rationale: handler.py changed (multi-image dispatch + Qwen 2509 reference) — t
 
 ```bash
 cd serverless/
-docker build -t ghcr.io/jhonata-matias/gemma4-flux-serverless:0.2.0 .
-docker push ghcr.io/jhonata-matias/gemma4-flux-serverless:0.2.0
+docker build -t ghcr.io/jhonata-matias/gemma4-flux-serverless:0.2.1 .
+docker push ghcr.io/jhonata-matias/gemma4-flux-serverless:0.2.1
 ```
 
 **Verification:**
 ```bash
-docker manifest inspect ghcr.io/jhonata-matias/gemma4-flux-serverless:0.2.0 | jq '.config.digest'
+docker manifest inspect ghcr.io/jhonata-matias/gemma4-flux-serverless:0.2.1 | jq '.config.digest'
 ```
 
 **Time:** 5-10 min (image is ~6-8 GB, no model baked).
@@ -96,13 +115,13 @@ docker manifest inspect ghcr.io/jhonata-matias/gemma4-flux-serverless:0.2.0 | jq
 `deploy.sh` is idempotent: if template name is new, it creates; if endpoint already exists, it updates `executionTimeoutMs` and reuses.
 
 ```bash
-IMAGE=ghcr.io/jhonata-matias/gemma4-flux-serverless:0.2.0 \
-TEMPLATE_NAME=gemma4-flux-serverless-v0_2_0 \
+IMAGE=ghcr.io/jhonata-matias/gemma4-flux-serverless:0.2.1 \
+TEMPLATE_NAME=gemma4-flux-serverless-v0_2_1 \
 bash serverless/deploy.sh
 ```
 
 **What this does:**
-1. Creates new template `gemma4-flux-serverless-v0_2_0` pointing to `:0.2.0` image.
+1. Creates new template `gemma4-flux-serverless-v0_2_1` pointing to `:0.2.1` image.
 2. Reuses existing endpoint `gemma4-flux-serverless` (default `ENDPOINT_NAME`).
 3. **Important caveat:** `deploy.sh` does NOT change the `templateId` of an existing endpoint via PATCH. To switch the endpoint to the new template, manual step required:
 
@@ -196,7 +215,7 @@ Old image at `:0.1.0` continues to use Qwen v1 weight (still on network volume p
 
 ## Post-deploy cleanup (optional)
 
-After 1-2 weeks of stable v0.2.0 in prod:
+After 1-2 weeks of stable v0.2.1 in prod:
 
 - [ ] Delete old template `gemma4-flux-serverless-v0_1_0` (RunPod UI or REST API)
 - [ ] Remove old image tag `:0.1.0` from ghcr.io (or keep for audit)
