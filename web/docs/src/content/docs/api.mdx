@@ -1,34 +1,44 @@
 ---
 title: API Reference
-description: HTTP contract for servegate — POST /jobs (text-to-image, single- and multi-image edit), GET /jobs/{id} polling, POST /v1/generate Gemma 4 text streaming, plus rate-limit headers and error codes.
+description: "HTTP contract for servegate, organized by capability: generate images, edit images, check job status, and generate text."
 ---
 
-import { Aside, Tabs, TabItem, Badge } from '@astrojs/starlight/components';
+import { Aside, Badge } from '@astrojs/starlight/components';
 
-The gateway exposes three endpoints over a single API key:
+The gateway exposes image and text capabilities behind one alpha API key. Image work uses an async submit/poll flow: submit a job, then check its status until the output is ready. Text generation uses `POST /v1/generate` and can return either a stream or one JSON response.
 
 | Method | Path | Purpose |
 |---|---|---|
-| `POST` | `/jobs` | Submit a T2I or i2i job (returns `202` with `job_id`) |
+| `POST` | `/jobs` | Submit an image generation or image editing job |
 | `GET` | `/jobs/{job_id}` | Poll job status — does **not** consume rate-limit quota |
 | `POST` | `/v1/generate` | Gemma 4 text generation (SSE stream or JSON) |
 
 Base URL (alpha): `https://gemma4-gateway.jhonata-matias.workers.dev`.
 
-## `POST /jobs`
+## Generate images
 
-Async submit for text-to-image **or** image-to-image. Without `input_image_b64`, the gateway routes to FLUX.1-schnell; with `input_image_b64`, it routes to Qwen-Image-Edit; with both `input_image_b64` and `input_image_b64_2`, it routes to the multi-image Qwen-Image-Edit path (`TextEncodeQwenImageEditPlus`, requires server `0.2.1`+).
+Generate images when you have a prompt and want a new image. This is the text-to-image path, often shortened to T2I.
 
-This endpoint **does** consume the daily rate-limit quota.
+### When to use this
 
-### Headers
+Use this for new images from text: concept art, backgrounds, product imagery, and experiments where no reference image is required.
+
+### Endpoint
+
+`POST /jobs`
+
+This endpoint returns `202 Accepted` with a `job_id`. It **does** consume the daily image job quota.
+
+### Request
+
+Headers:
 
 | Header | Required | Notes |
 |---|---|---|
 | `X-API-Key` | Yes | Gateway-issued credential |
 | `Content-Type` | Yes | `application/json` |
 
-### T2I request body
+Body:
 
 | Field | Type | Required |
 |---|---|---|
@@ -38,7 +48,62 @@ This endpoint **does** consume the daily rate-limit quota.
 | `height` | integer | Yes |
 | `seed` | integer | No |
 
-### i2i request body
+Example:
+
+```json
+{
+  "prompt": "a peaceful zen garden with cherry blossoms, photorealistic",
+  "steps": 4,
+  "width": 1024,
+  "height": 1024,
+  "seed": 42
+}
+```
+
+### Response
+
+```http
+HTTP/1.1 202 Accepted
+Location: /jobs/<job_id>
+Retry-After: 5
+
+{
+  "job_id": "<uuid>",
+  "status_url": "/jobs/<uuid>",
+  "est_wait_seconds": "unknown"
+}
+```
+
+### Common mistakes
+
+- Sending `input_image_b64` by accident selects the image editing path.
+- Forgetting to poll `GET /jobs/{job_id}` after the `202 Accepted` response.
+- Using an invalid API key or missing `X-API-Key`.
+
+## Edit images
+
+Edit images when you already have one or two reference images and want to change them with a text instruction. This is the image-to-image path, often shortened to i2i.
+
+### When to use this
+
+Use this for local image edits, restyling, background-preserving changes, or two-reference workflows such as applying an outfit from one image to a person in another.
+
+### Endpoint
+
+`POST /jobs`
+
+The body shape chooses the edit workflow. With `input_image_b64`, the gateway routes to Qwen-Image-Edit. With both `input_image_b64` and `input_image_b64_2`, it routes to the multi-image Qwen-Image-Edit path (`TextEncodeQwenImageEditPlus`, requires server `0.2.1`+).
+
+### Request
+
+Headers:
+
+| Header | Required | Notes |
+|---|---|---|
+| `X-API-Key` | Yes | Gateway-issued credential |
+| `Content-Type` | Yes | `application/json` |
+
+Body:
 
 | Field | Type | Required | Notes |
 |---|---|---|---|
@@ -55,7 +120,19 @@ When `input_image_b64_2` is provided, the workflow uses `TextEncodeQwenImageEdit
 The completed response includes additional metadata fields: `input_width_2`, `input_height_2`, `source_width_2`, `source_height_2`, `input_downsampled_2`. Single-image calls (omit `input_image_b64_2` / `image2`) keep using the original `TextEncodeQwenImageEdit` node — fully backwards-compatible.
 </Aside>
 
-### Response — accepted
+Example:
+
+```json
+{
+  "prompt": "make the jacket green while keeping the background unchanged",
+  "input_image_b64": "<base64 PNG/JPEG/WebP>",
+  "strength": 0.85,
+  "steps": 8,
+  "seed": 42
+}
+```
+
+### Response
 
 ```http
 HTTP/1.1 202 Accepted
@@ -69,30 +146,47 @@ Retry-After: 5
 }
 ```
 
-### Rate-limit headers
+### Common mistakes
 
-Every `POST /jobs` response carries:
+- Sending a square image (`1:1` aspect ratio), which is rejected.
+- Sending an image above 8 MB decoded or above 1 MP.
+- Sending the second reference image in an unexpected field instead of `input_image_b64_2`.
+- Treating the `202 Accepted` response as the final image output; use [Check job status](#check-job-status) next.
 
-| Header | Meaning |
-|---|---|
-| `X-RateLimit-Limit` | Daily global limit (default: `100`) |
-| `X-RateLimit-Remaining` | Quota remaining for the current UTC day |
-| `X-RateLimit-Reset` | Reset timestamp at `00:00 UTC` |
+## Check job status
 
-## `GET /jobs/{job_id}`
+Check job status after submitting any image job. Generation and editing both return a `job_id`, and the final `image_b64` appears only after polling completes.
 
-Polls the state of a previously submitted job. **Does not** consume quota.
+### When to use this
 
-### State mapping
+Use this immediately after `POST /jobs`, then repeat according to `Retry-After` until you receive `200 OK`.
+
+### Endpoint
+
+`GET /jobs/{job_id}`
+
+This endpoint **does not** consume image job quota.
+
+### Request
+
+Headers:
+
+| Header | Required | Notes |
+|---|---|---|
+| `X-API-Key` | Yes | Gateway-issued credential |
+
+### Response
+
+State mapping:
 
 | HTTP | State | Body |
 |---|---|---|
 | `200 OK` | Completed | `{ output: { image_b64, metadata } }` |
 | `202 Accepted` | In progress | Returns `Retry-After: 5` and `{ status: "running" }` |
 | `404 Not Found` | Expired or unknown | `{ error: "job_not_found_or_expired" }` |
-| `5xx` | Upstream failure | RunPod timeout or fatal error — see [Errors](/errors/) |
+| `5xx` | Upstream failure | RunPod timeout or fatal error — see [Handle errors](/errors/) |
 
-### Successful response shape
+Successful response shape:
 
 ```json
 {
@@ -120,20 +214,36 @@ Polls the state of a previously submitted job. **Does not** consume quota.
 
 The `_2`-suffixed metadata fields are only present when the request used `input_image_b64_2`. Their presence is a reliable signal that the multi-image branch executed.
 
-## `POST /v1/generate`
+### Common mistakes
 
-Gemma 4 text completions. SSE streaming by default; pass `"stream": false` for a single JSON response.
+- Polling without the same API key used to submit the job.
+- Polling too aggressively instead of respecting `Retry-After: 5`.
+- Treating `202 Accepted` as failure; it means the job is still queued or running.
+
+## Generate text
+
+Generate text when you want Gemma 4 to answer chat-style messages. Text generation is a first-class servegate capability and does not use the image job polling flow.
+
+### When to use this
+
+Use this for chat completions, assistants, summarization, or other language tasks. Use `stream: true` when you want tokens as they arrive, or `stream: false` when one JSON response is easier to handle.
+
+### Endpoint
+
+`POST /v1/generate`
 
 <Badge text="OpenAI-compatible frames" /> — emits `chat.completion.chunk` deltas with `data: [DONE]` terminator.
 
-### Headers
+### Request
+
+Headers:
 
 | Header | Required | Notes |
 |---|---|---|
 | `Authorization: Bearer <key>` | Yes | Same gateway API key |
 | `Content-Type` | Yes | `application/json` |
 
-### Request body
+Body:
 
 ```json
 {
@@ -144,7 +254,9 @@ Gemma 4 text completions. SSE streaming by default; pass `"stream": false` for a
 }
 ```
 
-### Streaming response
+### Response
+
+Streaming response:
 
 ```http
 HTTP/1.1 200 OK
@@ -162,7 +274,7 @@ data: {"object":"chat.completion.chunk","model":"gemma4:e4b","choices":[{"index"
 data: [DONE]
 ```
 
-### Non-streaming response
+Non-streaming response:
 
 ```json
 {
@@ -179,7 +291,36 @@ data: [DONE]
 }
 ```
 
-### Text error codes
+### Common mistakes
+
+- Using `X-API-Key` instead of `Authorization: Bearer <key>` on the text endpoint.
+- Omitting the `messages` array.
+- Forgetting that streaming responses are Server-Sent Events (SSE), which arrive as `data:` frames.
+
+## Rate limits and headers
+
+Image job responses include image quota headers:
+
+| Header | Meaning |
+|---|---|
+| `X-RateLimit-Limit` | Daily global limit (default: `100`) |
+| `X-RateLimit-Remaining` | Quota remaining for the current UTC day |
+| `X-RateLimit-Reset` | Reset timestamp at `00:00 UTC` |
+
+Text responses use the text token budget and also include rate-limit information when available.
+
+## Endpoint-specific error notes
+
+This page lists only the most common endpoint-specific failure modes. For the full taxonomy and SDK class mapping, see [Handle errors](/errors/).
+
+### Image jobs
+
+- `400 i2i_validation`: invalid image payload, MIME type, dimensions, aspect ratio, steps, or strength.
+- `401 invalid_api_key`: missing or invalid gateway credential.
+- `429 rate_limit_exceeded`: daily image job quota exhausted.
+- `504 generation_timeout`: RunPod marked the job as timed out.
+
+### Text generation
 
 | HTTP | Code | Meaning |
 |---|---|---|
@@ -191,4 +332,4 @@ data: [DONE]
 | `502` | `upstream_error` | Provider returned an error |
 | `503` | `upstream_unavailable` | Provider or network unreachable |
 
-See [Errors](/errors/) for a full taxonomy and SDK error class mapping.
+See [Handle errors](/errors/) for recovery guidance and SDK error classes.

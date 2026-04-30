@@ -1,0 +1,32 @@
+---
+title: Edit images
+description: Change one or two reference images with a text instruction using Qwen-Image-Edit.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Edit images when you already have a reference image and want servegate to change it with a text instruction. This is the image-to-image path, often shortened to i2i: you send image data plus a prompt, and the gateway runs an edit job.
+
+## When to use this
+
+Use image editing for local changes, restyling, outfit swaps, background-preserving edits, or multi-image references where one image supplies the subject and another supplies style or content.
+
+If you do not have an input image, use [Generate images](/generate-images/) instead.
+
+## Single-image edits
+
+Send `input_image_b64` with your prompt. The presence of that field selects the Qwen-Image-Edit workflow.
+
+## Multi-image edits
+
+Send `input_image_b64` and `input_image_b64_2` when you need two reference images. This path requires server `0.2.1` or newer and SDK `0.4.0` or newer.
+
+<Aside type="caution" title="Input constraints">
+Reference images must be PNG, JPEG, or WebP, at most 8 MB decoded, at most 1 MP, and non-square. If the second image fails validation, the SDK and gateway identify it with `field: "image2"`.
+</Aside>
+
+## Start here
+
+- Follow the [Quickstart](/quickstart/#3-edit-an-image) for single-image and two-image curl examples.
+- Use the [API Reference](/api/#edit-images) when you need exact payload fields.
+- Use the [SDK guide](/sdk/#edit--image-to-image) for TypeScript `client.edit(...)` examples.

@@ -1,0 +1,176 @@
+---
+title: RunPod Video Capacity Report
+description: Preliminary architecture report on RunPod capacity for alpha video generation with LTX-Video 2B, including T2V evidence, I2V blockers, cost envelope, and deployment gates.
+template: doc
+---
+
+import { Badge, LinkCard, CardGrid, Aside } from '@astrojs/starlight/components';
+
+<section class="report-hero" aria-labelledby="runpod-report-title">
+	<div class="report-kicker">
+		<Badge text="Preliminary" variant="caution" />
+		<span>Architectural capacity assessment · 2026-04-30</span>
+	</div>
+	<h1 id="runpod-report-title">RunPod capacity for video models</h1>
+	<p>
+		RunPod is technically viable for an alpha text-to-video path with LTX-Video 2B, but it is not yet approved as a dependable production capacity layer for the complete T2V + I2V surface.
+	</p>
+	<div class="verdict-strip" role="list" aria-label="Capacity verdict">
+		<div role="listitem">
+			<span class="verdict-label">T2V alpha</span>
+			<strong class="status-pass">Approved</strong>
+		</div>
+		<div role="listitem">
+			<span class="verdict-label">I2V alpha</span>
+			<strong class="status-blocked">Blocked</strong>
+		</div>
+		<div role="listitem">
+			<span class="verdict-label">Production</span>
+			<strong class="status-watch">Needs gates</strong>
+		</div>
+	</div>
+</section>
+
+<section class="metric-grid" aria-label="Validated RunPod T2V evidence">
+	<div class="metric-card positive">
+		<span>Best wallclock</span>
+		<strong>195.2s</strong>
+		<small>Below the 600s acceptance gate</small>
+	</div>
+	<div class="metric-card positive">
+		<span>GPU assigned</span>
+		<strong>NVIDIA L4</strong>
+		<small>24GB class, RunPod ADA_24 pool</small>
+	</div>
+	<div class="metric-card neutral">
+		<span>Peak reserved VRAM</span>
+		<strong>19.377GB</strong>
+		<small>Fits within the L4 usable envelope</small>
+	</div>
+	<div class="metric-card risk">
+		<span>I2V smoke</span>
+		<strong>IN_QUEUE</strong>
+		<small>No worker provisioned during fixed-handler run</small>
+	</div>
+</section>
+
+## Executive verdict
+
+The evidence supports **RunPod Serverless Flex + LTX-Video 2B + L4/A5000/3090 24GB-class GPUs** as the first alpha lane for text-to-video. The same evidence does **not** support a production-ready claim for all video modes, because I2V is still missing a successful fixed-handler smoke run and recent jobs remained queued without worker allocation.
+
+<Aside type="caution" title="Decision boundary">
+Treat “fits on GPU” and “provisions reliably” as separate questions. LTX-Video 2B fits the target GPU class. RunPod provisioning still needs more evidence before beta.
+</Aside>
+
+## Capacity matrix
+
+<table class="report-table">
+	<thead>
+		<tr>
+			<th>Capability</th>
+			<th>Current status</th>
+			<th>Evidence</th>
+			<th>Recommended action</th>
+		</tr>
+	</thead>
+	<tbody>
+		<tr>
+			<td>T2V alpha</td>
+			<td><span class="pill pass">Approved</span></td>
+			<td>Two GREEN smoke runs: 366.5s and 195.2s, both below 600s.</td>
+			<td>Proceed through the async job contract.</td>
+		</tr>
+		<tr>
+			<td>I2V alpha</td>
+			<td><span class="pill blocked">Blocked</span></td>
+			<td>Handler fix exists, but fixed I2V jobs stayed IN_QUEUE for 600s.</td>
+			<td>Require 3/3 COMPLETED smoke evidence before advertising.</td>
+		</tr>
+		<tr>
+			<td>Warm UX</td>
+			<td><span class="pill watch">Open</span></td>
+			<td>Cold start remains a visible UX cost; active workers remove it at continuous cost.</td>
+			<td>Decide `workersMin=1` only after alpha traffic data.</td>
+		</tr>
+		<tr>
+			<td>Volume cache</td>
+			<td><span class="pill watch">Risky</span></td>
+			<td>Network volume can reduce load time but pins scheduling to one datacenter.</td>
+			<td>Use no volume by default; reintroduce only in a healthier DC with rollback.</td>
+		</tr>
+	</tbody>
+</table>
+
+## Evidence map
+
+<div class="timeline" aria-label="Video capacity validation timeline">
+	<div class="timeline-item blocked">
+		<span>Wan spike</span>
+		<strong>Worker spawn failure</strong>
+		<p>Wan2.2 remained technically attractive, but RunPod did not provision workers after repeated mitigations.</p>
+	</div>
+	<div class="timeline-item pass">
+		<span>LTX T2V</span>
+		<strong>Two GREEN runs</strong>
+		<p>LTX-Video 2B returned playable MP4 output on L4 24GB within the 600s gate.</p>
+	</div>
+	<div class="timeline-item watch">
+		<span>Scheduler</span>
+		<strong>DC pinning identified</strong>
+		<p>Removing the network volume allowed RunPod to schedule across available datacenters.</p>
+	</div>
+	<div class="timeline-item blocked">
+		<span>I2V follow-up</span>
+		<strong>Provisioning blocked</strong>
+		<p>Fixed-handler smoke jobs were accepted but did not reach execution.</p>
+	</div>
+</div>
+
+## Cost envelope
+
+RunPod currently prices the L4/A5000/3090 Serverless Flex class at **US$0.00019/s**. Using the local median of **198.05 GPU-seconds** per cold call:
+
+<section class="cost-panel" aria-label="RunPod cost estimate">
+	<div>
+		<span>Per cold call</span>
+		<strong>~US$0.0376</strong>
+	</div>
+	<div>
+		<span>20 calls/day</span>
+		<strong>~US$22.60/month</strong>
+	</div>
+	<div>
+		<span>100 calls/day</span>
+		<strong>~US$112.90/month</strong>
+	</div>
+</section>
+
+These numbers exclude R2 storage/egress and any decision to keep active workers warm. If `workersMin=1` is enabled, the cost profile changes from burst compute to continuous capacity.
+
+## Recommended deployment posture
+
+1. Keep RunPod for **alpha T2V LTX 2B**.
+2. Keep I2V behind capability discovery as **validation pending** until Story 5.1.1.2 closes GREEN.
+3. Avoid `networkVolumeId` by default; use `MODEL_LOADING_PATH=pretrained` until the product has enough traffic to justify a volume cache.
+4. Keep the endpoint async-only. Do not use synchronous gateway calls for video.
+5. Escalate to hosted API fallback if repeated `IN_QUEUE` windows exceed the agreed operational threshold.
+
+## Follow-up gates
+
+<CardGrid>
+	<LinkCard
+		title="ADR-0005"
+		description="Authoritative architecture decision for the LTX video stack and outstanding capacity decisions."
+		href="https://github.com/Jhonata-Matias/servegate/blob/main/docs/architecture/adr-0005-video-stack.md"
+	/>
+	<LinkCard
+		title="Story 5.1.1"
+		description="T2V spike evidence: RunPod LTX endpoint returned MP4 within the acceptance gate."
+		href="https://github.com/Jhonata-Matias/servegate/blob/main/docs/stories/5.1.1.spike-validation-ltx-video.story.md"
+	/>
+	<LinkCard
+		title="Story 5.1.1.2"
+		description="I2V fixed-handler validation remains blocked by RunPod queue/capacity evidence."
+		href="https://github.com/Jhonata-Matias/servegate/blob/main/docs/stories/5.1.1.2.fix-i2v-handler.story.md"
+	/>
+</CardGrid>

@@ -1,0 +1,27 @@
+---
+title: Generate text
+description: Use servegate's Gemma 4 text generation endpoint with streaming or JSON responses.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Generate text when you want servegate to answer a message prompt through Gemma 4. Text generation uses the same gateway credential as image jobs, but it uses a separate endpoint and can stream tokens back to the client.
+
+## When to use this
+
+Use text generation for chat-style completions, internal assistants, summarization, and other language tasks where you need a text response instead of an image.
+
+## How it works
+
+1. Send chat-style `messages` to `POST /v1/generate`.
+2. Use `Authorization: Bearer <key>` with the same gateway API key.
+3. Choose streaming Server-Sent Events (SSE) for incremental output, or pass `"stream": false` for one JSON response.
+
+<Aside type="note" title="What is SSE?">
+SSE means Server-Sent Events: the response arrives as a stream of `data:` frames until the final `data: [DONE]` marker.
+</Aside>
+
+## Start here
+
+- See the [API Reference](/api/#generate-text) for request and response shapes.
+- Use [Handle errors](/errors/) for text-specific validation and upstream failures.

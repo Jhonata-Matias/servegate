@@ -23,13 +23,27 @@ export default defineConfig({
 			},
 			sidebar: [
 				{ label: 'Welcome', slug: 'index' },
+				{ label: 'Quickstart', slug: 'quickstart' },
 				{
-					label: 'Get started',
-					items: [{ label: 'Quickstart', slug: 'quickstart' }],
+					label: 'Capabilities',
+					items: [
+						{ label: 'Generate images', slug: 'generate-images' },
+						{ label: 'Edit images', slug: 'edit-images' },
+						{ label: 'Generate text', slug: 'generate-text' },
+					],
 				},
-				{ label: 'API Reference', slug: 'api' },
-				{ label: 'SDK (TypeScript)', slug: 'sdk' },
-				{ label: 'Errors', slug: 'errors' },
+				{
+					label: 'Reference',
+					items: [
+						{ label: 'API Reference', slug: 'api' },
+						{ label: 'SDK (TypeScript)', slug: 'sdk' },
+						{ label: 'Handle errors', slug: 'errors' },
+					],
+				},
+				{
+					label: 'Reports',
+					items: [{ label: 'RunPod Video Report', slug: 'runpod-video-report' }],
+				},
 			],
 		}),
 	],

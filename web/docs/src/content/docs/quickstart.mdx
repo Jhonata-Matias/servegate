@@ -1,17 +1,20 @@
 ---
 title: Quickstart
-description: Submit your first text-to-image, single-image edit, and multi-image edit jobs against the servegate gateway with curl in three steps.
+description: Submit your first image job, poll for the result, and continue to image editing or text generation.
 ---
 
 import { Tabs, TabItem, Aside, Steps } from '@astrojs/starlight/components';
 
-This page walks through three flows:
+Start here if you want the shortest path to a working servegate call. The first flow creates an image from text and shows the shared polling pattern used by image generation and image editing.
 
-1. Submit a **text-to-image** (T2I) job and poll until it completes.
-2. Submit an **image-to-image** (i2i) job with a single reference image (Qwen-Image-Edit).
-3. Submit an **i2i with two reference images** (multi-image i2i, requires server `0.2.1`+ and SDK `0.4.0`+).
+This page walks through:
 
-All three use the same `POST /jobs` endpoint over the same API key — the body shape decides which workflow runs.
+1. Submit a **generate images** job from a text prompt.
+2. Check job status until the image is ready.
+3. Submit **edit images** jobs with one or two reference images.
+4. Continue to **generate text** with Gemma 4.
+
+Image jobs use the same `POST /jobs` endpoint over the same API key. The body shape decides whether servegate generates a new image or edits a reference image.
 
 ## Prerequisites
 
@@ -20,7 +23,7 @@ All three use the same `POST /jobs` endpoint over the same API key — the body 
 
 The gateway base URL is `https://gemma4-gateway.jhonata-matias.workers.dev` (alpha).
 
-## 1. Submit a T2I job
+## 1. Generate an image
 
 <Tabs>
 <TabItem label="curl (submit)">
@@ -88,9 +91,9 @@ When complete:
 Use the [TypeScript SDK](/sdk/) — `client.generate({ prompt })` wraps the submit/poll loop and returns the decoded base64 image directly.
 </Aside>
 
-## 3. Submit an i2i job
+## 3. Edit an image
 
-The same `POST /jobs` accepts an `input_image_b64` field — its presence selects Qwen-Image-Edit instead of FLUX.1-schnell.
+The same `POST /jobs` accepts an `input_image_b64` field. Its presence selects Qwen-Image-Edit instead of text-to-image generation.
 
 <Tabs>
 <TabItem label="i2i 1-image">
@@ -155,7 +158,7 @@ Backwards compatibility: omitting `input_image_b64_2` continues to use the singl
 </TabItem>
 </Tabs>
 
-## i2i input constraints
+## Image editing input constraints
 
 Both reference images must satisfy the same rules:
 
@@ -166,6 +169,8 @@ Both reference images must satisfy the same rules:
 
 When the SDK validates a second image and finds a violation, the error surfaces with `field: 'image2'` so callers can attribute the error to the correct input.
 
-## Text generation (bonus)
+## Generate text
 
-The same gateway proxies Gemma 4 over `POST /v1/generate` with SSE streaming. See the [API reference](/api/#post-v1generate) for the full schema.
+The same gateway also proxies Gemma 4 over `POST /v1/generate`. Text generation does not use image polling; it can return Server-Sent Events (SSE), a stream of `data:` frames, or one JSON response when `"stream": false`.
+
+See [Generate text](/generate-text/) for the plain-language overview, or the [API Reference](/api/#generate-text) for the full schema.

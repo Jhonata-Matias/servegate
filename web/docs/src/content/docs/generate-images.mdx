@@ -1,0 +1,30 @@
+---
+title: Generate images
+description: Create images from text prompts with servegate's async image job API.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Generate images when you want servegate to turn a text prompt into a new image. This is the text-to-image path, often shortened to T2I: you provide text, the gateway starts an image job, and you poll until the image is ready.
+
+## When to use this
+
+Use image generation for prompts like product concepts, backgrounds, creative exploration, and other cases where there is no input image to preserve.
+
+If you already have a source image and want to change it, use [Edit images](/edit-images/) instead.
+
+## How it works
+
+1. Submit a job to `POST /jobs` with a prompt, dimensions, steps, and optional seed.
+2. Store the returned `job_id`.
+3. Poll `GET /jobs/{job_id}` until the response includes `output.image_b64`.
+
+<Aside type="tip" title="Prefer the SDK for app code">
+The TypeScript SDK wraps the submit/poll loop with `client.generate(...)`, so application code can wait on one method call instead of hand-writing polling logic.
+</Aside>
+
+## Start here
+
+- Follow the [Quickstart](/quickstart/) for a copy-paste curl flow.
+- Use the [API Reference](/api/#generate-images) when you need exact request and response fields.
+- Use the [SDK guide](/sdk/#generate--text-to-image) for TypeScript integration.
