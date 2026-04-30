@@ -4,7 +4,7 @@ description: servegate is the open-source HTTP gateway for FLUX.1-schnell text-t
 template: doc
 ---
 
-import { Card, CardGrid, Badge } from '@astrojs/starlight/components';
+import { LinkCard, CardGrid, Badge } from '@astrojs/starlight/components';
 
 <Badge text="Alpha" variant="caution" /> servegate is the canonical HTTP contract for generating images with **FLUX.1-schnell**, editing images with **Qwen-Image-Edit** (single- or multi-image), and generating text with **Gemma 4**. Images use async submit/poll; text uses streaming SSE on the same authenticated gateway.
 
@@ -14,41 +14,41 @@ Latest SDK: `@jhonata-matias/flux-client@0.4.0`.
 ## Get started
 
 <CardGrid stagger>
-	<Card title="Quickstart" icon="rocket">
-		Submit your first T2I and i2i jobs with `curl` in three steps.
+	<LinkCard
+		title="🚀 Quickstart"
+		description="Submit your first T2I and i2i jobs with curl in three steps."
+		href="/quickstart/"
+	/>
 
-		[→ Read the Quickstart](/quickstart/)
-	</Card>
+	<LinkCard
+		title="🔐 Authentication"
+		description="API key over X-API-Key (jobs) or Authorization: Bearer (text). Request alpha access via the GitHub repo issue template."
+		href="https://github.com/Jhonata-Matias/servegate#alpha-access"
+	/>
 
-	<Card title="Authentication" icon="seti:lock">
-		API key over `X-API-Key` (jobs) or `Authorization: Bearer` (text). Request alpha access via the GitHub repo issue template.
+	<LinkCard
+		title="📖 API Reference"
+		description="HTTP contract for POST /jobs, GET /jobs/{id}, and POST /v1/generate, including the new multi-image i2i field."
+		href="/api/"
+	/>
 
-		[→ Request access](https://github.com/Jhonata-Matias/servegate#alpha-access)
-	</Card>
+	<LinkCard
+		title="🛠 TypeScript SDK"
+		description="@jhonata-matias/flux-client wraps polling, error taxonomy, and now multi-image edit()."
+		href="/sdk/"
+	/>
 
-	<Card title="API Reference" icon="document">
-		HTTP contract for `POST /jobs`, `GET /jobs/{id}`, and `POST /v1/generate`, including the new multi-image i2i field.
+	<LinkCard
+		title="⚠ Errors"
+		description="HTTP status codes (401 / 429 / 502 / 504) and i2i_validation variants, including the field: 'image2' discriminator for multi-image errors."
+		href="/errors/"
+	/>
 
-		[→ Read the API reference](/api/)
-	</Card>
-
-	<Card title="TypeScript SDK" icon="seti:typescript">
-		`@jhonata-matias/flux-client` wraps polling, error taxonomy, and now multi-image `edit()`.
-
-		[→ Read the SDK reference](/sdk/)
-	</Card>
-
-	<Card title="Errors" icon="warning">
-		HTTP status codes (401 / 429 / 502 / 504) and `i2i_validation` variants, including the `field: 'image2'` discriminator for multi-image errors.
-
-		[→ Read the error reference](/errors/)
-	</Card>
-
-	<Card title="Releases" icon="seti:github">
-		Release notes and changelog for the gateway image and the SDK npm package.
-
-		[→ View on GitHub](https://github.com/Jhonata-Matias/servegate/releases)
-	</Card>
+	<LinkCard
+		title="🏷 Releases"
+		description="Release notes and changelog for the gateway image and the SDK npm package."
+		href="https://github.com/Jhonata-Matias/servegate/releases"
+	/>
 </CardGrid>
 
 ## Why servegate

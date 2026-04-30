@@ -16,6 +16,11 @@ export default defineConfig({
 				baseUrl: 'https://github.com/Jhonata-Matias/servegate/edit/main/web/docs/',
 			},
 			customCss: ['./src/styles/theme.css'],
+			components: {
+				// V1 is dark-only — suppress the theme toggle (Story 2.9 Decision #6).
+				// Light mode is V2 backlog. Revert by removing this override.
+				ThemeSelect: './src/components/EmptyComponent.astro',
+			},
 			sidebar: [
 				{ label: 'Welcome', slug: 'index' },
 				{
