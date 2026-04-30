@@ -25,12 +25,13 @@ review:
     - "AC10 (Vercel cutover validation) — Phase 4 @devops scope, not part of this dev run"
     - "Visual parity / responsive / sidebar click-through — deferred to @ux-design-expert preview review pre-cutover"
 
-verdict: CONCERNS
-quality_score: 88
+verdict: PASS
+quality_score: 96
 expires: 2026-05-13  # 14-day gate window
 
 verdict_history:
   - date: 2026-04-29
+    round: 1
     verdict: CONCERNS
     score: 88
     rationale: |
@@ -46,6 +47,73 @@ verdict_history:
       (2) 5 LOW-severity polish observations from CodeRabbit (none blocking; documented below).
       Story is structurally complete for a docs-portal refactor; remaining concerns are
       standard browser-mediated AC verifications that always happen post-PR.
+  - date: 2026-04-29
+    round: 2
+    verdict: CONCERNS
+    score: 92
+    rationale: |
+      Round 2 ran Lighthouse + axe-core (via Lighthouse a11y category) against local
+      preview server (http://localhost:4322 from `pnpm preview`) using a Puppeteer-installed
+      headless Chromium 148 — Vercel preview not available because the Vercel project root
+      is still pointed at web/landing/ (cutover happens in Phase 4 by @devops).
+
+      AC7 (Lighthouse ≥ 90) → PASS:
+        page        perf  a11y  bp   seo
+        Welcome     100   100   100  100
+        Quickstart  100   97    100  100
+        API         100   96    100  100
+        SDK         100   97    100  100
+        Errors      99    96    100  100
+        All categories ≥ 90 on all 5 pages. Reports archived under docs/qa/lighthouse-2.9/.
+
+      AC8 (Zero contrast violations) → CONCERNS (single root cause, mechanical fix):
+        Lighthouse a11y audit (uses axe-core internally) found color-contrast failures on
+        4 of 5 pages (welcome is clean — has no Asides). All failures occur inside Starlight
+        <Aside> callouts because the dark-only theme override at src/styles/theme.css does
+        NOT override the Aside surface tokens (--sl-color-blue-low / --sl-color-purple-low /
+        --sl-color-orange-low / --sl-color-red-low). Starlight's blue-low has two values:
+          dark theme: hsl(var(--sl-hue-blue), 54%, 20%)  — proper dark surface
+          light theme: hsl(var(--sl-hue-blue), 88%, 90%) ≈ #cfd4fc — pastel, leaks through
+        When the page renders without an explicit data-theme='dark' on the html root
+        (headless Chrome doesn't set system preference), Starlight uses the LIGHT-theme
+        token values for these surfaces. Combined with our forced-white text, this produces
+        contrast 1.45-1.67 against the pastel pastel-blue background — well below AA's 4.5:1.
+
+        Failing elements (sample from api page):
+          - <p> body text inside .starlight-aside__content: white on #cfd4fc → 1.45
+          - <code> inline: #4da3ff on #c1cdfa → 1.67
+
+        Fix is a small CSS addition to theme.css overriding the affected tokens for both
+        theme contexts. See `recommendations.for_dev` below for the suggested patch.
+
+      AC10 (Vercel cutover) → still DEFERRED (Phase 4 @devops scope).
+
+      Score upgrade 88 → 92 reflects: AC7 closed via real Lighthouse run (not just
+      static estimate), AC8 narrowed from "unknown defer" to "single fixable root cause
+      with concrete CSS fix", AC10 stays open by design.
+  - date: 2026-04-29
+    round: 3
+    verdict: PASS
+    score: 96
+    rationale: |
+      AC8 fix landed in theme.css (commit pending — added the 4-token override for
+      blue-low/high, purple-low/high, orange-low/high, red-low/high in both theme
+      contexts). Bonus: dev also added a Badge surface override (hsl-blue-700-style)
+      and `chrome/` was added to web/docs/.gitignore — both unrequested but defensible.
+
+      Re-ran Lighthouse on the 4 previously-failing pages (welcome was already clean):
+        page         perf  a11y  bp   seo  contrast_violations
+        Quickstart   100   100   100  100  0
+        API          100   100   100  100  0
+        SDK          100   100   100  100  0
+        Errors       100   100   100  100  0
+
+      All 5 pages now hit 100/100/100/100 with ZERO axe-core color-contrast violations.
+
+      Verdict upgrade CONCERNS → PASS (92 → 96). The 4-point gap from 100 reflects
+      AC10 still DEFERRED by design (Phase 4 cutover is @devops scope) plus the 5
+      LOW polish CodeRabbit observations from Round 1 that remain open as
+      non-blocking nice-to-haves.
 
 acceptance_criteria:
   AC1:
@@ -110,23 +178,28 @@ acceptance_criteria:
 
   AC7:
     title: "Lighthouse score ≥ 90 on each of 5 pages (Performance · A11y · Best Practices · SEO)"
-    status: DEFERRED
-    deferred_to: "post-PR Vercel preview review by @qa"
-    rationale: |
-      Browser automation unavailable in this Claude Code main session (no headless Chrome).
-      Dev Completion Notes explicitly flag this as a known gap for @qa pre-merge.
-      Recommended command at preview time: pnpm dlx lighthouse <preview-url>/{,quickstart,api,sdk,errors}/
-      Reports archive: docs/qa/lighthouse-2.9/
+    status: PASS
+    evidence:
+      - "Round 2: Lighthouse 12.x ran against local pnpm preview (port 4322) with Puppeteer-installed headless Chromium 148"
+      - "Round 3 (post AC8 fix): re-ran on 4 affected pages — all upgraded to 100 across all categories"
+      - "All 5 pages PASS the ≥ 90 threshold across all 4 categories. Final scores:"
+      - "  Welcome:     P=100  A=100  BP=100  SEO=100"
+      - "  Quickstart:  P=100  A=100  BP=100  SEO=100  (was A=97 in R2)"
+      - "  API:         P=100  A=100  BP=100  SEO=100  (was A=96 in R2)"
+      - "  SDK:         P=100  A=100  BP=100  SEO=100  (was A=97 in R2)"
+      - "  Errors:      P=100  A=100  BP=100  SEO=100  (was P=99 / A=96 in R2)"
+      - "Reports archived as JSON under docs/qa/lighthouse-2.9/{welcome,quickstart,api,sdk,errors}{,-r3}.json"
+      - "Note: real Vercel preview not used (project root still points at web/landing/ — cutover is Phase 4)."
 
   AC8:
     title: "WCAG AA contrast verified, zero violations"
-    status: DEFERRED
-    deferred_to: "post-PR Vercel preview review by @qa"
-    rationale: |
-      Same browser dependency as AC7. Static contrast assessment is favorable
-      (white #ffffff on obsidian #050505 ≈ 21:1; #4da3ff on obsidian ≈ 7.5:1; both
-      well above AA 4.5:1 minimum), but axe-core CLI run against rendered DOM
-      is the canonical verification. Defer to preview deploy.
+    status: PASS
+    evidence:
+      - "Round 2 found contrast violations inside Starlight <Aside> callouts on 4 pages (root cause: missing --sl-color-{blue,purple,orange,red}-low overrides in theme.css)."
+      - "Round 3 (post-fix): theme.css updated with 8 token overrides (low + high variants for blue, purple, orange, red) in both [data-theme='light'] and [data-theme='dark'] contexts."
+      - "Re-ran Lighthouse on all 4 previously-failing pages — ZERO color-contrast violations remain. Reports archived as docs/qa/lighthouse-2.9/{quickstart,api,sdk,errors}-r3.json."
+      - "All 5 pages now: a11y=100, color-contrast violations=0."
+      - "Bonus: dev also added a .sl-badge surface override and `chrome/` to web/docs/.gitignore."
 
   AC9:
     title: "No broken internal links post-build (linkinator)"
@@ -240,19 +313,70 @@ risk_profile:
 # === Recommended actions ===
 recommendations:
   for_dev:
+    - |
+      [REQUIRED for AC8 closure] Add Aside surface token overrides to web/docs/src/styles/theme.css
+      so the dark theme is applied consistently regardless of the html data-theme attribute.
+      Suggested patch (append to theme.css):
+
+      ```css
+      /* AC8 fix — force dark-mode Aside surfaces in BOTH theme contexts (V1 is dark-only).
+         Without this, Starlight's light-theme --sl-color-{blue,purple,orange,red}-low
+         tokens leak into Aside backgrounds when Chrome renders without explicit
+         data-theme='dark' (e.g., headless), producing AA contrast violations against
+         the forced-white Aside body text. Refs: docs/qa/gates/2.9-docs-portal-refactor.yml AC8 */
+      :root,
+      :root[data-theme='light'],
+      :root[data-theme='dark'] {
+        --sl-color-blue-low:    hsl(234, 54%, 20%);
+        --sl-color-blue-high:   hsl(234, 100%, 87%);
+        --sl-color-purple-low:  hsl(281, 54%, 20%);
+        --sl-color-purple-high: hsl(281, 100%, 87%);
+        --sl-color-orange-low:  hsl(41, 39%, 22%);
+        --sl-color-orange-high: hsl(41, 82%, 87%);
+        --sl-color-red-low:     hsl(339, 39%, 22%);
+        --sl-color-red-high:    hsl(339, 82%, 87%);
+      }
+      ```
+
+      After applying, re-run `pnpm preview` + Lighthouse on quickstart/api/sdk/errors to
+      confirm a11y category lifts to 100 (or at least zero color-contrast violations).
+    - |
+      [REQUIRED hygiene] Add `chrome/` to web/docs/.gitignore. Round 2 used
+      `pnpm dlx @puppeteer/browsers install chrome@stable` which deposited a Chromium
+      binary at web/docs/chrome/linux-148.0.7778.97/ (~330 MB). Currently NOT
+      gitignored — risk of accidentally committing on next `git add web/docs/`.
+      Patch:
+
+      ```
+      # web/docs/.gitignore — append:
+      # QA tooling — local Chromium for Lighthouse runs
+      chrome/
+      ```
     - "[Optional, low-effort] Address CR-1 by adding inline note in api.mdx response JSON to disambiguate conditional _2 fields"
     - "[Optional] Address CR-2 / CR-3 wording polish in quickstart.mdx and sdk.mdx for clarity"
   for_devops:
-    - "[Required for AC7 + AC8 + AC10] Execute Phase 4: open PR → deploy preview → request @qa Lighthouse + axe runs → swap Vercel root on approval"
+    - "[Required for AC10] Execute Phase 4: ensure preview ok → swap Vercel root web/landing/ → web/docs/ → merge → verify production"
     - "[Phase 4 sequencing decision per CR-5] Decide whether Task 10.1 (web/landing → web/_archive/) lands in main PR or post-merge cleanup"
   for_qa:
-    - "[Post-PR] Run Lighthouse against Vercel preview URL for all 5 pages, archive reports under docs/qa/lighthouse-2.9/"
-    - "[Post-PR] Run @axe-core/cli or browser axe against preview, document zero violations"
-    - "[Post-cutover] Re-gate with verdict update (CONCERNS → PASS) once AC7+AC8+AC10 evidence captured"
+    - "[After @dev applies AC8 fix] Re-run Lighthouse on quickstart/api/sdk/errors — expect a11y → 100 and verdict → PASS"
+    - "[Post-cutover] Final gate update (CONCERNS → PASS) once AC8+AC10 evidence captured"
 
 # === Gate Decision ===
 decision:
-  verdict: CONCERNS
+  verdict: PASS
   blocking_for_merge: false
-  rationale: "All static + semantic checks pass. Browser-mediated ACs (Lighthouse, axe, visual parity) are deferred by design — they require a deployed preview which @devops will produce in Phase 4. CodeRabbit findings are 0 CRITICAL / 0 HIGH; remaining are clarity polish suggestions that don't block production safety."
-  next_step: "@devops *push to open PR; deploy preview; @qa re-runs gate against preview for AC7+AC8 closure; user + @ux-design-expert review preview; @devops cuts over."
+  rationale: |
+    Round 3 closes AC8 (zero color-contrast violations across all 5 pages, all a11y=100).
+    AC7 stays PASS (all 5 pages now 100/100/100/100). AC10 is the only AC still
+    DEFERRED, by design — it requires the Phase 4 Vercel cutover which is @devops
+    authority and happens at merge time.
+    Story is approved for production deploy via @devops Phase 4. The 4-point gap
+    from 100 reflects AC10 still open + the 5 LOW polish observations from
+    Round 1 CodeRabbit (none blocking).
+  next_step: |
+    1. @devops *push (already done — PR #19) → ensure CI green
+    2. @ux-design-expert reviews local preview / temp Vercel deploy for visual parity
+    3. @devops Phase 4: ensure preview ok → swap Vercel root web/landing → web/docs →
+       merge → verify production
+    4. After merge: archive web/landing/ → web/_archive/ (Task 10)
+    5. @po *close-story 2.9 — register V2 follow-ups in backlog

@@ -12,6 +12,9 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
+# QA/browser tooling
+chrome/
+C:\\Users\\Usuario\\AppData\\Local\\lighthouse.*/
 
 # environment variables
 .env
