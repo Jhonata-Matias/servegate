@@ -31,7 +31,8 @@
 | **Gateway** | `gateway/` | TypeScript (Workers) | `src/index.ts` | `tests/` (vitest) | — (see `wrangler.toml`) |
 | **SDK** | `sdk/` | TypeScript (ESM + CJS) | `src/index.ts` → `dist/` | `tests/` (vitest) | ✅ |
 | **Serverless handler** | `serverless/` | Python 3 | `handler.py` | `tests/` (smoke/bench) | ✅ |
-| **Landing** | `web/landing/` | Static HTML/JS | `index.html` | (manual smoke) | ✅ |
+| **Docs portal** | `web/docs/` | Astro + Starlight (MDX, TS strict) | `src/content/docs/index.mdx` | Lighthouse + axe + linkinator | ✅ |
+| **Legacy landing** _(archived 2026-04-29 per Story 2.9)_ | `web/_archive/landing-pre-docs-2026-04-29/` | Static HTML/JS | `index.html` | replaced by docs portal | ✅ |
 | **Examples** | `examples/colab/` | Python (notebook) | — | — | ✅ |
 
 Two additional AIOX-internal directories (`squads/`, `.aiox-core/`) are framework tooling, out of scope for this analysis.
@@ -130,7 +131,7 @@ interface GenerateOutput { output: { image_b64: string; metadata: GenerateMetada
 
 | Dimension | Detail |
 |---|---|
-| TypeScript | `gateway/`, `sdk/`, `web/landing/` — strict `tsc --noEmit` in CI-equivalent scripts |
+| TypeScript | `gateway/`, `sdk/`, `web/docs/` — strict `tsc --noEmit` (web/docs/ via `astro check`) |
 | Python | `serverless/` — no type checker wired; tests via pytest |
 | Testing frameworks | vitest (TS), pytest (Py) |
 | Documentation style | README per module + `docs/usage/*.md`, `docs/api/*.md`, `docs/architecture/adr-*.md`, `docs/stories/*.story.md` |
