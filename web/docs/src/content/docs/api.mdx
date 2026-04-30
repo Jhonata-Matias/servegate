@@ -1,0 +1,194 @@
+---
+title: API Reference
+description: HTTP contract for servegate — POST /jobs (text-to-image, single- and multi-image edit), GET /jobs/{id} polling, POST /v1/generate Gemma 4 text streaming, plus rate-limit headers and error codes.
+---
+
+import { Aside, Tabs, TabItem, Badge } from '@astrojs/starlight/components';
+
+The gateway exposes three endpoints over a single API key:
+
+| Method | Path | Purpose |
+|---|---|---|
+| `POST` | `/jobs` | Submit a T2I or i2i job (returns `202` with `job_id`) |
+| `GET` | `/jobs/{job_id}` | Poll job status — does **not** consume rate-limit quota |
+| `POST` | `/v1/generate` | Gemma 4 text generation (SSE stream or JSON) |
+
+Base URL (alpha): `https://gemma4-gateway.jhonata-matias.workers.dev`.
+
+## `POST /jobs`
+
+Async submit for text-to-image **or** image-to-image. Without `input_image_b64`, the gateway routes to FLUX.1-schnell; with `input_image_b64`, it routes to Qwen-Image-Edit; with both `input_image_b64` and `input_image_b64_2`, it routes to the multi-image Qwen-Image-Edit path (`TextEncodeQwenImageEditPlus`, requires server `0.2.1`+).
+
+This endpoint **does** consume the daily rate-limit quota.
+
+### Headers
+
+| Header | Required | Notes |
+|---|---|---|
+| `X-API-Key` | Yes | Gateway-issued credential |
+| `Content-Type` | Yes | `application/json` |
+
+### T2I request body
+
+| Field | Type | Required |
+|---|---|---|
+| `prompt` | string | Yes (non-empty) |
+| `steps` | integer | Yes (recommended: `4`) |
+| `width` | integer | Yes |
+| `height` | integer | Yes |
+| `seed` | integer | No |
+
+### i2i request body
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `prompt` | string | Yes | Edit instruction |
+| `input_image_b64` | string | Yes | Base64 PNG / JPEG / WebP |
+| `input_image_b64_2` | string | **No** (NEW in `0.2.1`) | Second reference image — opt-in to multi-image edit (`TextEncodeQwenImageEditPlus`) |
+| `strength` | number | No (default `0.85`) | `0.0 < x ≤ 1.0` |
+| `steps` | integer | No (default `8`) | `4-50` |
+| `seed` | integer | No | |
+
+<Aside type="note" title="Multi-image i2i">
+When `input_image_b64_2` is provided, the workflow uses `TextEncodeQwenImageEditPlus` with both reference images. The TypeScript SDK exposes this as the `image2` parameter on `edit()` — the gateway translates `image2` to `input_image_b64_2` over the wire.
+
+The completed response includes additional metadata fields: `input_width_2`, `input_height_2`, `source_width_2`, `source_height_2`, `input_downsampled_2`. Single-image calls (omit `input_image_b64_2` / `image2`) keep using the original `TextEncodeQwenImageEdit` node — fully backwards-compatible.
+</Aside>
+
+### Response — accepted
+
+```http
+HTTP/1.1 202 Accepted
+Location: /jobs/<job_id>
+Retry-After: 5
+
+{
+  "job_id": "<uuid>",
+  "status_url": "/jobs/<uuid>",
+  "est_wait_seconds": "unknown"
+}
+```
+
+### Rate-limit headers
+
+Every `POST /jobs` response carries:
+
+| Header | Meaning |
+|---|---|
+| `X-RateLimit-Limit` | Daily global limit (default: `100`) |
+| `X-RateLimit-Remaining` | Quota remaining for the current UTC day |
+| `X-RateLimit-Reset` | Reset timestamp at `00:00 UTC` |
+
+## `GET /jobs/{job_id}`
+
+Polls the state of a previously submitted job. **Does not** consume quota.
+
+### State mapping
+
+| HTTP | State | Body |
+|---|---|---|
+| `200 OK` | Completed | `{ output: { image_b64, metadata } }` |
+| `202 Accepted` | In progress | Returns `Retry-After: 5` and `{ status: "running" }` |
+| `404 Not Found` | Expired or unknown | `{ error: "job_not_found_or_expired" }` |
+| `5xx` | Upstream failure | RunPod timeout or fatal error — see [Errors](/errors/) |
+
+### Successful response shape
+
+```json
+{
+  "output": {
+    "image_b64": "<base64 PNG>",
+    "metadata": {
+      "seed": 42,
+      "elapsed_ms": 3100,
+      "input_width": 720,
+      "input_height": 1024,
+      "input_width_2": 720,
+      "input_height_2": 1024,
+      "source_width": 720,
+      "source_height": 1024,
+      "source_width_2": 720,
+      "source_height_2": 1024,
+      "input_downsampled": false,
+      "input_downsampled_2": false,
+      "output_width": 720,
+      "output_height": 1024
+    }
+  }
+}
+```
+
+The `_2`-suffixed metadata fields are only present when the request used `input_image_b64_2`. Their presence is a reliable signal that the multi-image branch executed.
+
+## `POST /v1/generate`
+
+Gemma 4 text completions. SSE streaming by default; pass `"stream": false` for a single JSON response.
+
+<Badge text="OpenAI-compatible frames" /> — emits `chat.completion.chunk` deltas with `data: [DONE]` terminator.
+
+### Headers
+
+| Header | Required | Notes |
+|---|---|---|
+| `Authorization: Bearer <key>` | Yes | Same gateway API key |
+| `Content-Type` | Yes | `application/json` |
+
+### Request body
+
+```json
+{
+  "messages": [{ "role": "user", "content": "Say OK" }],
+  "model": "gemma4:e4b",
+  "max_tokens": 512,
+  "stream": true
+}
+```
+
+### Streaming response
+
+```http
+HTTP/1.1 200 OK
+Content-Type: text/event-stream
+X-RateLimit-Limit: 50000
+X-RateLimit-Remaining: 49750
+X-Gateway-Model: gemma4:e4b
+
+data: {"object":"chat.completion.chunk","model":"gemma4:e4b","choices":[{"index":0,"delta":{"role":"assistant"},"finish_reason":null}]}
+
+data: {"object":"chat.completion.chunk","model":"gemma4:e4b","choices":[{"index":0,"delta":{"content":"OK"},"finish_reason":null}]}
+
+data: {"object":"chat.completion.chunk","model":"gemma4:e4b","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}
+
+data: [DONE]
+```
+
+### Non-streaming response
+
+```json
+{
+  "object": "chat.completion",
+  "model": "gemma4:e4b",
+  "choices": [
+    {
+      "index": 0,
+      "message": { "role": "assistant", "content": "OK" },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": { "total_tokens": 12 }
+}
+```
+
+### Text error codes
+
+| HTTP | Code | Meaning |
+|---|---|---|
+| `400` | `missing_messages` | `messages[]` absent or empty |
+| `400` | `invalid_request` | Type, range, or role invalid |
+| `413` | `request_too_large` | Body above 2 MB |
+| `401` | `invalid_api_key` | Key missing or invalid |
+| `429` | `rate_limit_exceeded` | Daily token budget exceeded |
+| `502` | `upstream_error` | Provider returned an error |
+| `503` | `upstream_unavailable` | Provider or network unreachable |
+
+See [Errors](/errors/) for a full taxonomy and SDK error class mapping.

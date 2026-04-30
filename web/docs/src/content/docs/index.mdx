@@ -1,0 +1,59 @@
+---
+title: Welcome
+description: servegate is the open-source HTTP gateway for FLUX.1-schnell text-to-image, Qwen-Image-Edit single- and multi-image edits, and Gemma 4 text generation. One authenticated endpoint, async submit/poll for images, streaming SSE for text.
+template: doc
+---
+
+import { LinkCard, CardGrid, Badge } from '@astrojs/starlight/components';
+
+<Badge text="Alpha" variant="caution" /> servegate is the canonical HTTP contract for generating images with **FLUX.1-schnell**, editing images with **Qwen-Image-Edit** (single- or multi-image), and generating text with **Gemma 4**. Images use async submit/poll; text uses streaming SSE on the same authenticated gateway.
+
+Latest server: `gemma4-flux-serverless:0.2.1` (Qwen-Image-Edit 2509 with multi-image support).
+Latest SDK: `@jhonata-matias/flux-client@0.4.0`.
+
+## Get started
+
+<CardGrid stagger>
+	<LinkCard
+		title="🚀 Quickstart"
+		description="Submit your first T2I and i2i jobs with curl in three steps."
+		href="/quickstart/"
+	/>
+
+	<LinkCard
+		title="🔐 Authentication"
+		description="API key over X-API-Key (jobs) or Authorization: Bearer (text). Request alpha access via the GitHub repo issue template."
+		href="https://github.com/Jhonata-Matias/servegate#alpha-access"
+	/>
+
+	<LinkCard
+		title="📖 API Reference"
+		description="HTTP contract for POST /jobs, GET /jobs/{id}, and POST /v1/generate, including the new multi-image i2i field."
+		href="/api/"
+	/>
+
+	<LinkCard
+		title="🛠 TypeScript SDK"
+		description="@jhonata-matias/flux-client wraps polling, error taxonomy, and now multi-image edit()."
+		href="/sdk/"
+	/>
+
+	<LinkCard
+		title="⚠ Errors"
+		description="HTTP status codes (401 / 429 / 502 / 504) and i2i_validation variants, including the field: 'image2' discriminator for multi-image errors."
+		href="/errors/"
+	/>
+
+	<LinkCard
+		title="🏷 Releases"
+		description="Release notes and changelog for the gateway image and the SDK npm package."
+		href="https://github.com/Jhonata-Matias/servegate/releases"
+	/>
+</CardGrid>
+
+## Why servegate
+
+- **Async-first.** Submit/poll lets long inferences (cold start ~130s, warm ~7s) coexist with short ones behind one authenticated edge.
+- **Three modalities, one credential.** Same API key proxies T2I (FLUX.1-schnell), i2i (Qwen-Image-Edit single/multi), and text (Gemma 4 via vLLM).
+- **Open source.** Apache 2.0 / MIT, alpha-public on GitHub.
+- **Cost-aware.** RunPod Serverless behind Cloudflare Workers; near-zero idle.

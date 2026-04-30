@@ -1,0 +1,171 @@
+---
+title: Quickstart
+description: Submit your first text-to-image, single-image edit, and multi-image edit jobs against the servegate gateway with curl in three steps.
+---
+
+import { Tabs, TabItem, Aside, Steps } from '@astrojs/starlight/components';
+
+This page walks through three flows:
+
+1. Submit a **text-to-image** (T2I) job and poll until it completes.
+2. Submit an **image-to-image** (i2i) job with a single reference image (Qwen-Image-Edit).
+3. Submit an **i2i with two reference images** (multi-image i2i, requires server `0.2.1`+ and SDK `0.4.0`+).
+
+All three use the same `POST /jobs` endpoint over the same API key — the body shape decides which workflow runs.
+
+## Prerequisites
+
+- A gateway API key. Request one via the [GitHub access template](https://github.com/Jhonata-Matias/servegate#alpha-access).
+- Export it: `export GATEWAY_API_KEY=...`
+
+The gateway base URL is `https://gemma4-gateway.jhonata-matias.workers.dev` (alpha).
+
+## 1. Submit a T2I job
+
+<Tabs>
+<TabItem label="curl (submit)">
+```bash
+curl -i -X POST https://gemma4-gateway.jhonata-matias.workers.dev/jobs \
+  -H "X-API-Key: $GATEWAY_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "prompt": "a peaceful zen garden with cherry blossoms, photorealistic",
+    "steps": 4,
+    "width": 1024,
+    "height": 1024,
+    "seed": 42
+  }'
+```
+</TabItem>
+<TabItem label="Expected response">
+```http
+HTTP/1.1 202 Accepted
+Location: /jobs/2f3f0f1f-2a6f-4d8b-b6f3-0df9d9f36e9e
+Retry-After: 5
+
+{
+  "job_id": "2f3f0f1f-2a6f-4d8b-b6f3-0df9d9f36e9e",
+  "status_url": "/jobs/2f3f0f1f-2a6f-4d8b-b6f3-0df9d9f36e9e",
+  "est_wait_seconds": "unknown"
+}
+```
+</TabItem>
+</Tabs>
+
+## 2. Poll until completion
+
+```bash
+curl -i https://gemma4-gateway.jhonata-matias.workers.dev/jobs/$JOB_ID \
+  -H "X-API-Key: $GATEWAY_API_KEY"
+```
+
+While running:
+
+```http
+HTTP/1.1 202 Accepted
+Retry-After: 5
+
+{ "status": "running", "est_wait_seconds": "unknown" }
+```
+
+When complete:
+
+```json
+{
+  "output": {
+    "image_b64": "<base64 PNG>",
+    "metadata": {
+      "seed": 42,
+      "elapsed_ms": 3100,
+      "output_width": 720,
+      "output_height": 480
+    }
+  }
+}
+```
+
+<Aside type="tip">
+Use the [TypeScript SDK](/sdk/) — `client.generate({ prompt })` wraps the submit/poll loop and returns the decoded base64 image directly.
+</Aside>
+
+## 3. Submit an i2i job
+
+The same `POST /jobs` accepts an `input_image_b64` field — its presence selects Qwen-Image-Edit instead of FLUX.1-schnell.
+
+<Tabs>
+<TabItem label="i2i 1-image">
+```bash
+INPUT_IMAGE_B64="$(base64 -w 0 input.png)"
+
+curl -i -X POST https://gemma4-gateway.jhonata-matias.workers.dev/jobs \
+  -H "X-API-Key: $GATEWAY_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"prompt\": \"make the jacket green while keeping the background unchanged\",
+    \"input_image_b64\": \"$INPUT_IMAGE_B64\",
+    \"strength\": 0.85,
+    \"steps\": 8,
+    \"seed\": 42
+  }"
+```
+
+Polling shape is the same as T2I (`GET /jobs/{job_id}`).
+</TabItem>
+<TabItem label="i2i 2-image (NEW)">
+Server `0.2.1`+ exposes a multi-image edit path via `TextEncodeQwenImageEditPlus`. Pass a second optional `input_image_b64_2` and the gateway routes the job through the multi-image workflow.
+
+```bash
+IMAGE_1=$(base64 -w 0 person.png)
+IMAGE_2=$(base64 -w 0 outfit.png)
+
+curl -i -X POST https://gemma4-gateway.jhonata-matias.workers.dev/jobs \
+  -H "X-API-Key: $GATEWAY_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"prompt\": \"dress the person in image 1 with the outfit from image 2\",
+    \"input_image_b64\": \"$IMAGE_1\",
+    \"input_image_b64_2\": \"$IMAGE_2\",
+    \"strength\": 0.85,
+    \"steps\": 8
+  }"
+```
+
+The completed response includes the same shape as single-image, plus extra metadata fields confirming the multi-image branch executed:
+
+```json
+{
+  "output": {
+    "image_b64": "<base64 PNG>",
+    "metadata": {
+      "input_width": 720,
+      "input_height": 1024,
+      "input_width_2": 720,
+      "input_height_2": 1024,
+      "elapsed_ms": 8210,
+      "output_width": 720,
+      "output_height": 1024
+    }
+  }
+}
+```
+
+<Aside type="caution">
+Backwards compatibility: omitting `input_image_b64_2` continues to use the single-image `TextEncodeQwenImageEdit` node — existing 1-image clients are unaffected.
+</Aside>
+</TabItem>
+</Tabs>
+
+## i2i input constraints
+
+Both reference images must satisfy the same rules:
+
+- **Format.** PNG, JPEG, or WebP (verified via magic bytes).
+- **Size.** Decoded payload `≤ 8 MB`.
+- **Resolution.** `≤ 1 MP` (downsampled defensively if the SDK is configured to).
+- **Aspect ratio.** `1:1` is rejected — use a non-square crop.
+
+When the SDK validates a second image and finds a violation, the error surfaces with `field: 'image2'` so callers can attribute the error to the correct input.
+
+## Text generation (bonus)
+
+The same gateway proxies Gemma 4 over `POST /v1/generate` with SSE streaming. See the [API reference](/api/#post-v1generate) for the full schema.
