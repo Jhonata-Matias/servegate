@@ -1,0 +1,17 @@
+# Local QA tooling — Puppeteer Chromium binary (~330 MB)
+chrome/
+
+# Astro build output — Vercel rebuilds remotely
+dist/
+.astro/
+
+# Local dev artifacts
+node_modules/
+
+# Git artifacts
+.git/
+
+# Other local-only
+.env
+.env.production
+*.log
