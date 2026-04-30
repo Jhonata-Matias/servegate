@@ -77,19 +77,44 @@
 
 ## ✨ Enhancements
 
-### ENH-2.9 — Refactor landing into Astro Starlight docs portal
+### ENH-2.9 — Refactor landing into Astro Starlight docs portal ✅ CLOSED 2026-04-30
 
-- **Priority:** 🟡 Medium
-- **Related Story:** Future Story 2.9 (docs portal). Derived from Story 2.3 (web-demo-nextjs-vercel) + Story 2.7 (pt-BR-dev-docs) lineage. Trigger: PR #15 multi-image i2i merged — current `web/landing/index.html` (995 LOC single-page marketing) is undersized for the growing API/SDK surface.
-- **Source:** @ux-design-expert (Uma) front-end spec on 2026-04-29 after user reference (RunPod docs portal screenshot) + multi-image feature merge requiring docs update.
-- **Description:** Replace single-page marketing landing at `deploy-lp-one.vercel.app/` with a 3-column docs portal (sidebar nav · centered content · TOC) built with Astro Starlight (MDX content, Pagefind search, Shiki code highlight, dark-only V1). Migration scope V1 = 5 pages (Welcome · Quickstart · API Reference · SDK · Errors). Welcome uses custom card-grid 3×2 replicating RunPod ref. Brand identity preserved (charcoal+teal palette, Geist fonts). Multi-image i2i documented in API · SDK · Errors. New folder `web/docs/`; old landing archived to `web/_archive/landing-pre-docs-2026-04-29/`. Vercel project root cutover from `web/landing/` → `web/docs/`.
-- **Spec:** [`docs/design/landing-docs-portal-refactor.md`](../design/landing-docs-portal-refactor.md) — 7 locked decisions, IA, design tokens (Starlight CSS overrides), 4-phase implementation plan (~9-12h), 9 acceptance criteria, V2 backlog (light theme, versioned docs, Authentication/Concepts/Releases/Resources pages, ADR index, i18n parity), 5 risks with mitigations, 7-step hand-off checklist.
-- **Suggested Owner:** `@dev` (implementation across 4 phases) + `@devops` (Vercel root directory change at cutover) + `@ux-design-expert` (review of Welcome card-grid + content polish)
-- **Estimated Effort:** ~9-12h total (Phase 1 setup ~2h · Phase 2 content migration ~5h · Phase 3 polish ~2h · Phase 4 cutover ~1h)
-- **Tags:** docs, astro-starlight, landing, web-docs, multi-image-i2i, epic-2, consumer-integration
-- **Pre-condition for dev kickoff:** Spec is complete and locked. Recommended: `@sm *draft` to create formal Story 2.9 with this spec as Dev Notes input before `@dev *develop`. Alternative: `@dev *develop-preflight docs/design/landing-docs-portal-refactor.md` directly (faster but bypasses Story validation gate).
-- **Trigger:** Open. Can start any sprint. No external blockers.
-- **Created:** 2026-04-29 by `@po` (Pax) on user request after `@ux-design-expert` (Uma) handed off the front-end spec.
+- **Status:** ✅ **CLOSED** — delivered via Story 2.9 (PR #19 + #20 merged 2026-04-29/30). Production live at `deploy-lp-one.vercel.app/`.
+- **Story:** [`docs/stories/2.9.docs-portal-refactor.story.md`](2.9.docs-portal-refactor.story.md) — Status: Done. QA gate PASS 96.
+- **Final delivery:** Astro Starlight portal at `web/docs/` with 5 pages (Welcome · Quickstart · API Reference · SDK · Errors). Brand identity preserved (`#1d7fe5` accent + Inter/JetBrains Mono — corrected from spec's hypothesized teal+Geist after reading actual landing config). Multi-image i2i documented in 3 places. Lighthouse 100/100/100/100 across all 5 pages, zero axe-core violations. Old landing archived to `web/_archive/landing-pre-docs-2026-04-29/`. Vercel project rootDirectory cutover from `null` → `web/docs` via API + git-source deploy.
+- **Closure metadata:**
+  - **Effort actual:** ~14h end-to-end (vs estimated ~9-12h). Drift driven by Codex sandbox blocker on Phase 1 (resolved by main session pivot, documented as memory) + 2 unplanned QA rounds + 1 user-reported bug fix pre-cutover.
+  - **PRs:** #19 (main implementation, 7 commits squash-merged) + #20 (archive + tooling, 1 commit squash-merged)
+  - **Merge commits on main:** `b2171ab` (PR #19) + `88424f8` (PR #20)
+  - **V2 follow-ups:** consolidated as ENH-2.10 below.
+- **Created:** 2026-04-29 by `@po` (Pax) · **Closed:** 2026-04-30 by `@po` (Pax)
+
+### ENH-2.10 — Docs portal V2 polish (post-Story-2.9 follow-ups)
+
+- **Priority:** 🟢 Low (bundle of nice-to-haves, none individually urgent)
+- **Related Story:** Successor to ENH-2.9 / Story 2.9. Triggered post-cutover during pre-cutover review + UX signoff caveats.
+- **Source:** Story 2.9 Dev Notes "V2 backlog" + UX review caveats (`docs/qa/2.9-ux-review.md`) + design decision artifacts during the cutover sweep.
+- **Description:** Bundle of polish items deferred from Story 2.9 V1. Each can be picked individually and become a small standalone story when prioritized. Sub-items (priority order):
+
+  | # | Item | Trigger to schedule | Effort |
+  |---|---|---|---|
+  | 1 | **Bundle Inter + JetBrains Mono via `@fontsource/*`** | First feedback "fonts look weird on Windows" or any cross-OS fidelity issue | ~30min |
+  | 2 | **Light theme support** (revert ThemeSelect override, add light-mode token bindings, run Lighthouse) | Once accessibility audit requests light mode OR non-dev-audience feedback | ~3-4h |
+  | 3 | **Custom `IconLinkCard` atom** (Starlight component override accepting `title` + `description` + `href` + `icon`) | If 3+ alpha users say emoji prefixes feel unprofessional or want SVG icons back | ~30-45min |
+  | 4 | **Custom 404 page** (replace Starlight default with branded copy + helpful links to top pages) | Anytime — small UX polish | ~30min |
+  | 5 | **ADR index page** linked from Welcome `Resources` slot or sidebar | When `docs/architecture/adr-*.md` count ≥ 5 (currently 5 ADRs already, threshold met) | ~1h |
+  | 6 | **Dedicated sub-pages: Authentication, Concepts, Releases, Resources** (currently linked from Welcome card-grid to GitHub external) | When content for any one is ready (e.g., per-key rate-limit per ADR-0004 makes Auth page valuable) | ~1h per page |
+  | 7 | **API Reference split into per-endpoint sub-pages** (`/api/jobs/`, `/api/generate/`, etc.) | When current single-page api.mdx exceeds ~500 LOC (currently ~200 LOC, threshold not met) | ~2h |
+  | 8 | **i18n parity (pt-BR ↔ en)** — translate the 5 pages | When alpha BR adoption signals demand mirror Story 2.7's pt-BR-onboarding | ~4-6h |
+  | 9 | **"Copy page" plugin** (e.g., `starlight-copy-page` or custom) | Quality-of-life polish, low signal value alone | ~30min |
+  | 10 | **Versioned docs** (`/v0.4/api/`, `/v0.5/api/`) | First time a breaking SDK change makes "this version of the docs" relevant | ~2-3h setup + ongoing |
+  | 11 | **Algolia DocSearch** (replace Pagefind) | Only if Pagefind perf or relevance becomes an issue at scale (>50 pages) | ~1-2h |
+
+- **Suggested Owner:** `@dev` for impl + `@ux-design-expert` for design review on items 2, 3, 4
+- **Estimated Effort (full bundle):** ~15-25h cumulative if all done in one push (unlikely — typically picked individually as triggers fire)
+- **Tags:** docs, astro-starlight, web-docs, polish, v2, epic-2
+- **Trigger:** Open. No blockers. Each item has its own trigger condition above; pull from this entry as needed.
+- **Created:** 2026-04-30 by `@po` (Pax) at Story 2.9 close-out.
 
 ---
 
@@ -100,3 +125,4 @@
 | 2026-04-24 | @po (Pax) | Backlog file created. Registered TD-3.1.2 + TD-3.1.3 (both from Story 3.1 Round 2 deferrals). |
 | 2026-04-24 | @po (Pax) | Added FU-4.2.1 (KV writes/day monitoring) + FU-4.3.1 (Workers Paid upgrade pre-flight) following user's gateway security + rate-limit ceiling question on Story 4.2. CF Workers Free hard-cap = 100K req/day + 1K KV writes/day; KV writes is the active constraint at ~500 calls/day combined ceiling. Recommended alpha policy: 300 calls/day combined for 3× headroom. |
 | 2026-04-29 | @po (Pax) | Added ENH-2.9 (Refactor landing into Astro Starlight docs portal) following @ux-design-expert spec. Triggered by multi-image i2i merge (PR #15) needing docs update + user reference to RunPod docs portal pattern. Spec at `docs/design/landing-docs-portal-refactor.md`. |
+| 2026-04-30 | @po (Pax) | **Closed ENH-2.9** — delivered via Story 2.9 (PR #19 main impl + PR #20 archive/tooling, both merged). QA gate PASS 96. Production live at `deploy-lp-one.vercel.app/` with new Astro Starlight docs portal. Effort actual ~14h (vs estimated ~9-12h, +2-5h drift driven by Codex sandbox blocker recovery + 2 QA rounds + 1 pre-cutover bug fix). **Added ENH-2.10** consolidating 11 V2 polish follow-ups (font bundling, light theme, IconLinkCard atom, custom 404, ADR index, dedicated sub-pages, API split, i18n, versioned docs, Algolia, "Copy page") with individual trigger conditions per item. |
