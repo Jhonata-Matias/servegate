@@ -16,40 +16,48 @@ Latest SDK: `@jhonata-matias/flux-client@0.4.0`.
 <CardGrid stagger>
 	<LinkCard
 		title="🚀 Quickstart"
-		description="Submit your first T2I and i2i jobs with curl in three steps."
+		description="Make your first authenticated image job and learn where text generation fits next."
 		href="/quickstart/"
 	/>
 
 	<LinkCard
-		title="🔐 Authentication"
-		description="API key over X-API-Key (jobs) or Authorization: Bearer (text). Request alpha access via the GitHub repo issue template."
-		href="https://github.com/Jhonata-Matias/servegate#alpha-access"
+		title="🖼 Generate images"
+		description="Create a new image from a text prompt, then poll until output.image_b64 is ready."
+		href="/generate-images/"
+	/>
+
+	<LinkCard
+		title="🎨 Edit images"
+		description="Change one or two reference images with Qwen-Image-Edit and a text instruction."
+		href="/edit-images/"
+	/>
+
+	<LinkCard
+		title="💬 Generate text"
+		description="Call Gemma 4 through POST /v1/generate with streaming SSE or one JSON response."
+		href="/generate-text/"
 	/>
 
 	<LinkCard
 		title="📖 API Reference"
-		description="HTTP contract for POST /jobs, GET /jobs/{id}, and POST /v1/generate, including the new multi-image i2i field."
+		description="Use the exact HTTP contracts after you know which capability you need."
 		href="/api/"
 	/>
 
 	<LinkCard
-		title="🛠 TypeScript SDK"
-		description="@jhonata-matias/flux-client wraps polling, error taxonomy, and now multi-image edit()."
-		href="/sdk/"
-	/>
-
-	<LinkCard
-		title="⚠ Errors"
-		description="HTTP status codes (401 / 429 / 502 / 504) and i2i_validation variants, including the field: 'image2' discriminator for multi-image errors."
+		title="⚠ Handle errors"
+		description="Map gateway responses to recovery actions and SDK error classes."
 		href="/errors/"
 	/>
 
 	<LinkCard
-		title="🏷 Releases"
-		description="Release notes and changelog for the gateway image and the SDK npm package."
-		href="https://github.com/Jhonata-Matias/servegate/releases"
+		title="🛠 TypeScript SDK"
+		description="@jhonata-matias/flux-client wraps polling, validation, and typed errors."
+		href="/sdk/"
 	/>
 </CardGrid>
+
+Need access first? Request alpha access from the [GitHub repo issue template](https://github.com/Jhonata-Matias/servegate#alpha-access). For release notes, see [GitHub releases](https://github.com/Jhonata-Matias/servegate/releases). For operational evidence, read the [RunPod Video Report](/runpod-video-report/).
 
 ## Why servegate
 

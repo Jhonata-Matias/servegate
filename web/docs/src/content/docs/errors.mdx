@@ -1,11 +1,20 @@
 ---
-title: Errors
-description: HTTP error taxonomy returned by the servegate gateway, plus i2i_validation variants (including the field discriminator for multi-image i2i) and the SDK error class mapping.
+title: Handle errors
+description: Recovery guidance for servegate gateway errors, i2i_validation variants, and SDK error class mapping.
 ---
 
 import { Aside, Badge } from '@astrojs/starlight/components';
 
+Use this page when a request fails or when you need to decide whether your app should retry, ask the user for a different input, or show an authentication/rate-limit message.
+
 The gateway returns standard HTTP status codes. The SDK maps them to a strict class taxonomy with `cause` discriminators so callers can branch precisely.
+
+## What to do first
+
+1. Check the HTTP status: `401` usually means credentials, `429` means quota, and `5xx` usually means upstream or timeout.
+2. For image editing failures, inspect the `code` and `field` values before changing the prompt. `field: "image2"` means the second reference image caused the validation failure.
+3. In TypeScript, catch the SDK error class first (`ValidationError`, `RateLimitError`, `TimeoutError`, `AuthError`) and use the discriminator instead of parsing message strings.
+4. If the error is recoverable, retry only after respecting rate-limit or polling guidance.
 
 ## HTTP status codes
 
@@ -14,7 +23,7 @@ The gateway returns standard HTTP status codes. The SDK maps them to a strict cl
 | `400` | `invalid_json` | Body is not valid JSON or violates schema |
 | `400` | `invalid_request` | Type, range, or role invalid (text endpoint) |
 | `400` | `missing_messages` | `messages[]` absent or empty (text endpoint) |
-| `400` | `i2i_validation` | i2i input failed validation — see [variants below](#i2i_validation) |
+| `400` | `i2i_validation` | i2i input failed validation — see [variants below](#image-editing-validation) |
 | `401` | `invalid_api_key` | Header authentication failed |
 | `413` | `request_too_large` | Body above 2 MB (text endpoint) |
 | `429` | `rate_limit_exceeded` | Daily quota exhausted (image: 100 jobs/day; text: token budget) |
@@ -23,7 +32,7 @@ The gateway returns standard HTTP status codes. The SDK maps them to a strict cl
 | `503` | `upstream_unavailable` | Provider or network unreachable (text endpoint) |
 | `504` | `generation_timeout` | RunPod marked `TIMED_OUT` (job exceeded `COMFY_GENERATION_TIMEOUT_S=280`) |
 
-## `i2i_validation`
+## Image editing validation
 
 Calls to `POST /jobs` with `input_image_b64` (and optionally `input_image_b64_2`) can fail with `400 i2i_validation`. The response body carries an inner code identifying which constraint was violated.
 
