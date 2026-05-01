@@ -16,7 +16,6 @@ export type EditImageInput = Buffer | Uint8Array | Blob | string;
 export interface EditInput {
   prompt: string;
   image: EditImageInput;
-  image2?: EditImageInput;
   strength?: number;
   seed?: number;
   steps?: number;
@@ -36,11 +35,6 @@ export interface GenerateMetadata {
   source_width?: number;
   source_height?: number;
   input_downsampled?: boolean;
-  input_width_2?: number;
-  input_height_2?: number;
-  source_width_2?: number;
-  source_height_2?: number;
-  input_downsampled_2?: boolean;
 }
 
 export interface GenerateOutput {

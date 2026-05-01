@@ -11,12 +11,12 @@ set -a; . "$ENV_FILE"; set +a
 
 : "${RUNPOD_API_KEY:?RUNPOD_API_KEY missing}"
 
-IMAGE="${IMAGE:-ghcr.io/jhonata-matias/gemma4-flux-serverless:0.2.1}"
-TEMPLATE_NAME="${TEMPLATE_NAME:-gemma4-flux-serverless-v0_2_1}"
+IMAGE="${IMAGE:-ghcr.io/jhonata-matias/gemma4-flux-serverless:0.1.0}"
+TEMPLATE_NAME="${TEMPLATE_NAME:-gemma4-flux-serverless-v0_1_0}"
 ENDPOINT_NAME="${ENDPOINT_NAME:-gemma4-flux-serverless}"
 GPU_TYPE="${GPU_TYPE:-NVIDIA GeForce RTX 4090}"
-: "${DATACENTER:?DATACENTER required (set in .env: RunPod datacenter code where network volume lives)}"
-: "${NETWORK_VOLUME_ID:?NETWORK_VOLUME_ID required (set in .env: RunPod network volume ID with model weights)}"
+DATACENTER="${DATACENTER:-US-IL-1}"
+NETWORK_VOLUME_ID="${NETWORK_VOLUME_ID:-mqqgzwnfp1}"
 CONTAINER_REGISTRY_AUTH_ID="${CONTAINER_REGISTRY_AUTH_ID:-${RUNPOD_GHCR_AUTH_ID:-}}"
 # 300s aligns with handler.py COMFY_GENERATION_TIMEOUT_S (280s + margin). 120s was insufficient
 # for cold starts loading the 23GB FLUX UNET from the network volume (observed 98-150s real cold).

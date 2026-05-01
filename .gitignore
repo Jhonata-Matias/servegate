@@ -32,6 +32,9 @@ Thumbs.db
 # Handoff artifacts (runtime)
 .aiox/handoffs/
 
+# Codex delegation runs (runtime — see squads/codex-delegation/)
+.aiox/codex-runs/
+
 # AIOX framework (project-dev mode)
 .aiox-core/
 
@@ -53,9 +56,6 @@ test-onboarding/
 # User-local experiments (unrelated to servegate)
 contabhub_design_system.html
 
-# Private mirror staging (originals destined to servegate-planning)
-.planning-mirror/
-
 # AIOX framework artifacts (local-only, not for public repo consumers)
 # Owner workflow tooling — not relevant to external SDK/API users
 .ai/
@@ -72,3 +72,28 @@ squads/
 AGENTS.md
 .aiox/notes/story-4.2/deploy-record-*.md
 .aiox/notes/story-4.2/ac11-smoke-evidence-*.md
+
+# Spike run outputs (videos + metadata; ephemeral, not source)
+spike/runs/
+# Spike i2v test images (default: do not commit user-supplied binary assets)
+spike/test_images/*
+!spike/test_images/.gitkeep
+!spike/test_images/README.md
+# Allowlist: 3 CC0 Unsplash seeds + provenance manifest for Story 5.1.1.1 I2V
+# validation. Committed for bit-exact reproducibility. Source pivoted from FLUX
+# (gateway throttled at runtime) to Unsplash CC0; full attribution and license
+# in spike/test_images/PROVENANCE.json. Spec: spike/scripts/i2v-validation-spec.md.
+!spike/test_images/portrait.jpg
+!spike/test_images/landscape.jpg
+!spike/test_images/abstract.jpg
+!spike/test_images/PROVENANCE.json
+
+# Private content staging mirror (never commit; sync target maintained privately)
+.planning-mirror/
+
+# Story 5.1+ planning notes (private; do not commit to public repo)
+.aiox/notes/story-5.1*/
+
+# Story planning artifacts (private; agent-generated; do not commit)
+docs/architecture/research/
+docs/qa/waivers/

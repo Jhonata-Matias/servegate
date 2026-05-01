@@ -90,27 +90,3 @@ def test_i2i_handler_cleans_up_tempfile_on_timeout(monkeypatch, tmp_path):
     )
     assert result == {"error": "generation_timeout", "code": 504}
     assert not list(tmp_path.iterdir()), "tempfile not cleaned up on timeout"
-
-
-def test_i2i_handler_cleans_up_both_tempfiles_on_generation_error(monkeypatch, tmp_path):
-    monkeypatch.setattr(handler_module, "wait_for_comfy", lambda: None)
-    monkeypatch.setattr(
-        handler_module,
-        "queue_workflow",
-        lambda workflow: (_ for _ in ()).throw(RuntimeError("simulated")),
-    )
-    monkeypatch.setattr(handler_module, "COMFY_INPUT_DIR", str(tmp_path))
-
-    result = handler_module.handler(
-        {
-            "id": "job-i2i-error",
-            "input": {
-                "prompt": "blend",
-                "input_image_b64": make_b64(720, 480),
-                "input_image_b64_2": make_b64(640, 360),
-                "seed": 7,
-            },
-        }
-    )
-    assert result == {"error": "generation_error", "code": 500}
-    assert not list(tmp_path.iterdir()), "tempfiles not cleaned up on generation error"

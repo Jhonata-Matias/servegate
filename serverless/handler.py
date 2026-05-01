@@ -9,10 +9,7 @@ ComfyUI is started by start.sh before this handler is invoked.
 
 Schema:
   T2I input : {"prompt": str, "steps": int=4, "seed": int=random, "width": int=1024, "height": int=1024}
-  I2I input : {"prompt": str, "input_image_b64": str, "input_image_b64_2": str?=None, "strength": float=0.85, "steps": int=8, "seed": int=random}
-              `input_image_b64_2` is optional. When absent, the workflow keeps
-              the single-image TextEncodeQwenImageEdit path; when present, it
-              uses TextEncodeQwenImageEditPlus with both images as references.
+  I2I input : {"prompt": str, "input_image_b64": str, "strength": float=0.85, "steps": int=8, "seed": int=random}
   Output : {"image_b64": str, "metadata": {"seed": int, "elapsed_ms": int}}
   Error  : {"error": str, "code": int}
 """
@@ -30,7 +27,7 @@ import urllib.parse
 import urllib.request
 import uuid
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple, Union
+from typing import Any, Dict, Optional, Tuple
 
 from PIL import Image
 import runpod
@@ -54,7 +51,7 @@ MIN_DIM = 256
 MAX_DECODED_IMAGE_BYTES = 8 * 1024 * 1024
 MAX_INPUT_PIXELS = 1_048_576
 SUPPORTED_IMAGE_MIME_TYPES = frozenset({"image/png", "image/jpeg", "image/webp"})
-QWEN_UNET_NAME = "qwen_image_edit_2509_fp8_e4m3fn.safetensors"
+QWEN_UNET_NAME = "qwen_image_edit_fp8_e4m3fn.safetensors"
 QWEN_CLIP_NAME = "qwen_2.5_vl_7b_fp8_scaled.safetensors"
 QWEN_VAE_NAME = "qwen_image_vae.safetensors"
 QWEN_LIGHTNING_LORA_NAME = "qwen_image_lightning_8steps_lora.safetensors"
@@ -154,23 +151,25 @@ def build_qwen_edit_workflow(
     strength: float,
     seed: int,
     steps: int,
-    input_image_filename_2: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Qwen-Image-Edit workflow per ADR-0003.
 
-    Class types for the base graph were VERIFIED against ComfyUI v0.3.62
-    (pinned in Dockerfile); see serverless/tests/fixtures/comfyui-v0_3_62-object-info.json.
-    The multi-image path uses TextEncodeQwenImageEditPlus, whose mainline
-    ComfyUI schema exposes image1/image2/image3 inputs.
+    Class types are VERIFIED against ComfyUI v0.3.62 (pinned in Dockerfile); see
+    serverless/tests/fixtures/comfyui-v0_3_62-object-info.json for the registry
+    of allowed class_types + enum values. Round 3 F7 remediation replaced the 4
+    non-existent 'QwenImageEdit*' loader classes with real core ComfyUI nodes
+    (UNETLoader, CLIPLoader type='qwen_image', VAELoader, LoadImage) plus the
+    Qwen-specific TextEncodeQwenImageEdit from comfy_extras/nodes_qwen.py for
+    conditioning with image-aware encoding.
 
     T2I build_workflow path (FLUX.1-schnell) remains byte-identical unchanged
     per AC6; this function is purely additive on top of that contract.
 
-    Input images are loaded from ComfyUI's input directory by basename; the
-    handler() caller MUST write decoded bytes to COMFY_INPUT_DIR before
+    Input image is loaded from ComfyUI's input directory by basename; the
+    handler() caller MUST write the decoded bytes to COMFY_INPUT_DIR before
     submitting and clean up afterward (see write_input_image / cleanup helpers).
     """
-    workflow = {
+    return {
         "10": {
             "class_type": "UNETLoader",
             "inputs": {"unet_name": QWEN_UNET_NAME, "weight_dtype": "fp8_e4m3fn"},
@@ -241,25 +240,6 @@ def build_qwen_edit_workflow(
         "20": {"class_type": "SaveImage", "inputs": {"images": ["19", 0], "filename_prefix": "qwen-edit"}},
     }
 
-    if input_image_filename_2 is None:
-        return workflow
-
-    workflow["21"] = {
-        "class_type": "LoadImage",
-        "inputs": {"image": input_image_filename_2},
-    }
-    workflow["16"] = {
-        "class_type": "TextEncodeQwenImageEditPlus",
-        "inputs": {
-            "clip": ["14", 1],
-            "prompt": prompt,
-            "vae": ["12", 0],
-            "image1": ["13", 0],
-            "image2": ["21", 0],
-        },
-    }
-    return workflow
-
 
 def write_input_image_to_comfy(image_b64: str) -> str:
     """Decode base64 and write to ComfyUI's input directory; return the basename.
@@ -277,13 +257,9 @@ def write_input_image_to_comfy(image_b64: str) -> str:
     return filename
 
 
-def cleanup_input_image(filename: Optional[Union[str, list[str], tuple[str, ...], set[str]]]) -> None:
+def cleanup_input_image(filename: Optional[str]) -> None:
     """Best-effort cleanup of per-request input image. Never raises."""
     if not filename:
-        return
-    if isinstance(filename, (list, tuple, set)):
-        for item in filename:
-            cleanup_input_image(item)
         return
     try:
         (Path(COMFY_INPUT_DIR) / filename).unlink(missing_ok=True)
@@ -467,26 +443,6 @@ def _normalize_i2i_image(value: Any) -> Dict[str, Any]:
     }
 
 
-def _normalize_second_i2i_image(value: Any) -> Dict[str, Any]:
-    try:
-        image = _normalize_i2i_image(value)
-    except InputValidationError as e:
-        message = e.message.replace("input_image_b64", "input_image_b64_2")
-        if message == e.message:
-            message = f"input_image_b64_2: {message}"
-        raise InputValidationError(e.error, message) from e
-
-    return {
-        "input_image_b64_2": image["input_image_b64"],
-        "input_mime_type_2": image["input_mime_type"],
-        "input_width_2": image["input_width"],
-        "input_height_2": image["input_height"],
-        "source_width_2": image["source_width"],
-        "source_height_2": image["source_height"],
-        "input_downsampled_2": image["input_downsampled"],
-    }
-
-
 def _normalize_i2i_input(raw: Dict[str, Any], prompt: str, seed: int) -> Dict[str, Any]:
     if "width" in raw or "height" in raw:
         raise InputValidationError(
@@ -503,38 +459,28 @@ def _normalize_i2i_input(raw: Dict[str, Any], prompt: str, seed: int) -> Dict[st
         raise InputValidationError("invalid_strength", "input.strength must be > 0.0 and <= 1.0")
 
     image = _normalize_i2i_image(raw.get("input_image_b64"))
-    normalized = {"prompt": prompt, "steps": steps, "seed": seed, "strength": strength, **image}
-    if "input_image_b64_2" in raw:
-        normalized.update(_normalize_second_i2i_image(raw.get("input_image_b64_2")))
-    return normalized
+    return {"prompt": prompt, "steps": steps, "seed": seed, "strength": strength, **image}
 
 
-def i2i_params(
-    params: Dict[str, Any],
-    input_image_filename: str,
-    input_image_filename_2: Optional[str] = None,
-) -> Dict[str, Any]:
+def i2i_params(params: Dict[str, Any], input_image_filename: str) -> Dict[str, Any]:
     """Build the kwargs for build_qwen_edit_workflow().
 
     input_image_filename is the basename ComfyUI's LoadImage will resolve
     against COMFY_INPUT_DIR — NOT the base64 payload, which we've already
     persisted via write_input_image_to_comfy() before calling this.
     """
-    workflow_params = {
+    return {
         "prompt": params["prompt"],
         "input_image_filename": input_image_filename,
         "strength": params["strength"],
         "seed": params["seed"],
         "steps": params["steps"],
     }
-    if input_image_filename_2 is not None:
-        workflow_params["input_image_filename_2"] = input_image_filename_2
-    return workflow_params
 
 
 def safe_log_fields(params: Dict[str, Any]) -> Dict[str, Any]:
     if "input_image_b64" in params:
-        fields = {
+        return {
             "mode": "i2i",
             "seed": params["seed"],
             "steps": params["steps"],
@@ -544,16 +490,6 @@ def safe_log_fields(params: Dict[str, Any]) -> Dict[str, Any]:
             "input_mime_type": params["input_mime_type"],
             "input_downsampled": params["input_downsampled"],
         }
-        if "input_image_b64_2" in params:
-            fields.update(
-                {
-                    "input_width_2": params["input_width_2"],
-                    "input_height_2": params["input_height_2"],
-                    "input_mime_type_2": params["input_mime_type_2"],
-                    "input_downsampled_2": params["input_downsampled_2"],
-                }
-            )
-        return fields
     return {
         "mode": "t2i",
         "seed": params["seed"],
@@ -616,7 +552,7 @@ def handler(job: Dict[str, Any]) -> Dict[str, Any]:
     is_i2i = "input_image_b64" in params
     log("info", "job_start", job_id=job_id, **safe_log_fields(params))
 
-    input_image_filenames: list[str] = []
+    input_image_filename: Optional[str] = None
     try:
         wait_for_comfy()
         if is_i2i:
@@ -624,14 +560,7 @@ def handler(job: Dict[str, Any]) -> Dict[str, Any]:
             # input dir, so persist the decoded bytes there (unique per-request) and
             # pass only the basename into the workflow graph. Cleanup in finally.
             input_image_filename = write_input_image_to_comfy(params["input_image_b64"])
-            input_image_filenames.append(input_image_filename)
-            input_image_filename_2 = None
-            if "input_image_b64_2" in params:
-                input_image_filename_2 = write_input_image_to_comfy(params["input_image_b64_2"])
-                input_image_filenames.append(input_image_filename_2)
-            workflow = build_qwen_edit_workflow(
-                **i2i_params(params, input_image_filename, input_image_filename_2)
-            )
+            workflow = build_qwen_edit_workflow(**i2i_params(params, input_image_filename))
         else:
             # ADR-0003: T2I path is byte-identical unchanged per AC6.
             workflow = build_workflow(**params)
@@ -656,7 +585,7 @@ def handler(job: Dict[str, Any]) -> Dict[str, Any]:
         log("error", "execution_failed", job_id=job_id, error_type=type(e).__name__, error_details=str(e))
         return {"error": "generation_error", "code": 500}
     finally:
-        cleanup_input_image(input_image_filenames)
+        cleanup_input_image(input_image_filename)
 
     elapsed_ms = int((time.time() - started) * 1000)
     image_b64 = base64.b64encode(image_bytes).decode("ascii")
@@ -672,16 +601,6 @@ def handler(job: Dict[str, Any]) -> Dict[str, Any]:
                 "input_downsampled": params["input_downsampled"],
             }
         )
-        if "input_image_b64_2" in params:
-            metadata.update(
-                {
-                    "input_width_2": params["input_width_2"],
-                    "input_height_2": params["input_height_2"],
-                    "source_width_2": params["source_width_2"],
-                    "source_height_2": params["source_height_2"],
-                    "input_downsampled_2": params["input_downsampled_2"],
-                }
-            )
     return {"image_b64": image_b64, "metadata": metadata}
 
 

@@ -1,0 +1,82 @@
+{
+  "_comment": "Benchmark prompts for ADR-0005 empirical validation. Edit the entries below with prompts representative of YOUR product domain before the final smoke run. The default set covers a generic spread of motion patterns, subjects, and visual styles to surface failure modes early. Order is significant: t2v prompts are batched first to avoid model swap cost between t2v and i2v pipelines (the handler unloads on mode switch).",
+  "_runner_contract": {
+    "label": "stable identifier; appears in filenames and metrics",
+    "mode": "t2v | i2v",
+    "prompt": "main prompt string",
+    "negative_prompt": "optional; falls back to handler default if omitted",
+    "input_image": "i2v only; path RELATIVE to spike/ directory (e.g. test_images/portrait.jpg)",
+    "seed": "optional integer; if omitted, handler picks a random seed and reports it",
+    "num_frames": "optional override; defaults to handler's 121 (~5.04s @ 24fps)",
+    "width": "optional override; defaults to 1280",
+    "height": "optional override; defaults to 704",
+    "num_inference_steps": "optional override; defaults to 50"
+  },
+  "prompts": [
+    {
+      "label": "t2v-01-landscape-static",
+      "mode": "t2v",
+      "prompt": "A serene mountain lake at golden hour, mist rising slowly from the water, gentle wind moving the pine trees on the shore, cinematic establishing shot",
+      "seed": 1001
+    },
+    {
+      "label": "t2v-02-single-subject-walk",
+      "mode": "t2v",
+      "prompt": "A woman in a red coat walks down a quiet Parisian street in late afternoon, soft warm light, shallow depth of field, tracking shot from behind",
+      "seed": 1002
+    },
+    {
+      "label": "t2v-03-dynamic-action",
+      "mode": "t2v",
+      "prompt": "A skateboarder performs a kickflip in slow motion at an urban skatepark at sunset, dust kicked up, dramatic backlight, side angle",
+      "seed": 1003
+    },
+    {
+      "label": "t2v-04-animal-motion",
+      "mode": "t2v",
+      "prompt": "A golden retriever runs through a field of yellow wildflowers under a clear blue sky, camera tracks alongside the dog at low angle, joyful and playful mood",
+      "seed": 1004
+    },
+    {
+      "label": "t2v-05-stylized-night",
+      "mode": "t2v",
+      "prompt": "A neon-lit cyberpunk street at night, light rain on wet pavement reflecting pink and cyan signs, slow crane shot rising above the crowd, anamorphic flare",
+      "seed": 1005
+    },
+    {
+      "label": "i2v-01-portrait-smile",
+      "mode": "i2v",
+      "prompt": "The subject slowly smiles and turns their gaze toward the camera, soft natural light, subtle head movement, shallow depth of field",
+      "input_image": "test_images/portrait.jpg",
+      "seed": 2001
+    },
+    {
+      "label": "i2v-02-landscape-atmosphere",
+      "mode": "i2v",
+      "prompt": "Wind moves through the grass and trees, clouds drift slowly across the sky, gentle ambient motion, photorealistic",
+      "input_image": "test_images/landscape.jpg",
+      "seed": 2002
+    },
+    {
+      "label": "i2v-03-product-reveal",
+      "mode": "i2v",
+      "prompt": "Slow camera orbit around the product, soft studio lighting, product remains the focal point, premium commercial style",
+      "input_image": "test_images/product.jpg",
+      "seed": 2003
+    },
+    {
+      "label": "i2v-04-action-continuation",
+      "mode": "i2v",
+      "prompt": "Camera zooms in slowly while the subject continues their action with natural fluid motion, motion blur on hands, cinematic",
+      "input_image": "test_images/action.jpg",
+      "seed": 2004
+    },
+    {
+      "label": "i2v-05-abstract-particles",
+      "mode": "i2v",
+      "prompt": "Particles drift and swirl through the scene, ethereal atmosphere, soft glowing light moving slowly, dreamlike",
+      "input_image": "test_images/abstract.jpg",
+      "seed": 2005
+    }
+  ]
+}
