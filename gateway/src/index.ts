@@ -21,6 +21,7 @@
  */
 
 import { validateAuth } from './auth.js';
+import { CAPABILITIES_RESPONSE } from './capabilities-constants.js';
 import { handleCorsPreflight, handleGenerate } from './generate.js';
 import { getClientIp, log } from './log.js';
 import {
@@ -54,6 +55,17 @@ export default {
     // POST /v1/generate — text generation SSE/non-streaming endpoint
     if (method === 'POST' && pathname === '/v1/generate') {
       return handleGenerate(request, env, ctx);
+    }
+
+    // GET /capabilities — public capability discovery endpoint (Story 5.2 AC6)
+    if (method === 'GET' && pathname === '/capabilities') {
+      return new Response(JSON.stringify(CAPABILITIES_RESPONSE), {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'public, max-age=60',
+        },
+      });
     }
 
     // POST /jobs — new async submit
