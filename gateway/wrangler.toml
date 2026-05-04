@@ -47,13 +47,11 @@ binding = "VIDEOS_KV"
 id = "94ea78881fac4459b2fabba31d62a09f"
 preview_id = "87a93a652af0430895ca2edca16f4cde"
 
-# TODO Story 5.2 Task 6 — R2 bucket pending account-level R2 enablement.
-# Action required: enable R2 in Cloudflare dashboard (free tier OK; payment method needed).
-# After enabling, run: gateway/node_modules/.bin/wrangler r2 bucket create servegate-videos
-# Then uncomment the binding below + replicate in [env.preview]:
-# [[r2_buckets]]
-# binding = "R2_VIDEOS_BUCKET"
-# bucket_name = "servegate-videos"
+# R2 bucket for generated MP4 video output (pre-signed URLs, 24h TTL, Story 5.2 Task 2).
+# Bucket created 2026-05-04 (`wrangler r2 bucket create servegate-videos`).
+[[r2_buckets]]
+binding = "R2_VIDEOS_BUCKET"
+bucket_name = "servegate-videos"
 
 # Preview worker (Phase 5.6 INC-2026-04-23-gateway-504). KV bindings must be repeated
 # per env (not inherited). Secrets are per-script: `wrangler secret put <NAME> --env preview`.
@@ -78,6 +76,10 @@ id = "b3799bff71cc4d9c8e28bcf27d963eab"
 binding = "VIDEOS_KV"
 id = "94ea78881fac4459b2fabba31d62a09f"
 preview_id = "87a93a652af0430895ca2edca16f4cde"
+
+[[env.preview.r2_buckets]]
+binding = "R2_VIDEOS_BUCKET"
+bucket_name = "servegate-videos"
 
 # Observability — logs visible in `wrangler tail` and Cloudflare dashboard
 [observability]
