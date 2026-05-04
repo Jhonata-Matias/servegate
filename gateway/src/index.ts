@@ -31,6 +31,7 @@ import {
 } from './rate-limit.js';
 import { getMapping, putMapping, updateStatus } from './storage.js';
 import { getStatus, mapStatus, submitJob, RunpodUpstreamError } from './runpod.js';
+import { handleVideoSubmit } from './video.js';
 import type { Env, JobMapping, JobStatus, RateLimitState } from './types.js';
 
 const POLL_RETRY_AFTER_SECONDS = 5;
@@ -57,7 +58,7 @@ export default {
 
     // POST /jobs — new async submit
     if (method === 'POST' && pathname === '/jobs') {
-      return handleSubmit(request, env, ip, start);
+      return routeSubmit(request, env, ip, start);
     }
 
     // GET /jobs/{id} — poll status
@@ -108,6 +109,43 @@ export default {
 // ===========================================================================
 // POST /jobs handler (FR-1)
 // ===========================================================================
+
+async function routeSubmit(
+  request: Request,
+  env: Env,
+  ip: string | null,
+  start: number,
+): Promise<Response> {
+  const authFailure = validateAuth(request, env.GATEWAY_API_KEY);
+  if (authFailure) {
+    log({
+      timestamp: Date.now(),
+      event: 'auth_failed',
+      ip,
+      status: 401,
+      elapsed_ms: Date.now() - start,
+    });
+    return authFailure;
+  }
+
+  let body: unknown;
+  try {
+    body = await request.clone().json();
+  } catch {
+    return handleSubmit(request, env, ip, start);
+  }
+
+  const kind = isRecord(body) ? body.kind : undefined;
+  if (kind === undefined || kind === 'image') {
+    return handleSubmit(request, env, ip, start);
+  }
+
+  if (kind === 'video') {
+    return handleVideoSubmit(request, env, ip, start);
+  }
+
+  return json(400, { error: 'unsupported_kind', supported: ['image', 'video'] });
+}
 
 async function handleSubmit(
   request: Request,
@@ -434,4 +472,8 @@ function rateLimitHeaders(state: RateLimitState): Record<string, string> {
     'X-RateLimit-Remaining': String(state.remaining),
     'X-RateLimit-Reset': state.resetAt,
   };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

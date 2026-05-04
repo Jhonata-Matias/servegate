@@ -18,6 +18,7 @@ export interface Env {
   GATEWAY_API_KEY: string;
   RUNPOD_API_KEY: string;
   RUNPOD_ENDPOINT_ID: string;
+  RUNPOD_LTX_ENDPOINT_ID?: string;
   RUNPOD_TEXT_ENDPOINT_ID?: string;
   CORS_ALLOWED_ORIGIN?: string;
 }
@@ -137,10 +138,33 @@ export const RUNPOD_TO_GATEWAY_STATUS: Record<RunpodStatus, JobStatus> = {
 export interface JobMapping {
   job_id: string;               // UUID v4 — gateway-owned identity
   runpod_request_id: string;    // RunPod-owned identity, returned by /run
+  kind?: 'image' | 'video';      // Optional for backward-compatible pre-video image mappings
   status: JobStatus;            // Last-observed status (updated on poll)
   created_at: number;           // Unix ms — when /jobs POST was received
   completed_at?: number;        // Unix ms — set when status transitions to completed/failed/cancelled/timeout
   error_code?: string;          // Populated for terminal error states
+}
+
+export interface VideoSubmitRequest {
+  kind: 'video';
+  prompt: string;
+  negative_prompt?: string;
+  image?: string;
+  num_frames?: number;
+  fps?: number;
+  guidance_scale?: number;
+  steps?: number;
+  seed?: number;
+}
+
+export interface VideoSubmitResponse {
+  job_id: string;
+  status_url: string;
+  est_wait_seconds: {
+    p50: 90;
+    p95: 200;
+    first_call_max: 600;
+  };
 }
 
 // ---------------------------------------------------------------------------
