@@ -148,6 +148,36 @@ Troubleshooting guidance:
 - If backgrounds change unexpectedly, make the prompt explicit: "keep the background unchanged".
 - If you need HEIC/HEIF from mobile uploads, convert to PNG/JPEG/WebP before calling `edit()`.
 
+## Generate videos
+
+The SDK exposes `generateVideo`, `text2video`, and `image2video` for the LTX-Video alpha capability. The first call after a cold pool may take up to ~10 minutes; subsequent calls within the same warm window typically return in 30-90 seconds.
+
+```typescript
+// Text-to-video
+const video = await client.generateVideo({
+  prompt: 'A close-up of a meadow at sunset',
+  num_frames: 121,
+  fps: 24,
+});
+console.log(video.video_url);  // R2 pre-signed URL, valid for 24h
+
+// Image-to-video (alias)
+const video2 = await client.image2video(
+  'data:image/jpeg;base64,/9j/4AAQ...',
+  'soft wind moving through the grass',
+);
+
+// With progress + abort
+const ac = new AbortController();
+const video3 = await client.generateVideo({
+  prompt: 'rain falling on a window',
+  signal: ac.signal,
+  onProgress: ({ phase, est_wait_seconds }) => console.log(phase, est_wait_seconds),
+});
+```
+
+Default timeout is 15 minutes (cold-pool tolerant). Override via `timeoutMs`.
+
 #### `isWarm(): boolean`
 
 Pure state check (zero network) — `true` se warmup ou generate sucedeu nos últimos `warmThresholdMs`.

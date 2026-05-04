@@ -50,6 +50,41 @@ export interface GenerateOutput {
   };
 }
 
+export interface GenerateVideoInput {
+  prompt: string;
+  image?: string;
+  num_frames?: number;
+  fps?: number;
+  guidance_scale?: number;
+  steps?: number;
+  negative_prompt?: string;
+  seed?: number;
+  signal?: AbortSignal;
+  onProgress?: (event: VideoProgressEvent) => void;
+  /** Override per-call timeout in ms (default 900_000) */
+  timeoutMs?: number;
+}
+
+export interface VideoProgressEvent {
+  phase: 'queued' | 'loading_model' | 'inferencing' | 'uploading';
+  percent_estimate?: number;
+  est_wait_seconds?: number;
+}
+
+export interface GenerateVideoOutput {
+  video_url: string;
+  duration_seconds: number;
+  width: number;
+  height: number;
+  fps: number;
+  size_bytes: number;
+  metrics: {
+    queue_seconds: number;
+    execution_seconds: number;
+    wallclock_seconds: number;
+  };
+}
+
 export interface SubmitJobResponse {
   job_id: string;
   status_url: string;

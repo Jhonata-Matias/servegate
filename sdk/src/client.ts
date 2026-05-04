@@ -12,16 +12,27 @@ import {
   type EditInput,
   type GenerateInput,
   type GenerateOutput,
+  type GenerateVideoInput,
+  type GenerateVideoOutput,
   type PollPendingResponse,
   type RetryConfig,
   type SubmitJobResponse,
+  type VideoProgressEvent,
   type WarmupResult,
 } from './types.js';
-import { validateAndNormalizeEditInput, validateGenerateInput, type NormalizedEditRequest } from './validate.js';
+import {
+  validateAndNormalizeEditInput,
+  validateGenerateInput,
+  validateGenerateVideoInput,
+  type NormalizedEditRequest,
+} from './validate.js';
 
 const COLD_HEURISTIC_THRESHOLD_MS = 30_000;
 const DEFAULT_RETRY_AFTER_SECONDS = 5;
+const DEFAULT_VIDEO_TIMEOUT_MS = 900_000;
+const MAX_VIDEO_IMAGE_BYTES = 12 * 1024 * 1024;
 const MAX_NOT_FOUND_RETRIES = 3;
+const VIDEO_POLL_5XX_BACKOFF_MS = [1_000, 3_000, 9_000] as const;
 
 interface RateLimitErrorBody {
   error?: string;
@@ -42,7 +53,36 @@ interface TerminalPollErrorBody {
   status?: string;
 }
 
-type JobSubmitInput = GenerateInput | NormalizedEditRequest;
+interface VideoSubmitJobResponse {
+  job_id: string;
+  status_url: string;
+  est_wait_seconds: {
+    p50: number;
+    p95: number;
+    first_call_max: number;
+  };
+}
+
+interface VideoPollPendingResponse {
+  status: 'queued' | 'running';
+  est_wait_seconds?: number | 'unknown' | VideoSubmitJobResponse['est_wait_seconds'];
+  progress?: Partial<VideoProgressEvent>;
+}
+
+interface VideoCompletionResponse {
+  status?: 'completed';
+  output?: GenerateVideoOutput & { url_ttl_seconds?: number };
+  metrics?: GenerateVideoOutput['metrics'];
+}
+
+interface GatewayErrorBody {
+  error?: string | { code?: string; message?: string };
+  status?: string;
+  retryable?: boolean;
+}
+
+type VideoJobSubmitInput = Omit<GenerateVideoInput, 'signal' | 'onProgress' | 'timeoutMs'> & { kind: 'video' };
+type JobSubmitInput = GenerateInput | NormalizedEditRequest | VideoJobSubmitInput;
 
 export class FluxClient {
   readonly #apiKey: string;
@@ -137,6 +177,47 @@ export class FluxClient {
     const start = Date.now();
     const submitResponse = await this.#submitWithRetry(request);
     return this.#pollSubmittedJob(submitResponse, start, this.#warmTimeoutMs, true);
+  }
+
+  /**
+   * Generate video via the async gateway contract.
+   * Uses a video-specific poller because the image poller validates image_b64
+   * outputs and has different timeout/5xx retry semantics.
+   */
+  async generateVideo(input: GenerateVideoInput): Promise<GenerateVideoOutput> {
+    validateGenerateVideoInput(input);
+    this.#throwIfAborted(input.signal);
+
+    const request: VideoJobSubmitInput = {
+      kind: 'video',
+      prompt: input.prompt,
+    };
+    if (input.image !== undefined) request.image = await this.#normalizeVideoImage(input.image, input.signal);
+    if (input.num_frames !== undefined) request.num_frames = input.num_frames;
+    if (input.fps !== undefined) request.fps = input.fps;
+    if (input.guidance_scale !== undefined) request.guidance_scale = input.guidance_scale;
+    if (input.steps !== undefined) request.steps = input.steps;
+    if (input.negative_prompt !== undefined) request.negative_prompt = input.negative_prompt;
+    if (input.seed !== undefined) request.seed = input.seed;
+
+    const start = Date.now();
+    const submitResponse = await this.#submitVideoWithRetry(request, input.signal);
+    return this.#pollVideoJob(submitResponse, start, input.timeoutMs ?? DEFAULT_VIDEO_TIMEOUT_MS, input);
+  }
+
+  async text2video(
+    prompt: string,
+    opts?: Omit<GenerateVideoInput, 'prompt'>,
+  ): Promise<GenerateVideoOutput> {
+    return this.generateVideo({ prompt, ...opts });
+  }
+
+  async image2video(
+    image: string,
+    prompt: string,
+    opts?: Omit<GenerateVideoInput, 'prompt' | 'image'>,
+  ): Promise<GenerateVideoOutput> {
+    return this.generateVideo({ prompt, image, ...opts });
   }
 
   // ---------- private helpers ----------
@@ -238,6 +319,114 @@ export class FluxClient {
     });
   }
 
+  async #pollVideoJob(
+    submitResponse: Response,
+    start: number,
+    pollTimeoutMs: number,
+    input: GenerateVideoInput,
+  ): Promise<GenerateVideoOutput> {
+    const submitBody = await this.#safeReadJson<VideoSubmitJobResponse>(submitResponse);
+    if (!submitBody?.job_id || !submitBody.status_url) {
+      throw new Error('Gateway video submit response missing job_id or status_url');
+    }
+
+    const pollUrl = this.#absoluteStatusUrl(
+      submitResponse.headers.get('Location') ?? submitBody.status_url,
+    );
+
+    let retryAfterSeconds = this.#parseRetryAfterSeconds(submitResponse.headers.get('Retry-After'));
+    let notFoundRetries = 0;
+    let transient5xxRetries = 0;
+    let phase: VideoProgressEvent['phase'] = 'queued';
+
+    while (Date.now() - start < pollTimeoutMs) {
+      this.#throwIfAborted(input.signal);
+
+      const response = await this.#request(pollUrl, {
+        method: 'GET',
+        headers: this.#headers(),
+      }, input.signal);
+
+      if (response.status === 200) {
+        const parsed = await this.#safeReadJson<VideoCompletionResponse>(response);
+        const output = parsed?.output;
+        const metrics = parsed?.metrics;
+        if (!output?.video_url || !metrics) {
+          throw new Error('Gateway video completion response missing output or metrics');
+        }
+        return {
+          video_url: output.video_url,
+          duration_seconds: output.duration_seconds,
+          width: output.width,
+          height: output.height,
+          fps: output.fps,
+          size_bytes: output.size_bytes,
+          metrics,
+        };
+      }
+
+      if (response.status === 202) {
+        const body = await this.#safeReadJson<VideoPollPendingResponse>(response);
+        if (body?.status !== 'queued' && body?.status !== 'running') {
+          throw new Error('Gateway video poll response returned unexpected pending body');
+        }
+        if (this.#isVideoPhase(body.progress?.phase)) {
+          phase = body.progress.phase;
+        }
+        const progress: VideoProgressEvent = { phase };
+        if (typeof body.progress?.percent_estimate === 'number') {
+          progress.percent_estimate = body.progress.percent_estimate;
+        }
+        const estWaitSeconds = this.#extractVideoWaitSeconds(body.progress?.est_wait_seconds ?? body.est_wait_seconds);
+        if (estWaitSeconds !== undefined) {
+          progress.est_wait_seconds = estWaitSeconds;
+        }
+        input.onProgress?.(progress);
+        retryAfterSeconds = this.#parseRetryAfterSeconds(response.headers.get('Retry-After'));
+        await this.#sleep(retryAfterSeconds * 1000, input.signal);
+        continue;
+      }
+
+      if (response.status === 404) {
+        if (notFoundRetries < MAX_NOT_FOUND_RETRIES) {
+          await this.#sleep(this.#computeBackoffMs(notFoundRetries), input.signal);
+          notFoundRetries++;
+          continue;
+        }
+        throw new Error('job_not_found_or_expired');
+      }
+
+      if (response.status === 401) {
+        const body = await this.#safeReadJson<AuthErrorBody>(response);
+        throw new AuthError({
+          http_status: 401,
+          ...(body?.error ? { message: body.error } : {}),
+        });
+      }
+
+      if (response.status === 429) {
+        throw await this.#buildRateLimitError(response);
+      }
+
+      if (response.status >= 500) {
+        if (transient5xxRetries < VIDEO_POLL_5XX_BACKOFF_MS.length) {
+          const backoffMs = VIDEO_POLL_5XX_BACKOFF_MS[transient5xxRetries] ?? 9_000;
+          transient5xxRetries++;
+          await this.#sleep(backoffMs, input.signal);
+          continue;
+        }
+        throw await this.#buildGatewayError(response, `Gateway video poll failed with ${response.status}`);
+      }
+
+      throw new Error(`Unexpected video poll status ${response.status}`);
+    }
+
+    throw new TimeoutError({
+      elapsed_ms: Date.now() - start,
+      cause: 'poll_exhausted',
+    });
+  }
+
   #headers(): Record<string, string> {
     return {
       'Content-Type': 'application/json',
@@ -250,6 +439,61 @@ export class FluxClient {
       return this.#retryConfig.initialDelayMs * (attempt + 1);
     }
     return this.#retryConfig.initialDelayMs * Math.pow(2, attempt);
+  }
+
+  async #submitVideoWithRetry(input: VideoJobSubmitInput, signal?: AbortSignal): Promise<Response> {
+    for (let attempt = 0; attempt <= this.#retryConfig.maxRetries; attempt++) {
+      try {
+        this.#throwIfAborted(signal);
+        const response = await this.#request(`${this.#gatewayUrl}/jobs`, {
+          method: 'POST',
+          headers: this.#headers(),
+          body: JSON.stringify(input),
+        }, signal);
+
+        if (response.status === 202) {
+          return response;
+        }
+        if (response.status === 401) {
+          const body = await this.#safeReadJson<AuthErrorBody>(response);
+          throw new AuthError({
+            http_status: 401,
+            ...(body?.error ? { message: body.error } : {}),
+          });
+        }
+        if (response.status === 429) {
+          throw await this.#buildRateLimitError(response);
+        }
+        if (response.status >= 500 && attempt < this.#retryConfig.maxRetries) {
+          await this.#sleep(this.#computeBackoffMs(attempt), signal);
+          continue;
+        }
+        if (response.status >= 500) {
+          throw await this.#buildGatewayError(response, `Gateway video submit failed with ${response.status}`);
+        }
+        throw new Error(`Unexpected video submit status ${response.status}`);
+      } catch (err) {
+        if (
+          err instanceof AuthError ||
+          err instanceof RateLimitError ||
+          this.#isAbortError(err)
+        ) {
+          throw err;
+        }
+        if (attempt === this.#retryConfig.maxRetries) {
+          if (err instanceof TimeoutError) {
+            throw err;
+          }
+          if (err instanceof Error) {
+            throw new NetworkError({ cause: err });
+          }
+          throw new Error('Unknown video submit failure');
+        }
+        await this.#sleep(this.#computeBackoffMs(attempt), signal);
+      }
+    }
+
+    throw new Error('video submit retry loop exhausted unexpectedly');
   }
 
   async #submitWithRetry(input: JobSubmitInput): Promise<Response> {
@@ -302,15 +546,28 @@ export class FluxClient {
     throw new Error('submit retry loop exhausted unexpectedly');
   }
 
-  async #request(url: string, init: RequestInit): Promise<Response> {
+  async #request(url: string, init: RequestInit, signal?: AbortSignal): Promise<Response> {
+    this.#throwIfAborted(signal);
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), this.#retryConfig.requestTimeoutMs);
+    let abortCause: 'timeout' | 'external' | null = null;
+    const timer = setTimeout(() => {
+      abortCause = 'timeout';
+      controller.abort();
+    }, this.#retryConfig.requestTimeoutMs);
+    const abort = (): void => {
+      abortCause = 'external';
+      controller.abort();
+    };
+    signal?.addEventListener('abort', abort, { once: true });
     try {
       return await this.#fetch(url, {
         ...init,
         signal: controller.signal,
       });
     } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError' && abortCause === 'external') {
+        throw this.#buildAbortError();
+      }
       if (err instanceof Error && err.name === 'AbortError') {
         throw new NetworkError({
           cause: new Error(`Request timed out after ${this.#retryConfig.requestTimeoutMs}ms`),
@@ -322,6 +579,7 @@ export class FluxClient {
       throw new Error('Unknown request failure');
     } finally {
       clearTimeout(timer);
+      signal?.removeEventListener('abort', abort);
     }
   }
 
@@ -335,6 +593,68 @@ export class FluxClient {
     });
   }
 
+  async #buildGatewayError(response: Response, fallback: string): Promise<Error> {
+    const body = await this.#safeReadJson<GatewayErrorBody>(response);
+    if (typeof body?.error === 'string') {
+      return new Error(body.status ? `${body.error}:${body.status}` : body.error);
+    }
+    if (body?.error?.code || body?.error?.message) {
+      const code = body.error.code ?? 'gateway_error';
+      return new Error(body.error.message ? `${code}: ${body.error.message}` : code);
+    }
+    return new Error(fallback);
+  }
+
+  async #normalizeVideoImage(image: string, signal?: AbortSignal): Promise<string> {
+    const trimmed = image.trim();
+    if (trimmed.startsWith('data:')) {
+      return trimmed;
+    }
+    if (!trimmed.startsWith('https://')) {
+      throw this.#buildImageFetchError('Video image must be a data URL or https URL');
+    }
+
+    let response: Response;
+    try {
+      this.#throwIfAborted(signal);
+      const init: RequestInit = { method: 'GET' };
+      if (signal !== undefined) init.signal = signal;
+      response = await this.#fetch(trimmed, init);
+    } catch (err) {
+      if (this.#isAbortError(err)) {
+        throw this.#buildAbortError();
+      }
+      throw this.#buildImageFetchError(
+        `Failed to fetch video image URL: ${err instanceof Error ? err.message : 'unknown error'}`,
+      );
+    }
+
+    if (!response.ok) {
+      throw this.#buildImageFetchError(`Failed to fetch video image URL: HTTP ${response.status}`);
+    }
+
+    const contentType = response.headers.get('Content-Type')?.split(';')[0]?.trim().toLowerCase();
+    if (contentType !== 'image/jpeg' && contentType !== 'image/png') {
+      throw this.#buildImageFetchError('Video image URL must return image/jpeg or image/png');
+    }
+
+    const contentLength = response.headers.get('Content-Length');
+    if (contentLength && Number.parseInt(contentLength, 10) > MAX_VIDEO_IMAGE_BYTES) {
+      throw this.#buildImageFetchError('Video image URL payload must be <= 12 MB');
+    }
+
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    if (bytes.byteLength > MAX_VIDEO_IMAGE_BYTES) {
+      throw this.#buildImageFetchError('Video image URL payload must be <= 12 MB');
+    }
+
+    return `data:${contentType};base64,${this.#bytesToBase64(bytes)}`;
+  }
+
+  #buildImageFetchError(message: string): Error {
+    return new Error(message, { cause: 'image_fetch_failed' });
+  }
+
   #parseRetryAfterSeconds(headerValue: string | null, fallback = DEFAULT_RETRY_AFTER_SECONDS): number {
     if (!headerValue) return fallback;
     return Math.max(1, Number.parseInt(headerValue, 10) || fallback);
@@ -345,8 +665,62 @@ export class FluxClient {
     return `${this.#gatewayUrl}${path.startsWith('/') ? path : `/${path}`}`;
   }
 
-  #sleep(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms));
+  #sleep(ms: number, signal?: AbortSignal): Promise<void> {
+    this.#throwIfAborted(signal);
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        signal?.removeEventListener('abort', abort);
+        resolve();
+      }, ms);
+      const abort = (): void => {
+        clearTimeout(timer);
+        reject(this.#buildAbortError());
+      };
+      signal?.addEventListener('abort', abort, { once: true });
+    });
+  }
+
+  #throwIfAborted(signal?: AbortSignal): void {
+    if (signal?.aborted) {
+      throw this.#buildAbortError();
+    }
+  }
+
+  #buildAbortError(): Error {
+    return new DOMException('aborted', 'AbortError');
+  }
+
+  #isAbortError(err: unknown): boolean {
+    return err instanceof Error && err.name === 'AbortError';
+  }
+
+  #isVideoPhase(value: unknown): value is VideoProgressEvent['phase'] {
+    return value === 'queued' || value === 'loading_model' || value === 'inferencing' || value === 'uploading';
+  }
+
+  #extractVideoWaitSeconds(value: unknown): number | undefined {
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return value;
+    }
+    if (value !== null && typeof value === 'object') {
+      const maybeP50 = (value as { p50?: unknown }).p50;
+      if (typeof maybeP50 === 'number' && Number.isFinite(maybeP50)) {
+        return maybeP50;
+      }
+    }
+    return undefined;
+  }
+
+  #bytesToBase64(bytes: Uint8Array): string {
+    if (typeof Buffer !== 'undefined') {
+      return Buffer.from(bytes).toString('base64');
+    }
+
+    let binary = '';
+    for (let i = 0; i < bytes.length; i += 0x8000) {
+      binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+    }
+    return btoa(binary);
   }
 
   async #safeReadJson<T>(response: Response): Promise<T | null> {
