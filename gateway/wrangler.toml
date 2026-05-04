@@ -22,6 +22,8 @@ workers_dev = true
 # revisit if a public landing domain (gemma4.dev or other) is provisioned.
 CORS_ALLOWED_ORIGIN = "https://gemma4-gateway.jhonata-matias.workers.dev"
 RUNPOD_LTX_ENDPOINT_ID = "j8oub0cfiz5oke"
+# Story 5.2 Task 6 — video daily quota (configurable; default 20 calls/day per API key)
+VIDEO_DAILY_LIMIT = "20"
 
 # KV namespace for rate-limit counter (key: count:YYYY-MM-DD, TTL 48h)
 # Created via `npm run kv:create` 2026-04-21
@@ -37,6 +39,22 @@ id = "55bd0b4a7c3c44bb958331ba82035e55"
 binding = "JOBS_KV"
 id = "b3799bff71cc4d9c8e28bcf27d963eab"
 
+# KV namespace for video daily quota (key: videos:YYYY-MM-DD:{api_key_hash}, value: int counter).
+# Story 5.2 Task 3 will read/write here for video rate-limit (separate from RATE_LIMIT_KV which
+# tracks image jobs). Created 2026-05-04 (`wrangler kv namespace create VIDEOS_KV`).
+[[kv_namespaces]]
+binding = "VIDEOS_KV"
+id = "94ea78881fac4459b2fabba31d62a09f"
+preview_id = "87a93a652af0430895ca2edca16f4cde"
+
+# TODO Story 5.2 Task 6 — R2 bucket pending account-level R2 enablement.
+# Action required: enable R2 in Cloudflare dashboard (free tier OK; payment method needed).
+# After enabling, run: gateway/node_modules/.bin/wrangler r2 bucket create servegate-videos
+# Then uncomment the binding below + replicate in [env.preview]:
+# [[r2_buckets]]
+# binding = "R2_VIDEOS_BUCKET"
+# bucket_name = "servegate-videos"
+
 # Preview worker (Phase 5.6 INC-2026-04-23-gateway-504). KV bindings must be repeated
 # per env (not inherited). Secrets are per-script: `wrangler secret put <NAME> --env preview`.
 [env.preview]
@@ -46,6 +64,7 @@ workers_dev = true
 [env.preview.vars]
 CORS_ALLOWED_ORIGIN = "https://gemma4.dev"
 RUNPOD_LTX_ENDPOINT_ID = "j8oub0cfiz5oke"
+VIDEO_DAILY_LIMIT = "20"
 
 [[env.preview.kv_namespaces]]
 binding = "RATE_LIMIT_KV"
@@ -54,6 +73,11 @@ id = "55bd0b4a7c3c44bb958331ba82035e55"
 [[env.preview.kv_namespaces]]
 binding = "JOBS_KV"
 id = "b3799bff71cc4d9c8e28bcf27d963eab"
+
+[[env.preview.kv_namespaces]]
+binding = "VIDEOS_KV"
+id = "94ea78881fac4459b2fabba31d62a09f"
+preview_id = "87a93a652af0430895ca2edca16f4cde"
 
 # Observability — logs visible in `wrangler tail` and Cloudflare dashboard
 [observability]
