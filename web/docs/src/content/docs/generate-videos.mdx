@@ -119,7 +119,7 @@ HTTP/1.1 200 OK
 {
   "status": "completed",
   "output": {
-    "video_url": "https://servegate-r2.<account>.r2.cloudflarestorage.com/videos/<sha256>.mp4?X-Amz-Algorithm=...",
+    "video_url": "https://gemma4-gateway.jhonata-matias.workers.dev/videos/<job_id>?t=<token>",
     "duration_seconds": 5.04,
     "width": 704,
     "height": 512,
@@ -203,7 +203,7 @@ Video generation is limited to 20 video calls per day per `X-API-Key` during the
 
 ## Output URL TTL
 
-Completed video jobs return an R2 pre-signed `video_url`. Treat it as a one-time download handoff URL: it is not a permanent asset URL, but it remains valid for up to 24 hours (`url_ttl_seconds: 86400`).
+Completed video jobs return an HMAC-signed gateway-proxied `video_url`. Treat it as a one-time download handoff URL: it is not a permanent asset URL, but it remains valid for up to 24 hours (`url_ttl_seconds: 86400`).
 
 ## Start here
 
