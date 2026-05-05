@@ -17,6 +17,9 @@ export interface Env {
   // KV namespace for video daily quota counters (Story 5.2 AC5)
   VIDEOS_KV: KVNamespace;
 
+  // R2 bucket for generated MP4 video output (Story 5.2 AC3)
+  R2_VIDEOS_BUCKET: R2Bucket;
+
   // Secrets (configured via `wrangler secret put`)
   GATEWAY_API_KEY: string;
   RUNPOD_API_KEY: string;
@@ -142,6 +145,9 @@ export const RUNPOD_TO_GATEWAY_STATUS: Record<RunpodStatus, JobStatus> = {
 export interface JobMapping {
   job_id: string;               // UUID v4 — gateway-owned identity
   runpod_request_id: string;    // RunPod-owned identity, returned by /run
+  runpod_endpoint_id?: string;   // Optional for video jobs submitted to LTX endpoint
+  api_key_hash?: string;         // Optional for video post-flight quota / R2 metadata
+  submitted_at?: string;         // ISO-8601 submit timestamp for R2 metadata
   kind?: 'image' | 'video';      // Optional for backward-compatible pre-video image mappings
   status: JobStatus;            // Last-observed status (updated on poll)
   created_at: number;           // Unix ms — when /jobs POST was received
@@ -199,9 +205,15 @@ export interface RunpodStatusResponse {
   executionTime?: number;       // ms actual inference time
   output?: {
     image_b64?: string;
+    video_b64?: string;
     metadata?: {
       seed?: number;
       elapsed_ms?: number;
+      duration_seconds?: number;
+      width?: number;
+      height?: number;
+      fps?: number;
+      video_bytes?: number;
     };
     error?: string;             // Populated for FAILED/TIMED_OUT
     code?: number;

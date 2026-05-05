@@ -29,7 +29,16 @@ import {
   checkAndIncrement,
   checkAndRead,
   DAILY_LIMIT,
+  incrementVideoQuotaPostFlight,
 } from './rate-limit.js';
+import {
+  readVideoMetadata,
+  uploadVideoToR2,
+  verifyVideoAccessToken,
+  VIDEO_OBJECT_PREFIX,
+  VIDEO_URL_TTL_SECONDS,
+  type VideoMetadata,
+} from './r2-video.js';
 import { getMapping, putMapping, updateStatus } from './storage.js';
 import { getStatus, mapStatus, submitJob, RunpodUpstreamError } from './runpod.js';
 import { handleVideoSubmit } from './video.js';
@@ -66,6 +75,16 @@ export default {
           'Cache-Control': 'public, max-age=60',
         },
       });
+    }
+
+    // GET /videos/{id} — token-authenticated R2 video proxy (Story 5.2 AC3)
+    const videoMatch = method === 'GET' && /^\/videos\/([^/]+)$/.exec(pathname);
+    if (videoMatch) {
+      const jobId = videoMatch[1];
+      if (!jobId) {
+        return json(404, { error: 'video_not_found' });
+      }
+      return handleVideoObject(request, env, ip, start, jobId);
     }
 
     // POST /jobs — new async submit
@@ -313,6 +332,10 @@ async function handleStatus(
     );
   }
 
+  if (mapping.kind === 'video') {
+    return handleVideoStatus(request, env, ip, start, jobId, mapping, rlState);
+  }
+
   // 4. Query RunPod /status
   let runpodStatus;
   try {
@@ -423,9 +446,292 @@ async function handleStatus(
   );
 }
 
+async function handleVideoStatus(
+  request: Request,
+  env: Env,
+  ip: string | null,
+  start: number,
+  jobId: string,
+  mapping: JobMapping,
+  rlState: RateLimitState,
+): Promise<Response> {
+  if (mapping.status === 'completed') {
+    const cached = await getVideoOutputCache(env, jobId);
+    if (cached) {
+      return json(200, videoCompletedBody(cached), rateLimitHeaders(rlState));
+    }
+  }
+
+  let runpodStatus;
+  try {
+    runpodStatus = await getStatus(env, mapping.runpod_request_id, {
+      endpointId: mapping.runpod_endpoint_id ?? env.RUNPOD_LTX_ENDPOINT_ID ?? env.RUNPOD_ENDPOINT_ID,
+    });
+  } catch (err) {
+    return handleUpstreamError(err, ip, start, rlState, jobId);
+  }
+
+  const gatewayStatus: JobStatus = mapStatus(runpodStatus.status);
+  if (gatewayStatus !== 'completed') {
+    if (gatewayStatus === 'queued' || gatewayStatus === 'running') {
+      log({
+        timestamp: Date.now(),
+        event: 'job_polled',
+        ip,
+        status: 202,
+        elapsed_ms: Date.now() - start,
+        job_id: jobId,
+        job_status: gatewayStatus,
+      });
+      return json(
+        202,
+        {
+          status: gatewayStatus,
+          est_wait_seconds: 'unknown',
+        },
+        {
+          'Retry-After': String(POLL_RETRY_AFTER_SECONDS),
+          ...rateLimitHeaders(rlState),
+        },
+      );
+    }
+
+    const errorCode = gatewayStatus === 'timeout'
+      ? 'generation_timeout'
+      : gatewayStatus === 'cancelled'
+        ? 'runpod_cancelled'
+        : 'runpod_failed';
+    try {
+      await updateStatus(env.JOBS_KV, jobId, gatewayStatus, { error_code: errorCode });
+    } catch {
+      // Non-fatal: client still receives the terminal failure response.
+    }
+    log({
+      timestamp: Date.now(),
+      event: 'job_polled',
+      ip,
+      status: 500,
+      elapsed_ms: Date.now() - start,
+      job_id: jobId,
+      job_status: gatewayStatus,
+      error_code: errorCode,
+    });
+    return json(
+      500,
+      {
+        status: 'failed',
+        error: {
+          code: errorCode,
+          message: runpodStatus.output?.error ?? 'Video generation failed',
+        },
+        retryable: gatewayStatus === 'timeout',
+      },
+      rateLimitHeaders(rlState),
+    );
+  }
+
+  const cached = await getVideoOutputCache(env, jobId);
+  if (cached) {
+    return json(200, videoCompletedBody(cached), rateLimitHeaders(rlState));
+  }
+
+  const videoB64 = runpodStatus.output?.video_b64;
+  if (typeof videoB64 !== 'string' || videoB64.length === 0) {
+    return json(
+      500,
+      {
+        status: 'failed',
+        error: {
+          code: 'missing_video_output',
+          message: 'RunPod completed without video_b64 output',
+        },
+        retryable: true,
+      },
+      rateLimitHeaders(rlState),
+    );
+  }
+
+  const metadata = readVideoMetadata(runpodStatus.output?.metadata ?? {});
+  const submittedAt = mapping.submitted_at ?? new Date(mapping.created_at).toISOString();
+  const apiKeyHash = mapping.api_key_hash ?? await hashApiKey(request.headers.get('X-API-Key') ?? '');
+  let upload;
+  try {
+    upload = await uploadVideoToR2(env, jobId, videoB64, { submittedAt, apiKeyHash });
+  } catch (err) {
+    return json(
+      500,
+      {
+        status: 'failed',
+        error: {
+          code: 'r2_upload_failed',
+          message: err instanceof Error ? err.message : 'R2 upload failed',
+        },
+        retryable: true,
+      },
+      rateLimitHeaders(rlState),
+    );
+  }
+
+  const metrics = videoMetrics(runpodStatus.delayTime, runpodStatus.executionTime);
+  const cache: VideoOutputCache = {
+    videoUrl: upload.videoUrl,
+    objectKey: upload.objectKey,
+    sizeBytes: upload.sizeBytes,
+    ttlSeconds: upload.ttlSeconds,
+    metadata,
+    metrics,
+  };
+
+  try {
+    await env.JOBS_KV.put(videoOutputCacheKey(jobId), JSON.stringify(cache), {
+      expirationTtl: VIDEO_URL_TTL_SECONDS,
+    });
+    await updateStatus(env.JOBS_KV, jobId, gatewayStatus);
+  } catch {
+    // Cache/status persistence is best-effort; quota remains idempotent by jobId.
+  }
+
+  const dateUTC = submittedAt.slice(0, 10);
+  await incrementVideoQuotaPostFlight(env, apiKeyHash, dateUTC, jobId);
+
+  log({
+    timestamp: Date.now(),
+    event: 'job_completed',
+    ip,
+    status: 200,
+    elapsed_ms: Date.now() - start,
+    day_count: rlState.count,
+    job_id: jobId,
+    runpod_request_id: mapping.runpod_request_id,
+    job_status: gatewayStatus,
+  });
+
+  return json(200, videoCompletedBody(cache), rateLimitHeaders(rlState));
+}
+
+async function handleVideoObject(
+  request: Request,
+  env: Env,
+  ip: string | null,
+  start: number,
+  jobId: string,
+): Promise<Response> {
+  const token = new URL(request.url).searchParams.get('t');
+  if (!token) {
+    return json(401, { error: 'invalid_video_token' });
+  }
+
+  const tokenCheck = await verifyVideoAccessToken(env, jobId, token);
+  if (!tokenCheck.valid) {
+    log({
+      timestamp: Date.now(),
+      event: 'job_polled',
+      ip,
+      status: 401,
+      elapsed_ms: Date.now() - start,
+      job_id: jobId,
+      error_code: `video_token_${tokenCheck.reason ?? 'invalid'}`,
+    });
+    return json(401, { error: 'invalid_video_token' });
+  }
+
+  const object = await env.R2_VIDEOS_BUCKET.get(`${VIDEO_OBJECT_PREFIX}/${jobId}.mp4`);
+  if (!object) {
+    return json(404, { error: 'video_not_found' });
+  }
+
+  return new Response(object.body, {
+    status: 200,
+    headers: {
+      'Content-Type': 'video/mp4',
+      'Content-Length': String(object.size),
+      'Cache-Control': `private, max-age=${VIDEO_URL_TTL_SECONDS}`,
+    },
+  });
+}
+
 // ===========================================================================
 // Shared helpers
 // ===========================================================================
+
+interface VideoOutputCache {
+  videoUrl: string;
+  objectKey: string;
+  sizeBytes: number;
+  ttlSeconds: number;
+  metadata: VideoMetadata;
+  metrics: VideoMetrics;
+}
+
+interface VideoMetrics {
+  queue_seconds: number;
+  execution_seconds: number;
+  wallclock_seconds: number;
+}
+
+function videoOutputCacheKey(jobId: string): string {
+  return `video-output:${jobId}`;
+}
+
+async function getVideoOutputCache(env: Env, jobId: string): Promise<VideoOutputCache | null> {
+  const raw = await env.JOBS_KV.get(videoOutputCacheKey(jobId));
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as VideoOutputCache;
+    if (
+      typeof parsed.videoUrl !== 'string' ||
+      typeof parsed.objectKey !== 'string' ||
+      typeof parsed.sizeBytes !== 'number' ||
+      typeof parsed.ttlSeconds !== 'number'
+    ) {
+      return null;
+    }
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function videoCompletedBody(cache: VideoOutputCache): unknown {
+  return {
+    status: 'completed',
+    output: {
+      video_url: cache.videoUrl,
+      duration_seconds: cache.metadata.duration_seconds,
+      width: cache.metadata.width,
+      height: cache.metadata.height,
+      fps: cache.metadata.fps,
+      size_bytes: cache.sizeBytes,
+      url_ttl_seconds: cache.ttlSeconds,
+    },
+    metrics: cache.metrics,
+  };
+}
+
+function videoMetrics(delayTime?: number, executionTime?: number): VideoMetrics {
+  const queueSeconds = millisecondsToSeconds(delayTime);
+  const executionSeconds = millisecondsToSeconds(executionTime);
+  return {
+    queue_seconds: queueSeconds,
+    execution_seconds: executionSeconds,
+    wallclock_seconds: roundSeconds(queueSeconds + executionSeconds),
+  };
+}
+
+function millisecondsToSeconds(value: number | undefined): number {
+  return roundSeconds(typeof value === 'number' && Number.isFinite(value) ? value / 1000 : 0);
+}
+
+function roundSeconds(value: number): number {
+  return Math.round(value * 1000) / 1000;
+}
+
+async function hashApiKey(apiKey: string): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(apiKey));
+  return [...new Uint8Array(digest)]
+    .map((byte) => byte.toString(16).padStart(2, '0'))
+    .join('');
+}
 
 function handleUpstreamError(
   err: unknown,

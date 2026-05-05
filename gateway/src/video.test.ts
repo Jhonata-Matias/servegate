@@ -19,15 +19,42 @@ function makeKv(): KVNamespace & { _store: Map<string, string> } {
   } as unknown as KVNamespace & { _store: Map<string, string> };
 }
 
+function makeR2(): R2Bucket & { _store: Map<string, Uint8Array> } {
+  const store = new Map<string, Uint8Array>();
+  return {
+    put: vi.fn(async (key: string, value: Uint8Array) => {
+      store.set(key, value);
+      return { key, size: value.byteLength } as R2Object;
+    }),
+    get: vi.fn(async (key: string) => {
+      const body = store.get(key);
+      if (!body) return null;
+      return {
+        key,
+        size: body.byteLength,
+        body: new Blob([body]).stream(),
+      } as unknown as R2ObjectBody;
+    }),
+    head: vi.fn(),
+    delete: vi.fn(),
+    list: vi.fn(),
+    createMultipartUpload: vi.fn(),
+    resumeMultipartUpload: vi.fn(),
+    _store: store,
+  } as unknown as R2Bucket & { _store: Map<string, Uint8Array> };
+}
+
 function makeEnv(overrides: Partial<Env> = {}): Env {
   return {
     RATE_LIMIT_KV: makeKv(),
     JOBS_KV: makeKv(),
     VIDEOS_KV: makeKv(),
+    R2_VIDEOS_BUCKET: makeR2(),
     GATEWAY_API_KEY: 'test-gateway-key',
     RUNPOD_API_KEY: 'test-runpod-key',
     RUNPOD_ENDPOINT_ID: 'image-endpoint',
     RUNPOD_LTX_ENDPOINT_ID: 'ltx-endpoint',
+    CORS_ALLOWED_ORIGIN: 'https://worker.test',
     ...overrides,
   };
 }
@@ -40,6 +67,15 @@ function req(body: unknown): Request {
       'X-API-Key': 'test-gateway-key',
     },
     body: JSON.stringify(body),
+  });
+}
+
+function getReq(path: string): Request {
+  return new Request(`https://worker.test${path}`, {
+    method: 'GET',
+    headers: {
+      'X-API-Key': 'test-gateway-key',
+    },
   });
 }
 
@@ -257,6 +293,150 @@ describe('POST /jobs kind=video', () => {
     expect(videoEnv.VIDEOS_KV.get).toHaveBeenCalledWith(`videos:2026-05-04:${apiKeyHash}`);
     expect(videoEnv.RATE_LIMIT_KV.get).not.toHaveBeenCalled();
     expect(videoEnv.RATE_LIMIT_KV.put).not.toHaveBeenCalled();
+  });
+});
+
+describe('GET /jobs kind=video', () => {
+  it('returns 202 with Retry-After while the RunPod video job is in progress', async () => {
+    const fetchMock = stubRunpod({ id: 'rp-video-status', status: 'IN_PROGRESS' });
+    const env = makeEnv();
+    const apiKeyHash = await hashApiKey('test-gateway-key');
+    await env.JOBS_KV.put('job-video-running', JSON.stringify({
+      job_id: 'job-video-running',
+      runpod_request_id: 'rp-video-status',
+      runpod_endpoint_id: 'ltx-endpoint',
+      kind: 'video',
+      status: 'queued',
+      created_at: Date.now(),
+      submitted_at: new Date().toISOString(),
+      api_key_hash: apiKeyHash,
+    }));
+
+    const res = await worker.fetch(getReq('/jobs/job-video-running'), env);
+
+    expect(res.status).toBe(202);
+    expect(res.headers.get('Retry-After')).toBe('5');
+    await expect(res.json()).resolves.toMatchObject({
+      status: 'running',
+      est_wait_seconds: 'unknown',
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining('/v2/ltx-endpoint/status/rp-video-status'),
+      expect.any(Object),
+    );
+  });
+
+  it('uploads completed video output to R2 and increments quota only once across polls', async () => {
+    const fetchMock = stubRunpod({
+      id: 'rp-video-done',
+      status: 'COMPLETED',
+      delayTime: 800,
+      executionTime: 86800,
+      output: {
+        video_b64: btoa('mp4-bytes'),
+        metadata: {
+          duration_seconds: 5.04,
+          width: 704,
+          height: 512,
+          fps: 24,
+        },
+      },
+    });
+    const env = makeEnv();
+    const apiKeyHash = await hashApiKey('test-gateway-key');
+    await env.JOBS_KV.put('job-video-done', JSON.stringify({
+      job_id: 'job-video-done',
+      runpod_request_id: 'rp-video-done',
+      runpod_endpoint_id: 'ltx-endpoint',
+      kind: 'video',
+      status: 'queued',
+      created_at: Date.now(),
+      submitted_at: '2026-05-04T12:00:00.000Z',
+      api_key_hash: apiKeyHash,
+    }));
+
+    const first = await worker.fetch(getReq('/jobs/job-video-done'), env);
+
+    expect(first.status).toBe(200);
+    await expect(first.json()).resolves.toEqual({
+      status: 'completed',
+      output: {
+        video_url: expect.stringMatching(/^https:\/\/worker\.test\/videos\/job-video-done\?t=/),
+        duration_seconds: 5.04,
+        width: 704,
+        height: 512,
+        fps: 24,
+        size_bytes: 9,
+        url_ttl_seconds: 86400,
+      },
+      metrics: {
+        queue_seconds: 0.8,
+        execution_seconds: 86.8,
+        wallclock_seconds: 87.6,
+      },
+    });
+    expect(env.R2_VIDEOS_BUCKET.put).toHaveBeenCalledTimes(1);
+    expect(env.R2_VIDEOS_BUCKET.put).toHaveBeenCalledWith(
+      'videos/job-video-done.mp4',
+      new TextEncoder().encode('mp4-bytes'),
+      expect.objectContaining({
+        httpMetadata: { contentType: 'video/mp4' },
+        customMetadata: {
+          job_id: 'job-video-done',
+          submitted_at: '2026-05-04T12:00:00.000Z',
+          api_key_hash: apiKeyHash,
+        },
+      }),
+    );
+    await expect(env.VIDEOS_KV.get(`videos:2026-05-04:${apiKeyHash}`)).resolves.toBe('1');
+
+    fetchMock.mockClear();
+    vi.mocked(env.R2_VIDEOS_BUCKET.put).mockClear();
+    vi.mocked(env.VIDEOS_KV.put).mockClear();
+
+    const second = await worker.fetch(getReq('/jobs/job-video-done'), env);
+
+    expect(second.status).toBe(200);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(env.R2_VIDEOS_BUCKET.put).not.toHaveBeenCalled();
+    expect(env.VIDEOS_KV.put).not.toHaveBeenCalled();
+    await expect(second.json()).resolves.toMatchObject({
+      status: 'completed',
+      output: {
+        duration_seconds: 5.04,
+        size_bytes: 9,
+        url_ttl_seconds: 86400,
+      },
+    });
+  });
+
+  it('keeps kind=image polling on the existing inline output flow', async () => {
+    const fetchMock = stubRunpod({
+      id: 'rp-image-done',
+      status: 'COMPLETED',
+      output: { image_b64: 'iVBORw0KGgo=', metadata: { seed: 7, elapsed_ms: 6800 } },
+    });
+    const env = makeEnv();
+    await env.JOBS_KV.put('job-image-done', JSON.stringify({
+      job_id: 'job-image-done',
+      runpod_request_id: 'rp-image-done',
+      kind: 'image',
+      status: 'queued',
+      created_at: Date.now(),
+    }));
+
+    const res = await worker.fetch(getReq('/jobs/job-image-done'), env);
+
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toEqual({
+      output: { image_b64: 'iVBORw0KGgo=', metadata: { seed: 7, elapsed_ms: 6800 } },
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining('/v2/image-endpoint/status/rp-image-done'),
+      expect.any(Object),
+    );
+    expect(env.R2_VIDEOS_BUCKET.put).not.toHaveBeenCalled();
+    expect(env.VIDEOS_KV.put).not.toHaveBeenCalled();
   });
 });
 

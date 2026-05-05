@@ -129,6 +129,9 @@ export async function handleVideoSubmit(
   const mapping: JobMapping = {
     job_id: jobId,
     runpod_request_id: runpodResponse.id,
+    runpod_endpoint_id: endpointId,
+    api_key_hash: apiKeyHash,
+    submitted_at: new Date().toISOString(),
     kind: 'video',
     status: 'queued',
     created_at: Date.now(),
