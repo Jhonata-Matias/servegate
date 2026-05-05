@@ -14,12 +14,16 @@ export interface Env {
   // KV namespace for async job mapping (INC-2026-04-23-gateway-504 FR-3)
   JOBS_KV: KVNamespace;
 
+  // KV namespace for video daily quota counters (Story 5.2 AC5)
+  VIDEOS_KV: KVNamespace;
+
   // Secrets (configured via `wrangler secret put`)
   GATEWAY_API_KEY: string;
   RUNPOD_API_KEY: string;
   RUNPOD_ENDPOINT_ID: string;
   RUNPOD_LTX_ENDPOINT_ID?: string;
   RUNPOD_TEXT_ENDPOINT_ID?: string;
+  VIDEO_DAILY_LIMIT?: string;
   CORS_ALLOWED_ORIGIN?: string;
 }
 

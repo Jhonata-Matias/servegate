@@ -19,6 +19,7 @@ function makeEnv(): Env {
   return {
     RATE_LIMIT_KV: makeKv(),
     JOBS_KV: makeKv(),
+    VIDEOS_KV: makeKv(),
     GATEWAY_API_KEY: 'test-gateway-key',
     RUNPOD_API_KEY: 'runpod-key',
     RUNPOD_ENDPOINT_ID: 'image-endpoint',

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import worker from './index.js';
+import { checkVideoQuota, incrementVideoQuotaPostFlight } from './rate-limit.js';
 import type { Env } from './types.js';
 
 function makeKv(): KVNamespace & { _store: Map<string, string> } {
@@ -18,14 +19,16 @@ function makeKv(): KVNamespace & { _store: Map<string, string> } {
   } as unknown as KVNamespace & { _store: Map<string, string> };
 }
 
-function makeEnv(): Env {
+function makeEnv(overrides: Partial<Env> = {}): Env {
   return {
     RATE_LIMIT_KV: makeKv(),
     JOBS_KV: makeKv(),
+    VIDEOS_KV: makeKv(),
     GATEWAY_API_KEY: 'test-gateway-key',
     RUNPOD_API_KEY: 'test-runpod-key',
     RUNPOD_ENDPOINT_ID: 'image-endpoint',
     RUNPOD_LTX_ENDPOINT_ID: 'ltx-endpoint',
+    ...overrides,
   };
 }
 
@@ -55,12 +58,22 @@ function stubRunpod(
 }
 
 beforeEach(() => {
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date('2026-05-04T12:00:00Z'));
   vi.restoreAllMocks();
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllGlobals();
 });
+
+async function hashApiKey(apiKey: string): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(apiKey));
+  return [...new Uint8Array(digest)]
+    .map((byte) => byte.toString(16).padStart(2, '0'))
+    .join('');
+}
 
 describe('POST /jobs kind=video', () => {
   it('accepts a valid text-to-video request', async () => {
@@ -199,6 +212,126 @@ describe('POST /jobs kind=video', () => {
     await expect(res.json()).resolves.toEqual({
       error: 'upstream_error',
       retryable: true,
+    });
+  });
+
+  it('returns 429 with Story 5.2 AC5 shape when video quota is at limit', async () => {
+    const fetchMock = stubRunpod();
+    const env = makeEnv();
+    const apiKeyHash = await hashApiKey('test-gateway-key');
+    await env.VIDEOS_KV.put(`videos:2026-05-04:${apiKeyHash}`, '20');
+
+    const res = await worker.fetch(req({ kind: 'video', prompt: 'x' }), env);
+
+    expect(res.status).toBe(429);
+    await expect(res.json()).resolves.toEqual({
+      error: 'rate_limit_exceeded',
+      reset_at: '2026-05-05T00:00:00.000Z',
+      limit: 20,
+      period_remaining_seconds: 12 * 3600,
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('keeps image quota in RATE_LIMIT_KV and video quota in VIDEOS_KV', async () => {
+    const fetchMock = stubRunpod({ id: 'rp-any', status: 'IN_QUEUE' });
+    const imageEnv = makeEnv();
+
+    const imageRes = await worker.fetch(req({ prompt: 'forest' }), imageEnv);
+
+    expect(imageRes.status).toBe(202);
+    expect(imageEnv.RATE_LIMIT_KV.get).toHaveBeenCalledWith('count:2026-05-04');
+    expect(imageEnv.RATE_LIMIT_KV.put).toHaveBeenCalledWith('count:2026-05-04', '1', {
+      expirationTtl: 48 * 3600,
+    });
+    expect(imageEnv.VIDEOS_KV.get).not.toHaveBeenCalled();
+    expect(imageEnv.VIDEOS_KV.put).not.toHaveBeenCalled();
+
+    fetchMock.mockClear();
+    const videoEnv = makeEnv();
+    const apiKeyHash = await hashApiKey('test-gateway-key');
+
+    const videoRes = await worker.fetch(req({ kind: 'video', prompt: 'meadow' }), videoEnv);
+
+    expect(videoRes.status).toBe(202);
+    expect(videoEnv.VIDEOS_KV.get).toHaveBeenCalledWith(`videos:2026-05-04:${apiKeyHash}`);
+    expect(videoEnv.RATE_LIMIT_KV.get).not.toHaveBeenCalled();
+    expect(videoEnv.RATE_LIMIT_KV.put).not.toHaveBeenCalled();
+  });
+});
+
+describe('video quota helpers', () => {
+  it('allows under-limit checks at count 0 and below limit without incrementing', async () => {
+    const env = makeEnv();
+    const apiKeyHash = 'hash-under-limit';
+
+    await expect(checkVideoQuota(env, apiKeyHash, '2026-05-04')).resolves.toEqual({
+      allowed: true,
+      limit: 20,
+      count: 0,
+      resetAt: '2026-05-05T00:00:00.000Z',
+    });
+    expect(env.VIDEOS_KV.put).not.toHaveBeenCalled();
+
+    await env.VIDEOS_KV.put(`videos:2026-05-04:${apiKeyHash}`, '19');
+    await expect(checkVideoQuota(env, apiKeyHash, '2026-05-04')).resolves.toEqual({
+      allowed: true,
+      limit: 20,
+      count: 19,
+      resetAt: '2026-05-05T00:00:00.000Z',
+    });
+  });
+
+  it('is idempotent per jobId on post-flight increment', async () => {
+    const env = makeEnv();
+
+    await expect(
+      incrementVideoQuotaPostFlight(env, 'hash-idempotent', '2026-05-04', 'job-1'),
+    ).resolves.toEqual({ incremented: true, count: 1 });
+    await expect(
+      incrementVideoQuotaPostFlight(env, 'hash-idempotent', '2026-05-04', 'job-1'),
+    ).resolves.toEqual({ incremented: false, count: 1 });
+
+    await expect(env.VIDEOS_KV.get('videos:2026-05-04:hash-idempotent')).resolves.toBe('1');
+  });
+
+  it('advances the counter for different jobIds', async () => {
+    const env = makeEnv();
+
+    await expect(
+      incrementVideoQuotaPostFlight(env, 'hash-multi', '2026-05-04', 'job-1'),
+    ).resolves.toEqual({ incremented: true, count: 1 });
+    await expect(
+      incrementVideoQuotaPostFlight(env, 'hash-multi', '2026-05-04', 'job-2'),
+    ).resolves.toEqual({ incremented: true, count: 2 });
+
+    await expect(env.VIDEOS_KV.get('videos:2026-05-04:hash-multi')).resolves.toBe('2');
+  });
+
+  it('sets 48h TTL on counter and marker writes', async () => {
+    const env = makeEnv();
+
+    await incrementVideoQuotaPostFlight(env, 'hash-ttl', '2026-05-04', 'job-ttl');
+
+    expect(env.VIDEOS_KV.put).toHaveBeenCalledWith('videos:2026-05-04:hash-ttl', '1', {
+      expirationTtl: 48 * 3600,
+    });
+    expect(env.VIDEOS_KV.put).toHaveBeenCalledWith(
+      'videos:2026-05-04:hash-ttl:job:job-ttl',
+      '1',
+      { expirationTtl: 48 * 3600 },
+    );
+  });
+
+  it('uses custom VIDEO_DAILY_LIMIT and rejects at that count', async () => {
+    const env = makeEnv({ VIDEO_DAILY_LIMIT: '5' });
+    await env.VIDEOS_KV.put('videos:2026-05-04:hash-custom-limit', '5');
+
+    await expect(checkVideoQuota(env, 'hash-custom-limit', '2026-05-04')).resolves.toEqual({
+      allowed: false,
+      limit: 5,
+      count: 5,
+      resetAt: '2026-05-05T00:00:00.000Z',
     });
   });
 });

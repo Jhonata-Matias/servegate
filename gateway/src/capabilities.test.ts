@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   buildRateLimitResponse: vi.fn(),
   checkAndIncrement: vi.fn(),
   checkAndRead: vi.fn(),
+  checkVideoQuota: vi.fn(),
 }));
 
 vi.mock('./auth.js', () => ({
@@ -19,6 +20,7 @@ vi.mock('./rate-limit.js', () => ({
   buildRateLimitResponse: mocks.buildRateLimitResponse,
   checkAndIncrement: mocks.checkAndIncrement,
   checkAndRead: mocks.checkAndRead,
+  checkVideoQuota: mocks.checkVideoQuota,
 }));
 
 function makeKv(): KVNamespace & { _store: Map<string, string> } {
@@ -41,6 +43,7 @@ function makeEnv(): Env {
   return {
     RATE_LIMIT_KV: makeKv(),
     JOBS_KV: makeKv(),
+    VIDEOS_KV: makeKv(),
     GATEWAY_API_KEY: 'test-gateway-key',
     RUNPOD_API_KEY: 'test-runpod-key',
     RUNPOD_ENDPOINT_ID: 'image-endpoint',
@@ -107,6 +110,7 @@ describe('GET /capabilities', () => {
     expect(mocks.validateAuth).not.toHaveBeenCalled();
     expect(mocks.checkAndIncrement).not.toHaveBeenCalled();
     expect(mocks.checkAndRead).not.toHaveBeenCalled();
+    expect(mocks.checkVideoQuota).not.toHaveBeenCalled();
     expect(mocks.buildRateLimitResponse).not.toHaveBeenCalled();
   });
 });

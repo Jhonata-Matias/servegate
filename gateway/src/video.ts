@@ -1,13 +1,9 @@
 import { validateAuth } from './auth.js';
 import { log } from './log.js';
-import {
-  DAILY_LIMIT,
-  buildRateLimitResponse,
-  checkAndIncrement,
-} from './rate-limit.js';
+import { checkVideoQuota } from './rate-limit.js';
 import { RunpodUpstreamError, submitJob } from './runpod.js';
 import { putMapping } from './storage.js';
-import type { Env, JobMapping, RateLimitState, VideoSubmitRequest, VideoSubmitResponse } from './types.js';
+import type { Env, JobMapping, VideoSubmitRequest, VideoSubmitResponse } from './types.js';
 
 const POLL_RETRY_AFTER_SECONDS = 5;
 const MAX_PROMPT_CHARS = 2000;
@@ -30,6 +26,13 @@ const EST_WAIT_SECONDS: VideoSubmitResponse['est_wait_seconds'] = {
   first_call_max: 600,
 };
 
+interface VideoRateLimitState {
+  count: number;
+  remaining: number;
+  resetAt: string;
+  limit: number;
+}
+
 export async function handleVideoSubmit(
   request: Request,
   env: Env,
@@ -48,18 +51,33 @@ export async function handleVideoSubmit(
     return authFailure;
   }
 
-  // TODO Task 3: switch to video-specific quota.
-  const { state: rlState, allowed } = await checkAndIncrement(env.RATE_LIMIT_KV);
-  if (!allowed) {
+  const apiKeyHash = await hashApiKey(request.headers.get('X-API-Key') ?? '');
+  const dateUTC = new Date().toISOString().slice(0, 10);
+  const quotaCheck = await checkVideoQuota(env, apiKeyHash, dateUTC);
+  const rlState: VideoRateLimitState = {
+    count: quotaCheck.count,
+    remaining: Math.max(0, quotaCheck.limit - quotaCheck.count),
+    resetAt: quotaCheck.resetAt,
+    limit: quotaCheck.limit,
+  };
+  if (!quotaCheck.allowed) {
     log({
       timestamp: Date.now(),
       event: 'rate_limited',
       ip,
       status: 429,
       elapsed_ms: Date.now() - start,
-      day_count: rlState.count,
+      day_count: quotaCheck.count,
     });
-    return buildRateLimitResponse(rlState);
+    return json(429, {
+      error: 'rate_limit_exceeded',
+      reset_at: quotaCheck.resetAt,
+      limit: quotaCheck.limit,
+      period_remaining_seconds: Math.max(
+        0,
+        Math.floor((Date.parse(quotaCheck.resetAt) - Date.now()) / 1000),
+      ),
+    });
   }
 
   let body: unknown;
@@ -263,7 +281,7 @@ function handleVideoUpstreamError(
   err: unknown,
   ip: string | null,
   start: number,
-  rlState: RateLimitState,
+  rlState: VideoRateLimitState,
 ): Response {
   const isUpstream = err instanceof RunpodUpstreamError;
   const kind = isUpstream ? err.kind : 'network';
@@ -321,9 +339,16 @@ function json(status: number, body: unknown, headers: Record<string, string> = {
   });
 }
 
-function rateLimitHeaders(state: RateLimitState): Record<string, string> {
+async function hashApiKey(apiKey: string): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(apiKey));
+  return [...new Uint8Array(digest)]
+    .map((byte) => byte.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+function rateLimitHeaders(state: VideoRateLimitState): Record<string, string> {
   return {
-    'X-RateLimit-Limit': String(DAILY_LIMIT),
+    'X-RateLimit-Limit': String(state.limit),
     'X-RateLimit-Remaining': String(state.remaining),
     'X-RateLimit-Reset': state.resetAt,
   };
