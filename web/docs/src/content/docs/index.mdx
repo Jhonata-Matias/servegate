@@ -1,15 +1,15 @@
 ---
 title: Welcome
-description: servegate is the open-source HTTP gateway for FLUX.1-schnell text-to-image, Qwen-Image-Edit single- and multi-image edits, and Gemma 4 text generation. One authenticated endpoint, async submit/poll for images, streaming SSE for text.
+description: servegate is the open-source HTTP gateway for FLUX.1-schnell text-to-image, Qwen-Image-Edit single- and multi-image edits, LTX-Video 2B text-to-video and image-to-video, and Gemma 4 text generation. One authenticated endpoint, async submit/poll for images and videos, streaming SSE for text.
 template: doc
 ---
 
 import { LinkCard, CardGrid, Badge } from '@astrojs/starlight/components';
 
-<Badge text="Alpha" variant="caution" /> servegate is the canonical HTTP contract for generating images with **FLUX.1-schnell**, editing images with **Qwen-Image-Edit** (single- or multi-image), and generating text with **Gemma 4**. Images use async submit/poll; text uses streaming SSE on the same authenticated gateway.
+<Badge text="Alpha" variant="caution" /> servegate is the canonical HTTP contract for generating images with **FLUX.1-schnell**, editing images with **Qwen-Image-Edit** (single- or multi-image), generating videos with **LTX-Video 2B** (text-to-video and image-to-video), and generating text with **Gemma 4**. Images and videos use async submit/poll; text uses streaming SSE on the same authenticated gateway.
 
-Latest server: `gemma4-flux-serverless:0.2.1` (Qwen-Image-Edit 2509 with multi-image support).
-Latest SDK: `@jhonata-matias/flux-client@0.4.0`.
+Latest server: `gemma4-flux-serverless:0.2.1` (Qwen-Image-Edit 2509 with multi-image support); LTX-Video 2B alpha runs on a dedicated RunPod endpoint.
+Latest SDK: `@jhonata-matias/flux-client@0.5.0` (adds `generateVideo`, `text2video`, `image2video`).
 
 ## Get started
 
@@ -30,6 +30,12 @@ Latest SDK: `@jhonata-matias/flux-client@0.4.0`.
 		title="🎨 Edit images"
 		description="Change one or two reference images with Qwen-Image-Edit and a text instruction."
 		href="/edit-images/"
+	/>
+
+	<LinkCard
+		title="🎬 Generate videos"
+		description="Generate short MP4s from a text prompt (T2V) or animate a still image (I2V) with LTX-Video 2B."
+		href="/generate-videos/"
 	/>
 
 	<LinkCard
@@ -62,6 +68,6 @@ Need access first? Request alpha access from the [GitHub repo issue template](ht
 ## Why servegate
 
 - **Async-first.** Submit/poll lets long inferences (cold start ~130s, warm ~7s) coexist with short ones behind one authenticated edge.
-- **Three modalities, one credential.** Same API key proxies T2I (FLUX.1-schnell), i2i (Qwen-Image-Edit single/multi), and text (Gemma 4 via vLLM).
+- **Four modalities, one credential.** Same API key proxies T2I (FLUX.1-schnell), i2i (Qwen-Image-Edit single/multi), T2V/I2V (LTX-Video 2B), and text (Gemma 4 via vLLM).
 - **Open source.** Apache 2.0 / MIT, alpha-public on GitHub.
 - **Cost-aware.** RunPod Serverless behind Cloudflare Workers; near-zero idle.
