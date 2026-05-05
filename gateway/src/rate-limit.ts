@@ -1,8 +1,21 @@
-import type { RateLimitState, TokenBudgetState } from './types.js';
+import type { Env, RateLimitState, TokenBudgetState } from './types.js';
 
 const DAILY_LIMIT = 100;
 const TOKEN_DAILY_LIMIT = 50000;
+export const VIDEO_DAILY_LIMIT_DEFAULT = 20;
 const KV_TTL_SECONDS = 48 * 60 * 60; // 48h auto-cleanup
+
+export interface VideoQuotaCheck {
+  allowed: boolean;
+  limit: number;
+  count: number;
+  resetAt: string; // ISO 8601 UTC midnight tomorrow
+}
+
+export interface VideoQuotaIncrementResult {
+  incremented: boolean; // false on idempotent re-call
+  count: number;
+}
 
 /**
  * Computes the KV key for today's UTC date (YYYY-MM-DD).
@@ -18,6 +31,14 @@ export function dayKey(now: Date = new Date()): string {
  */
 export function tokenDayKey(now: Date = new Date()): string {
   return `tokens:${now.toISOString().slice(0, 10)}`;
+}
+
+function videoCounterKey(dateUTC: string, apiKeyHash: string): string {
+  return `videos:${dateUTC}:${apiKeyHash}`;
+}
+
+function videoJobMarkerKey(dateUTC: string, apiKeyHash: string, jobId: string): string {
+  return `${videoCounterKey(dateUTC, apiKeyHash)}:job:${jobId}`;
 }
 
 /**
@@ -38,6 +59,15 @@ export function nextUtcMidnightIso(now: Date = new Date()): string {
     Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1),
   );
   return tomorrow.toISOString();
+}
+
+function nextUtcMidnightIsoFromDateUTC(dateUTC: string): string {
+  return new Date(Date.parse(`${dateUTC}T00:00:00.000Z`) + 24 * 3600 * 1000).toISOString();
+}
+
+function videoDailyLimit(env: Env): number {
+  const parsed = Number.parseInt(env.VIDEO_DAILY_LIMIT ?? '', 10);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : VIDEO_DAILY_LIMIT_DEFAULT;
 }
 
 /**
@@ -112,6 +142,71 @@ export async function checkAndRead(
     resetAt: nextUtcMidnightIso(now),
     secondsUntilReset: secondsUntilNextUtcMidnight(now),
   };
+}
+
+/**
+ * Pre-flight video quota check + reservation.
+ *
+ * Reads the current video count for {apiKeyHash} for the UTC day, and:
+ * - if count >= VIDEO_DAILY_LIMIT, returns { allowed: false, limit, count, resetAt }
+ * - if count <  VIDEO_DAILY_LIMIT, returns { allowed: true, limit, count, resetAt }
+ *
+ * Does NOT increment yet — the increment happens post-flight in
+ * `incrementVideoQuotaPostFlight` after the job actually completes.
+ */
+export async function checkVideoQuota(
+  env: Env,
+  apiKeyHash: string,
+  dateUTC: string,
+): Promise<VideoQuotaCheck> {
+  const raw = await env.VIDEOS_KV.get(videoCounterKey(dateUTC, apiKeyHash));
+  const count = raw ? Number.parseInt(raw, 10) || 0 : 0;
+  const limit = videoDailyLimit(env);
+
+  return {
+    allowed: count < limit,
+    limit,
+    count,
+    resetAt: nextUtcMidnightIsoFromDateUTC(dateUTC),
+  };
+}
+
+/**
+ * Post-flight increment, idempotent by jobId.
+ *
+ * Reads the current per-day count and a per-jobId marker. If the marker for
+ * this jobId is already set, returns { incremented: false, count } and does
+ * nothing (idempotent on poll loops). Otherwise atomically increments the
+ * counter and sets the marker.
+ *
+ * Marker key: `videos:YYYY-MM-DD:{apiKeyHash}:job:{jobId}` with TTL 48h.
+ * Counter key: `videos:YYYY-MM-DD:{apiKeyHash}` with TTL 48h.
+ */
+export async function incrementVideoQuotaPostFlight(
+  env: Env,
+  apiKeyHash: string,
+  dateUTC: string,
+  jobId: string,
+): Promise<VideoQuotaIncrementResult> {
+  const counterKey = videoCounterKey(dateUTC, apiKeyHash);
+  const markerKey = videoJobMarkerKey(dateUTC, apiKeyHash, jobId);
+  const [rawCount, marker] = await Promise.all([
+    env.VIDEOS_KV.get(counterKey),
+    env.VIDEOS_KV.get(markerKey),
+  ]);
+  const count = rawCount ? Number.parseInt(rawCount, 10) || 0 : 0;
+
+  if (marker !== null) {
+    return { incremented: false, count };
+  }
+
+  const nextCount = count + 1;
+  await Promise.all([
+    env.VIDEOS_KV.put(counterKey, String(nextCount), { expirationTtl: KV_TTL_SECONDS }),
+    env.VIDEOS_KV.put(markerKey, '1', { expirationTtl: KV_TTL_SECONDS }),
+  ]);
+
+  return { incremented: true, count: nextCount };
 }
 
 export async function readTokenBudget(

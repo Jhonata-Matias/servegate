@@ -21,6 +21,8 @@ function makeEnv(): Env {
   return {
     RATE_LIMIT_KV: {} as KVNamespace,
     JOBS_KV: {} as KVNamespace,
+    VIDEOS_KV: {} as KVNamespace,
+    R2_VIDEOS_BUCKET: {} as R2Bucket,
     GATEWAY_API_KEY: 'gateway-test-key',
     RUNPOD_API_KEY: 'runpod-test-key',
     RUNPOD_ENDPOINT_ID: 'test-endpoint-id',

@@ -54,8 +54,11 @@ export type {
   GenerateInput,
   GenerateMetadata,
   GenerateOutput,
+  GenerateVideoInput,
+  GenerateVideoOutput,
   PollPendingResponse,
   RetryConfig,
   SubmitJobResponse,
+  VideoProgressEvent,
   WarmupResult,
 } from './types.js';

@@ -20,6 +20,8 @@ function makeEnv(initialTokens?: string): Env {
   return {
     RATE_LIMIT_KV: makeKv(initialTokens ? { 'tokens:2026-04-24': initialTokens } : {}),
     JOBS_KV: makeKv(),
+    VIDEOS_KV: makeKv(),
+    R2_VIDEOS_BUCKET: {} as R2Bucket,
     GATEWAY_API_KEY: 'test-gateway-key',
     RUNPOD_API_KEY: 'test-runpod-key',
     RUNPOD_ENDPOINT_ID: 'image-endpoint',

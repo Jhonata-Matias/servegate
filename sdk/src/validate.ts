@@ -1,5 +1,5 @@
 import { ValidationError } from './errors.js';
-import type { EditInput, GenerateInput } from './types.js';
+import type { EditInput, GenerateInput, GenerateVideoInput } from './types.js';
 
 export const MAX_EDIT_INPUT_PIXELS = 1_048_576;
 export const MAX_EDIT_DECODED_BYTES = 8 * 1024 * 1024;
@@ -8,6 +8,7 @@ export const DEFAULT_EDIT_STRENGTH = 0.85;
 
 const MIN_EDIT_STEPS = 4;
 const MAX_EDIT_STEPS = 50;
+const MAX_VIDEO_PROMPT_CHARS = 2000;
 
 export interface NormalizedEditRequest {
   prompt: string;
@@ -84,6 +85,68 @@ export function validateGenerateInput(input: unknown): asserts input is Generate
     if (typeof obj['seed'] !== 'number' || !Number.isInteger(obj['seed'])) {
       throw new ValidationError({ field: 'seed', reason: 'must be an integer when provided' });
     }
+  }
+}
+
+export function validateGenerateVideoInput(input: unknown): asserts input is GenerateVideoInput {
+  if (input === null || typeof input !== 'object') {
+    throw new ValidationError({ field: 'input', reason: 'must be an object' });
+  }
+
+  const obj = input as Partial<GenerateVideoInput>;
+
+  if (typeof obj.prompt !== 'string' || obj.prompt.trim().length === 0) {
+    throw new ValidationError({ field: 'prompt', reason: 'must be a non-empty string' });
+  }
+  if (obj.prompt.length > MAX_VIDEO_PROMPT_CHARS) {
+    throw new ValidationError({ field: 'prompt', reason: `must be <= ${MAX_VIDEO_PROMPT_CHARS} chars` });
+  }
+
+  if (obj.image !== undefined) {
+    if (typeof obj.image !== 'string') {
+      throw new ValidationError({ field: 'image', reason: 'must be a data URL or https URL' });
+    }
+    const trimmed = obj.image.trim();
+    if (!trimmed.startsWith('data:image/') && !trimmed.startsWith('https://')) {
+      throw new ValidationError({ field: 'image', reason: 'must be a data URL or https URL' });
+    }
+  }
+
+  validateOptionalInteger(obj.num_frames, 'num_frames');
+  if (obj.num_frames !== undefined && (obj.num_frames < 1 || obj.num_frames > 121)) {
+    throw new ValidationError({ field: 'num_frames', reason: 'must be between 1 and 121' });
+  }
+
+  validateOptionalInteger(obj.fps, 'fps');
+  if (obj.fps !== undefined && (obj.fps < 1 || obj.fps > 60)) {
+    throw new ValidationError({ field: 'fps', reason: 'must be between 1 and 60' });
+  }
+
+  validateOptionalNumber(obj.guidance_scale, 'guidance_scale');
+  if (obj.guidance_scale !== undefined && (obj.guidance_scale < 0 || obj.guidance_scale > 20)) {
+    throw new ValidationError({ field: 'guidance_scale', reason: 'must be between 0 and 20' });
+  }
+
+  validateOptionalInteger(obj.steps, 'steps');
+  if (obj.steps !== undefined && (obj.steps < 1 || obj.steps > 80)) {
+    throw new ValidationError({ field: 'steps', reason: 'must be between 1 and 80' });
+  }
+
+  if (obj.negative_prompt !== undefined && typeof obj.negative_prompt !== 'string') {
+    throw new ValidationError({ field: 'negative_prompt', reason: 'must be a string when provided' });
+  }
+
+  validateOptionalInteger(obj.seed, 'seed');
+
+  if (obj.timeoutMs !== undefined) {
+    validateOptionalInteger(obj.timeoutMs, 'timeoutMs');
+    if (obj.timeoutMs <= 0) {
+      throw new ValidationError({ field: 'timeoutMs', reason: 'must be > 0' });
+    }
+  }
+
+  if (obj.onProgress !== undefined && typeof obj.onProgress !== 'function') {
+    throw new ValidationError({ field: 'onProgress', reason: 'must be a function when provided' });
   }
 }
 

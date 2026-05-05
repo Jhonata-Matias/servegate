@@ -58,8 +58,10 @@ export class RunpodUpstreamError extends Error {
 export async function submitJob(
   env: Env,
   input: Record<string, unknown>,
+  options: { endpointId?: string } = {},
 ): Promise<RunpodSubmitResponse> {
-  const url = `${RUNPOD_BASE}/${env.RUNPOD_ENDPOINT_ID}/run`;
+  const endpointId = options.endpointId ?? env.RUNPOD_ENDPOINT_ID;
+  const url = `${RUNPOD_BASE}/${endpointId}/run`;
   const body = JSON.stringify({ input });
 
   const response = await fetchWithTimeout(url, {
@@ -90,8 +92,10 @@ export async function submitJob(
 export async function getStatus(
   env: Env,
   runpodRequestId: string,
+  options: { endpointId?: string } = {},
 ): Promise<RunpodStatusResponse> {
-  const url = `${RUNPOD_BASE}/${env.RUNPOD_ENDPOINT_ID}/status/${runpodRequestId}`;
+  const endpointId = options.endpointId ?? env.RUNPOD_ENDPOINT_ID;
+  const url = `${RUNPOD_BASE}/${endpointId}/status/${runpodRequestId}`;
 
   const response = await fetchWithTimeout(url, {
     method: 'GET',

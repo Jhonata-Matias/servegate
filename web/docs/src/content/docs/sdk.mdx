@@ -1,13 +1,13 @@
 ---
 title: SDK (TypeScript)
-description: '@jhonata-matias/flux-client wraps the servegate gateway with a typed client — generate() for text-to-image, edit() for single- or multi-image i2i, and a strict error taxonomy with cause discriminators.'
+description: '@jhonata-matias/flux-client wraps the servegate gateway with a typed client — generate() for text-to-image, edit() for image-to-image, generateVideo() for alpha video, and a strict error taxonomy with cause discriminators.'
 ---
 
 import { Tabs, TabItem, Aside, Badge } from '@astrojs/starlight/components';
 
 `@jhonata-matias/flux-client` is the official TypeScript client. It wraps the async submit/poll loop so callers get a single `await` per generation, plus a strict error taxonomy that maps gateway HTTP codes to typed exceptions.
 
-<Badge text="Latest: 0.4.0" variant="success" /> &nbsp; <Badge text="Multi-image i2i" variant="note" />
+<Badge text="Latest: 0.5.0" variant="success" /> &nbsp; <Badge text="Video alpha" variant="note" />
 
 ## Install
 
@@ -103,6 +103,67 @@ The SDK shares validation rules across both images (PNG / JPEG / WebP magic byte
 <Aside type="tip">
 The SDK is forward-compatible: a `0.4.0` client calling a `0.3.x` server with `image` only continues to work. A `0.4.0` client calling a `0.3.x` server with `image2` will receive `i2i_validation` from the server because the `TextEncodeQwenImageEditPlus` node isn't deployed there.
 </Aside>
+
+## Generate videos
+
+Video methods use the same async submit/poll contract as image jobs, with a 900s default timeout for first-call cold starts. See [Generate videos](/generate-videos/) for the full request/response contract, quota, latency expectations, and output URL TTL.
+
+### Signatures
+
+```ts
+client.generateVideo(input: {
+  prompt: string;
+  image?: string;
+  num_frames?: number;
+  fps?: number;
+  guidance_scale?: number;
+  steps?: number;
+  negative_prompt?: string;
+  seed?: number;
+  signal?: AbortSignal;
+  onProgress?: (event: {
+    phase: 'queued' | 'loading_model' | 'inferencing' | 'uploading';
+    percent_estimate?: number;
+    est_wait_seconds?: number;
+  }) => void;
+  timeoutMs?: number;
+}): Promise<{
+  video_url: string;
+  duration_seconds: number;
+  width: number;
+  height: number;
+  fps: number;
+  size_bytes: number;
+  metrics: {
+    queue_seconds: number;
+    execution_seconds: number;
+    wallclock_seconds: number;
+  };
+}>;
+
+client.text2video(prompt: string, opts?: Omit<GenerateVideoInput, 'prompt'>): Promise<GenerateVideoOutput>;
+client.image2video(image: string, prompt: string, opts?: Omit<GenerateVideoInput, 'prompt' | 'image'>): Promise<GenerateVideoOutput>;
+```
+
+### Example
+
+```ts
+const video = await client.generateVideo({
+  prompt: 'rain on a window at golden hour',
+  num_frames: 121,
+  fps: 24,
+  onProgress: (event) => console.log(event.phase, event.est_wait_seconds),
+});
+
+console.log(video.video_url);
+```
+
+For convenience:
+
+```ts
+const t2v = await client.text2video('rain on a window at golden hour');
+const i2v = await client.image2video('data:image/jpeg;base64,...', 'soft wind moving through grass');
+```
 
 ## Error classes
 
