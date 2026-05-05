@@ -120,8 +120,11 @@ export async function verifyVideoAccessToken(
   return ok ? { valid: true } : { valid: false, reason: 'bad_signature' };
 }
 
+/**
+ * Public URL origin precedence: GATEWAY_ORIGIN > CORS_ALLOWED_ORIGIN > DEFAULT_GATEWAY_ORIGIN.
+ */
 function gatewayOrigin(env: Env): string {
-  const configured = env.CORS_ALLOWED_ORIGIN;
+  const configured = env.GATEWAY_ORIGIN ?? env.CORS_ALLOWED_ORIGIN;
   return configured?.startsWith('http') ? configured.replace(/\/+$/, '') : DEFAULT_GATEWAY_ORIGIN;
 }
 

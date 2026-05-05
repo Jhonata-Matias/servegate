@@ -128,6 +128,26 @@ describe('uploadVideoToR2', () => {
       reason: 'expired',
     });
   });
+
+  it('uses GATEWAY_ORIGIN before legacy CORS_ALLOWED_ORIGIN for video URLs', async () => {
+    const envWithGatewayOrigin = makeEnv({
+      GATEWAY_ORIGIN: 'https://gateway.test',
+      CORS_ALLOWED_ORIGIN: 'https://cors.test',
+    });
+    const envWithCorsOnly = makeEnv({ CORS_ALLOWED_ORIGIN: 'https://legacy.test' });
+
+    const preferred = await uploadVideoToR2(envWithGatewayOrigin, 'job-origin-preferred', btoa('mp4'), {
+      submittedAt: '2026-05-04T12:00:00.000Z',
+      apiKeyHash: 'hash-origin-preferred',
+    });
+    const legacy = await uploadVideoToR2(envWithCorsOnly, 'job-origin-legacy', btoa('mp4'), {
+      submittedAt: '2026-05-04T12:00:00.000Z',
+      apiKeyHash: 'hash-origin-legacy',
+    });
+
+    expect(new URL(preferred.videoUrl).origin).toBe('https://gateway.test');
+    expect(new URL(legacy.videoUrl).origin).toBe('https://legacy.test');
+  });
 });
 
 describe('GET /videos/:jobId', () => {

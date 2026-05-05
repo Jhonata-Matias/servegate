@@ -28,6 +28,9 @@ export interface Env {
   RUNPOD_TEXT_ENDPOINT_ID?: string;
   VIDEO_DAILY_LIMIT?: string;
   CORS_ALLOWED_ORIGIN?: string;
+  // Public origin of the worker used to build absolute URLs returned to clients.
+  // Distinct from CORS_ALLOWED_ORIGIN, which is the CORS allowlist.
+  GATEWAY_ORIGIN?: string;
 }
 
 export interface RateLimitState {
