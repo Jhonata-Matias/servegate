@@ -157,7 +157,116 @@ Retry-After: 5
 
 ## Generate videos
 
-The video generation surface (T2V + I2V via LTX-Video 2B) is documented at [Generate videos](/generate-videos/). The shape is identical to the image submit/poll contract — the only difference is `kind: "video"` in the body and the response payload at COMPLETED time, which contains a `video_url` instead of `image_b64`.
+Generate videos when you want a short MP4 from a text prompt or want to animate a still image. This is the text-to-video (T2V) and image-to-video (I2V) path, powered by LTX-Video 2B.
+
+### When to use this
+
+Use T2V when the prompt alone should define the scene and motion. Use I2V when you need to preserve the composition, subject, or style of a starting image while adding motion. If you only need a single frame or static visual, defer to a still image job instead of spending video quota.
+
+### Endpoint
+
+`POST /jobs`
+
+This endpoint returns `202 Accepted` with a `job_id`. It consumes the daily video job quota, which is separate from image and text quotas.
+
+### Request
+
+Headers:
+
+| Header | Required | Notes |
+|---|---|---|
+| `X-API-Key` | Yes | Gateway-issued credential |
+| `Content-Type` | Yes | `application/json` |
+
+Body:
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `kind` | string | Yes | Must be `"video"` |
+| `prompt` | string | Yes | Non-empty, ≤2000 chars |
+| `image` | string | No | JPEG or PNG base64 data URL for raw HTTP; SDK accepts HTTPS URLs and converts. Presence switches to I2V |
+| `num_frames` | integer | No | Default `121`, range `[1, 121]` |
+| `fps` | integer | No | Default `24` |
+| `guidance_scale` | number | No | Default `3.0` |
+| `steps` | integer | No | Default `30` |
+| `negative_prompt` | string | No | Optional |
+| `seed` | integer | No | Optional deterministic seed |
+
+T2V example:
+
+```json
+{
+  "kind": "video",
+  "prompt": "rain on a window at golden hour",
+  "num_frames": 121,
+  "fps": 24,
+  "guidance_scale": 3.0,
+  "steps": 30
+}
+```
+
+I2V example:
+
+```json
+{
+  "kind": "video",
+  "prompt": "soft wind moving through grass",
+  "image": "data:image/jpeg;base64,..."
+}
+```
+
+### Response
+
+Submit success:
+
+```http
+HTTP/1.1 202 Accepted
+Location: /jobs/<job_id>
+Retry-After: 5
+
+{
+  "job_id": "<uuid>",
+  "status_url": "/jobs/<uuid>",
+  "est_wait_seconds": {
+    "p50": 90,
+    "p95": 200,
+    "first_call_max": 600
+  }
+}
+```
+
+Completed poll:
+
+```http
+HTTP/1.1 200 OK
+
+{
+  "status": "completed",
+  "output": {
+    "video_url": "https://gemma4-gateway.jhonata-matias.workers.dev/videos/<job_id>?t=<token>",
+    "duration_seconds": 5.04,
+    "width": 704,
+    "height": 512,
+    "fps": 24,
+    "size_bytes": 820742,
+    "url_ttl_seconds": 86400
+  },
+  "metrics": {
+    "queue_seconds": 0.8,
+    "execution_seconds": 86.8,
+    "wallclock_seconds": 87.6
+  }
+}
+```
+
+### Common mistakes
+
+- Forgetting `kind: "video"` (gateway routes to image flow and either succeeds with an image or rejects depending on the rest of the body).
+- Sending a non-base64-data-URL image; raw HTTP requires `data:image/jpeg;base64,...` or `data:image/png;base64,...`.
+- Treating the `202 Accepted` as the final video; you must poll `GET /jobs/{job_id}` until `200 OK`.
+- Caching `video_url` for more than 24h (`url_ttl_seconds: 86400`); it is a one-time signed handoff URL, not a permanent asset URL.
+
+For the full guide with SDK examples and quota details, see [Generate videos](/generate-videos/).
 
 ## Check job status
 
@@ -219,6 +328,8 @@ Successful response shape:
 ```
 
 The `_2`-suffixed metadata fields are only present when the request used `input_image_b64_2`. Their presence is a reliable signal that the multi-image branch executed.
+
+**Video jobs return a different output shape:** `{ status: "completed", output: { video_url, duration_seconds, width, height, fps, size_bytes, url_ttl_seconds }, metrics: { queue_seconds, execution_seconds, wallclock_seconds } }`. See the [Generate videos](#generate-videos) subsection above for the full example.
 
 ### Common mistakes
 
