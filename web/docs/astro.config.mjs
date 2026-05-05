@@ -8,7 +8,7 @@ export default defineConfig({
 	integrations: [
 		starlight({
 			title: 'servegate',
-			description: 'Open-source gateway and TypeScript SDK for FLUX.1-schnell, Qwen-Image-Edit and Gemma 4 — async submit/poll contract over an authenticated HTTP API.',
+			description: 'Open-source gateway and TypeScript SDK for FLUX.1-schnell, Qwen-Image-Edit, LTX-Video 2B and Gemma 4 — async submit/poll contract over an authenticated HTTP API.',
 			social: [
 				{ icon: 'github', label: 'GitHub', href: 'https://github.com/Jhonata-Matias/servegate' },
 			],
