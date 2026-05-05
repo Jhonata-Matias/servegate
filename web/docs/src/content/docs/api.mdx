@@ -1,16 +1,18 @@
 ---
 title: API Reference
-description: "HTTP contract for servegate, organized by capability: generate images, edit images, check job status, and generate text."
+description: "HTTP contract for servegate, organized by capability: generate images, edit images, generate videos, check job status, capability discovery, and generate text."
 ---
 
 import { Aside, Badge } from '@astrojs/starlight/components';
 
-The gateway exposes image and text capabilities behind one alpha API key. Image work uses an async submit/poll flow: submit a job, then check its status until the output is ready. Text generation uses `POST /v1/generate` and can return either a stream or one JSON response.
+The gateway exposes image, video, and text capabilities behind one alpha API key. Image and video work use an async submit/poll flow: submit a job, then check its status until the output is ready. Text generation uses `POST /v1/generate` and can return either a stream or one JSON response.
 
 | Method | Path | Purpose |
 |---|---|---|
 | `POST` | `/jobs` | Submit an image generation or image editing job |
+| `POST` | `/jobs` (with `kind=video`) | Submit a text-to-video or image-to-video job |
 | `GET` | `/jobs/{job_id}` | Poll job status — does **not** consume rate-limit quota |
+| `GET` | `/capabilities` | Discover live capabilities and quota limits |
 | `POST` | `/v1/generate` | Gemma 4 text generation (SSE stream or JSON) |
 
 Base URL (alpha): `https://gemma4-gateway.jhonata-matias.workers.dev`.
@@ -153,9 +155,13 @@ Retry-After: 5
 - Sending the second reference image in an unexpected field instead of `input_image_b64_2`.
 - Treating the `202 Accepted` response as the final image output; use [Check job status](#check-job-status) next.
 
+## Generate videos
+
+The video generation surface (T2V + I2V via LTX-Video 2B) is documented at [Generate videos](/generate-videos/). The shape is identical to the image submit/poll contract — the only difference is `kind: "video"` in the body and the response payload at COMPLETED time, which contains a `video_url` instead of `image_b64`.
+
 ## Check job status
 
-Check job status after submitting any image job. Generation and editing both return a `job_id`, and the final `image_b64` appears only after polling completes.
+Check job status after submitting any async image or video job. Image generation and editing return `output.image_b64`; video generation returns `output.video_url`.
 
 ### When to use this
 
@@ -165,7 +171,7 @@ Use this immediately after `POST /jobs`, then repeat according to `Retry-After` 
 
 `GET /jobs/{job_id}`
 
-This endpoint **does not** consume image job quota.
+This endpoint **does not** consume image or video job quota.
 
 ### Request
 
@@ -181,7 +187,7 @@ State mapping:
 
 | HTTP | State | Body |
 |---|---|---|
-| `200 OK` | Completed | `{ output: { image_b64, metadata } }` |
+| `200 OK` | Completed | Image jobs: `{ output: { image_b64, metadata } }`; video jobs: see [Generate videos](/generate-videos/#response) |
 | `202 Accepted` | In progress | Returns `Retry-After: 5` and `{ status: "running" }` |
 | `404 Not Found` | Expired or unknown | `{ error: "job_not_found_or_expired" }` |
 | `5xx` | Upstream failure | RunPod timeout or fatal error — see [Handle errors](/errors/) |

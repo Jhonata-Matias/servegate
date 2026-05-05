@@ -29,6 +29,7 @@ export default defineConfig({
 					items: [
 						{ label: 'Generate images', slug: 'generate-images' },
 						{ label: 'Edit images', slug: 'edit-images' },
+						{ label: 'Generate videos', slug: 'generate-videos' },
 						{ label: 'Generate text', slug: 'generate-text' },
 					],
 				},

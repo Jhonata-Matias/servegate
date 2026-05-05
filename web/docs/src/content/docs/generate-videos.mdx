@@ -1,0 +1,212 @@
+---
+title: Generate videos
+description: Generate text-to-video and image-to-video using LTX-Video 2B alpha.
+---
+
+import { Aside, Badge } from '@astrojs/starlight/components';
+
+<Badge text="Alpha" variant="note" /> Generate videos when you want servegate to create short MP4 output from a text prompt or animate a still image. Text-to-video (T2V) sends only a prompt; image-to-video (I2V) adds an input image so the model can preserve the visual starting point. Latency varies because video jobs run through async RunPod workers: warm workers can return quickly, while the first call after an idle window may include worker provisioning and model loading.
+
+## When to use this
+
+Use video generation for animation, motion-from-still workflows, social previews, cinematic prompt experiments, or alpha testing of LTX-Video 2B behavior.
+
+If you need a single still image, use [Generate images](/generate-images/) instead. If you need to modify an existing image without motion, use [Edit images](/edit-images/).
+
+## Endpoints
+
+1. Submit a job to `POST /jobs` with `kind: "video"`, a prompt, and optional video parameters.
+2. Add `image` when you want I2V. Raw HTTP requests must send a JPEG or PNG base64 data URL; the TypeScript SDK can accept an HTTPS image URL and converts it before submit.
+3. Store the returned `job_id`.
+4. Poll `GET /jobs/{job_id}` until the response includes `output.video_url`.
+5. Use `GET /capabilities` to discover live video availability, modes, defaults, and quota limits.
+
+<Aside type="tip" title="Prefer the SDK for app code">
+The TypeScript SDK wraps the submit/poll loop with `client.generateVideo(...)`, `client.text2video(...)`, and `client.image2video(...)`, including progress callbacks, abort handling, and the longer default timeout needed for cold starts.
+</Aside>
+
+## Request
+
+`POST /jobs`
+
+Headers:
+
+| Header | Required | Notes |
+|---|---|---|
+| `X-API-Key` | Yes | Gateway-issued credential |
+| `Content-Type` | Yes | `application/json` |
+
+Body:
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `kind` | string | Yes | Must be `"video"` |
+| `prompt` | string | Yes | Non-empty, ≤2000 chars |
+| `image` | string | No | JPEG or PNG base64 data URL for raw HTTP; SDK also accepts HTTPS URLs and converts them. Presence switches to I2V |
+| `num_frames` | integer | No | Default `121`, range `[1, 121]` |
+| `fps` | integer | No | Default `24` |
+| `guidance_scale` | number | No | Default `3.0` |
+| `steps` | integer | No | Default `30` |
+| `negative_prompt` | string | No | Optional negative prompt |
+| `seed` | integer | No | Optional deterministic seed |
+
+Example:
+
+```json
+{
+  "kind": "video",
+  "prompt": "rain on a window at golden hour",
+  "num_frames": 121,
+  "fps": 24,
+  "guidance_scale": 3.0,
+  "steps": 30
+}
+```
+
+I2V example:
+
+```json
+{
+  "kind": "video",
+  "prompt": "soft wind moving through grass",
+  "image": "data:image/jpeg;base64,...",
+  "num_frames": 121,
+  "fps": 24
+}
+```
+
+## Response
+
+Submit success:
+
+```http
+HTTP/1.1 202 Accepted
+Location: /jobs/<job_id>
+Retry-After: 5
+
+{
+  "job_id": "<uuid>",
+  "status_url": "/jobs/<uuid>",
+  "est_wait_seconds": {
+    "p50": 90,
+    "p95": 200,
+    "first_call_max": 600
+  }
+}
+```
+
+Poll while queued or running:
+
+```http
+HTTP/1.1 202 Accepted
+Retry-After: 5
+
+{
+  "status": "running",
+  "progress": {
+    "phase": "inferencing",
+    "percent_estimate": 42,
+    "est_wait_seconds": 90
+  }
+}
+```
+
+Completed poll:
+
+```http
+HTTP/1.1 200 OK
+
+{
+  "status": "completed",
+  "output": {
+    "video_url": "https://servegate-r2.<account>.r2.cloudflarestorage.com/videos/<sha256>.mp4?X-Amz-Algorithm=...",
+    "duration_seconds": 5.04,
+    "width": 704,
+    "height": 512,
+    "fps": 24,
+    "size_bytes": 820742,
+    "url_ttl_seconds": 86400
+  },
+  "metrics": {
+    "queue_seconds": 0.8,
+    "execution_seconds": 86.8,
+    "wallclock_seconds": 87.6
+  }
+}
+```
+
+Daily quota exhausted:
+
+```http
+HTTP/1.1 429 Too Many Requests
+
+{
+  "error": "rate_limit_exceeded",
+  "reset_at": "2026-05-05T00:00:00.000Z",
+  "limit": 20,
+  "period_remaining_seconds": 43199
+}
+```
+
+RunPod submit error:
+
+```http
+HTTP/1.1 502 Bad Gateway
+
+{
+  "error": "upstream_error",
+  "retryable": true
+}
+```
+
+## Latency expectations
+
+<Aside type="caution" title="First-call cold-start">
+The first call after an idle window may take up to ~10 minutes wallclock as
+workers spin up and the model loads. Subsequent calls within the warm window
+typically return in 30–90 seconds. Plan your UX around polling, not
+synchronous wait. See the [RunPod capacity report](/runpod-video-report/)
+for the empirical evidence behind these numbers.
+</Aside>
+
+## SDK
+
+Text-to-video:
+
+```typescript
+import { FluxClient } from '@jhonata-matias/flux-client';
+const client = new FluxClient({ apiKey: process.env.GATEWAY_API_KEY! });
+const video = await client.text2video('rain on a window at golden hour', {
+  num_frames: 121,
+  fps: 24,
+});
+console.log(video.video_url);  // R2-served URL, valid for 24h
+```
+
+Image-to-video with abort:
+
+```typescript
+const ac = new AbortController();
+setTimeout(() => ac.abort(), 60_000);
+const video = await client.image2video(
+  'data:image/jpeg;base64,...',
+  'soft wind moving through grass',
+  { signal: ac.signal, onProgress: (e) => console.log(e.phase, e.est_wait_seconds) },
+);
+```
+
+Use the [SDK guide](/sdk/#generate-videos) for the full TypeScript method signatures.
+
+## Daily quota
+
+Video generation is limited to 20 video calls per day per `X-API-Key` during the alpha. Video quota is separate from image job quota and text token quota.
+
+## Output URL TTL
+
+Completed video jobs return an R2 pre-signed `video_url`. Treat it as a one-time download handoff URL: it is not a permanent asset URL, but it remains valid for up to 24 hours (`url_ttl_seconds: 86400`).
+
+## Start here
+
+- Use the [API Reference](/api/#generate-videos) for the compact endpoint overview.
+- Use the [SDK guide](/sdk/#generate-videos) for TypeScript integration.
+- Check [RunPod capacity report](/runpod-video-report/) before designing user-facing wait states.
