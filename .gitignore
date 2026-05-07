@@ -72,3 +72,6 @@ squads/
 AGENTS.md
 .aiox/notes/story-4.2/deploy-record-*.md
 .aiox/notes/story-4.2/ac11-smoke-evidence-*.md
+
+# Story 6.1 HiDream PoC — measurement JSON, PNG archive, regression evidence (large / sensitive)
+.aiox/notes/story-6.1/
