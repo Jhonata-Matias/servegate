@@ -50,17 +50,18 @@
 
 ## 📌 Follow-ups
 
-### FU-6.1 — Path 2 (Stable Diffusion 3.5 Large) — $1M ARR cliff impact assessment at servegate scale
+### FU-6.1 — Path 2 (Stable Diffusion 3.5 Large) — $1M ARR cliff impact assessment at servegate scale ✅ CLOSED 2026-05-07
 
-- **Priority:** 🟡 Medium
+- **Status:** ✅ **CLOSED** — REJECT verdict delivered via [`docs/decisions/2026-05-07-sd35l-arr-cliff-memo.md`](../decisions/2026-05-07-sd35l-arr-cliff-memo.md). Path 2 closed. Only Path 3 (fal.ai proxy, FU-6.2) remains in field for next model-selection brainstorm.
+- **Priority:** 🟡 Medium (now resolved)
 - **Related Story:** Epic 6 closure (REJECT-track) — input for next model-selection brainstorm
 - **Source:** ADR-0006 Open Threads + brainstorm 2026-05-06 Path 2 (SD 3.5L deferred during HiDream-I1 selection)
 - **Description:** Stability Community License imposes commercial license requirement at $1M annual revenue. Determine whether this cliff is acceptable for servegate at projected alpha → paid tier scale (and on what timeline). If acceptable: SD 3.5L re-enters as candidate for next brainstorm. If not: Path 2 is closed and only Path 3 (fal.ai proxy) remains. Output: lightweight memo deciding the cliff acceptability.
-- **Suggested Owner:** `@pm`
-- **Estimated Effort:** ~2-4 hours (revenue projection + license fine-print read + memo)
-- **Tags:** model-selection, license-evaluation, epic-6-followup, brainstorm-input
-- **Unblock Condition:** None — but must complete BEFORE next model-selection brainstorm runs
-- **Created:** 2026-05-07 by @po (Epic 6 closure handoff from ADR-0006 Open Threads)
+- **Owner (delivered):** `@pm` (Morgan)
+- **Effort actual:** ~1.5h (end-to-end memo + License Stack Audit + sanitization for public mirror)
+- **Tags:** model-selection, license-evaluation, epic-6-followup, brainstorm-input, closed
+- **Closure summary:** License Stack Audit applied (per memory `feedback_brainstorm_license_audit`) confirmed Stability Community License is composite license (most-restrictive component = MMDiT + VAE weights themselves). Cliff is **architectural, not financial** — automatic license termination + discretionary re-licensing by Stability AI. "Directly or indirectly" + "in aggregate" clause means servegate inherits the cliff on the entire portfolio revenue, not just SD 3.5L revenue. Pattern matches ADR-0003 portfolio commitment violations (4/4 clauses). Watch-list defined: re-opens only if Stability changes terms (Apache release, cliff removal, or non-discretionary commercial license).
+- **Created:** 2026-05-07 by @po (Epic 6 closure handoff from ADR-0006 Open Threads) · **Closed:** 2026-05-07 by @pm (Morgan)
 
 ### FU-6.2 — Path 3 (fal.ai proxy) economics revisit
 
@@ -174,3 +175,4 @@
 | 2026-04-24 | @po (Pax) | Added FU-4.2.1 (KV writes/day monitoring) + FU-4.3.1 (Workers Paid upgrade pre-flight) following user's gateway security + rate-limit ceiling question on Story 4.2. CF Workers Free hard-cap = 100K req/day + 1K KV writes/day; KV writes is the active constraint at ~500 calls/day combined ceiling. Recommended alpha policy: 300 calls/day combined for 3× headroom. |
 | 2026-04-29 | @po (Pax) | Added ENH-2.9 (Refactor landing into Astro Starlight docs portal) following @ux-design-expert spec. Triggered by multi-image i2i merge (PR #15) needing docs update + user reference to RunPod docs portal pattern. Spec at `docs/design/landing-docs-portal-refactor.md`. |
 | 2026-04-30 | @po (Pax) | **Closed ENH-2.9** — delivered via Story 2.9 (PR #19 main impl + PR #20 archive/tooling, both merged). QA gate PASS 96. Production live at `deploy-lp-one.vercel.app/` with new Astro Starlight docs portal. Effort actual ~14h (vs estimated ~9-12h, +2-5h drift driven by Codex sandbox blocker recovery + 2 QA rounds + 1 pre-cutover bug fix). **Added ENH-2.10** consolidating 11 V2 polish follow-ups (font bundling, light theme, IconLinkCard atom, custom 404, ADR index, dedicated sub-pages, API split, i18n, versioned docs, Algolia, "Copy page") with individual trigger conditions per item. |
+| 2026-05-07 | @pm (Morgan) | **Closed FU-6.1** (SD 3.5L $1M ARR cliff assessment) — REJECT verdict via decision memo at `docs/decisions/2026-05-07-sd35l-arr-cliff-memo.md`. License Stack Audit confirmed Stability Community License is the composite (MMDiT + VAE = core weights). Cliff is architectural (auto-termination + discretionary re-licensing), not financial. "Directly or indirectly" clause amplifies cliff to entire servegate portfolio revenue. Same architectural pattern as ADR-0006 (Llama Community) and ADR-0003 (FLUX NC + Stability Community). Path 2 closed; FU-6.2 (Path 3 fal.ai proxy) becomes effective default candidate for next model-selection brainstorm. Effort actual ~1.5h (vs estimated 2-4h). Watch-list condition defined: re-opens if Stability changes terms. |
