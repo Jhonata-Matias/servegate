@@ -1,0 +1,256 @@
+{
+  "version": 1,
+  "description": "Shared 50-prompt fixture for Story 6.1 (measure) and 6.2 (eval).",
+  "prompts": [
+    {
+      "id": "p01",
+      "category": "photorealistic",
+      "text": "Close-up portrait of a woman in her 60s, soft window light, realistic skin texture with visible pores."
+    },
+    {
+      "id": "p02",
+      "category": "photorealistic",
+      "text": "Full body photo of a dancer mid-leap on a city rooftop at golden hour, Canon EOS style."
+    },
+    {
+      "id": "p03",
+      "category": "photorealistic",
+      "text": "Macro photo of dew on a spider web in a forest, shallow depth of field."
+    },
+    {
+      "id": "p04",
+      "category": "hands",
+      "text": "Two hands knitting yarn, detailed fingers and knuckles, warm indoor lighting."
+    },
+    {
+      "id": "p05",
+      "category": "hands",
+      "text": "A child's hand holding a small frog at a pond edge, photorealistic."
+    },
+    {
+      "id": "p06",
+      "category": "hands",
+      "text": "Hands preparing sushi on a bamboo mat, detailed rice grains and fingers."
+    },
+    {
+      "id": "p07",
+      "category": "faces",
+      "text": "Portrait of a middle-aged man laughing, crow's feet wrinkles, natural daylight."
+    },
+    {
+      "id": "p08",
+      "category": "faces",
+      "text": "Profile of a teenager with freckles and acne texture, studio softbox."
+    },
+    {
+      "id": "p09",
+      "category": "faces",
+      "text": "Elderly grandmother smiling, deep wrinkles, hazel eyes, indoors."
+    },
+    {
+      "id": "p10",
+      "category": "text-in-image",
+      "text": "A red vintage delivery van with the text OPEN 7 DAYS painted on the side, city street."
+    },
+    {
+      "id": "p11",
+      "category": "text-in-image",
+      "text": "Wooden sign reading WELCOME HOME with weathered paint, hanging on a cottage."
+    },
+    {
+      "id": "p12",
+      "category": "text-in-image",
+      "text": "Neon sign COFFEE NOW reflected on wet pavement at night."
+    },
+    {
+      "id": "p13",
+      "category": "photorealistic",
+      "text": "Interior of a cluttered workshop with tools, dust in sunbeams."
+    },
+    {
+      "id": "p14",
+      "category": "photorealistic",
+      "text": "Aerial view of a marina with white boats, midday sun, polarized look."
+    },
+    {
+      "id": "p15",
+      "category": "photorealistic",
+      "text": "Australian shepherd dog shaking off water, freeze motion, meadow background."
+    },
+    {
+      "id": "p16",
+      "category": "mixed",
+      "text": "Stormy ocean waves crashing on black volcanic rocks, moody sky."
+    },
+    {
+      "id": "p17",
+      "category": "mixed",
+      "text": "Glass of iced tea with condensation, lemon slices, outdoor picnic table."
+    },
+    {
+      "id": "p18",
+      "category": "mixed",
+      "text": "Abandoned factory hall with graffiti, volumetric light shafts."
+    },
+    {
+      "id": "p19",
+      "category": "design",
+      "text": "Flat vector travel poster for Kyoto, torii gate, minimal palette, print-ready."
+    },
+    {
+      "id": "p20",
+      "category": "design",
+      "text": "Isometric low-poly miniature city with parks and roads, pastel colors."
+    },
+    {
+      "id": "p21",
+      "category": "design",
+      "text": "App icon for a meditation app, gradient orb, modern iOS style."
+    },
+    {
+      "id": "p22",
+      "category": "design",
+      "text": "Packaging mockup for organic tea, kraft paper texture, botanical illustration."
+    },
+    {
+      "id": "p23",
+      "category": "photorealistic",
+      "text": "Chef flambeing mushrooms in a stainless pan, flames, restaurant kitchen."
+    },
+    {
+      "id": "p24",
+      "category": "photorealistic",
+      "text": "Rain-soaked cobblestone alley in Porto, string lights, dusk."
+    },
+    {
+      "id": "p25",
+      "category": "photorealistic",
+      "text": "Siberian husky with heterochromia, snow background, high detail fur."
+    },
+    {
+      "id": "p26",
+      "category": "hands",
+      "text": "Surgeon's gloved hands suturing, operating room bokeh background."
+    },
+    {
+      "id": "p27",
+      "category": "hands",
+      "text": "Piano player's hands on ivory keys, shallow DOF, concert hall."
+    },
+    {
+      "id": "p28",
+      "category": "faces",
+      "text": "Woman wearing traditional Indian jewelry, studio portrait, symmetric lighting."
+    },
+    {
+      "id": "p29",
+      "category": "faces",
+      "text": "Man with tattoos on neck, serious expression, monochrome dramatic light."
+    },
+    {
+      "id": "p30",
+      "category": "faces",
+      "text": "Child blowing dandelion seeds, backlit sunset, candid photo."
+    },
+    {
+      "id": "p31",
+      "category": "text-in-image",
+      "text": "Billboard advertising SUMMER SALE 50% OFF against blue sky."
+    },
+    {
+      "id": "p32",
+      "category": "text-in-image",
+      "text": "Rusty license plate reading GEMMA-404 on a desert road pickup truck."
+    },
+    {
+      "id": "p33",
+      "category": "text-in-image",
+      "text": "Open book page with large heading PROLOGUE in serif type, paper texture."
+    },
+    {
+      "id": "p34",
+      "category": "mixed",
+      "text": "Cyberpunk alley with holographic koi fish projections, rain reflections."
+    },
+    {
+      "id": "p35",
+      "category": "mixed",
+      "text": "Steampunk compass on a leather journal, brass and copper details."
+    },
+    {
+      "id": "p36",
+      "category": "mixed",
+      "text": "Alien desert with two moons, turquoise sand, sci-fi landscape."
+    },
+    {
+      "id": "p37",
+      "category": "design",
+      "text": "UX wireframe illustration of a checkout flow, monochrome, annotations."
+    },
+    {
+      "id": "p38",
+      "category": "design",
+      "text": "Seamless botanical pattern for textile, white peonies on navy background."
+    },
+    {
+      "id": "p39",
+      "category": "design",
+      "text": "Mood board for Scandinavian living room, beige, oak, indoor plants."
+    },
+    {
+      "id": "p40",
+      "category": "photorealistic",
+      "text": "Vintage typewriter on a wooden desk, cigarette smoke wisp, film grain."
+    },
+    {
+      "id": "p41",
+      "category": "photorealistic",
+      "text": "Mountain biker jumping over a root on a forest trail, motion blur background."
+    },
+    {
+      "id": "p42",
+      "category": "photorealistic",
+      "text": "Fresh sourdough loaf on linen cloth, flour dust, macro crust texture."
+    },
+    {
+      "id": "p43",
+      "category": "hands",
+      "text": "Barista pouring latte art heart, close-up of cup and wrists."
+    },
+    {
+      "id": "p44",
+      "category": "hands",
+      "text": "Two people arm-wrestling at a wooden tavern table, tension in tendons."
+    },
+    {
+      "id": "p45",
+      "category": "faces",
+      "text": "Actor in stage makeup, half face sad half happy, split lighting."
+    },
+    {
+      "id": "p46",
+      "category": "mixed",
+      "text": "Hot air balloons over Cappadocia at sunrise, telephoto compression."
+    },
+    {
+      "id": "p47",
+      "category": "mixed",
+      "text": "Underwater coral reef with a sea turtle, turquoise water, rays of light."
+    },
+    {
+      "id": "p48",
+      "category": "mixed",
+      "text": "Minimalist concrete architecture with one lonely tree, brutalist style."
+    },
+    {
+      "id": "p49",
+      "category": "design",
+      "text": "Logo mark for a bakery, wheat stalk + oven icon, black on white."
+    },
+    {
+      "id": "p50",
+      "category": "mixed",
+      "text": "Still life of citrus fruits and a copper bowl, painterly but photorealistic."
+    }
+  ]
+}

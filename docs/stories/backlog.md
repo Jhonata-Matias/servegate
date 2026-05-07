@@ -8,6 +8,18 @@
 
 ## 🔧 Tech Debt
 
+### TD-6.1 — Codify License Stack Audit gate in brainstorming-output template
+
+- **Priority:** 🟡 Medium
+- **Related Story:** Epic 6 closure (REJECT-track) — process correction
+- **Source:** ADR-0006 Open Threads + memory entry `feedback_brainstorm_license_audit`
+- **Description:** Patch `.aiox-core/development/templates/brainstorming-output-tmpl.yaml` to require an explicit "License Stack Audit" section before any Path Synthesis. Audit must enumerate all component dependencies (transformer, encoders, VAEs, schedulers, tokenizers, refiners, safety filters), capture each component's actual LICENSE, derive composite license = most-restrictive component, and cross-reference against `docs/architecture/recommended-approach.md` alternatives-rejected table. Current memory entry captures the rule but is not structurally enforced.
+- **Suggested Owner:** `@architect`
+- **Estimated Effort:** ~1-2 hours (template patch + 1 example brainstorm refactor for testing)
+- **Tags:** brainstorm-framework, template-amendment, license-audit, epic-6, process-correction
+- **Unblock Condition:** None (can start anytime); ideally land BEFORE next model-selection brainstorm
+- **Created:** 2026-05-07 by @po (Epic 6 closure handoff from ADR-0006 Open Threads)
+
 ### TD-3.1.2 — Normalize 400 error shape across validation paths
 
 - **Priority:** 🟢 Low
@@ -37,6 +49,42 @@
 ---
 
 ## 📌 Follow-ups
+
+### FU-6.1 — Path 2 (Stable Diffusion 3.5 Large) — $1M ARR cliff impact assessment at servegate scale
+
+- **Priority:** 🟡 Medium
+- **Related Story:** Epic 6 closure (REJECT-track) — input for next model-selection brainstorm
+- **Source:** ADR-0006 Open Threads + brainstorm 2026-05-06 Path 2 (SD 3.5L deferred during HiDream-I1 selection)
+- **Description:** Stability Community License imposes commercial license requirement at $1M annual revenue. Determine whether this cliff is acceptable for servegate at projected alpha → paid tier scale (and on what timeline). If acceptable: SD 3.5L re-enters as candidate for next brainstorm. If not: Path 2 is closed and only Path 3 (fal.ai proxy) remains. Output: lightweight memo deciding the cliff acceptability.
+- **Suggested Owner:** `@pm`
+- **Estimated Effort:** ~2-4 hours (revenue projection + license fine-print read + memo)
+- **Tags:** model-selection, license-evaluation, epic-6-followup, brainstorm-input
+- **Unblock Condition:** None — but must complete BEFORE next model-selection brainstorm runs
+- **Created:** 2026-05-07 by @po (Epic 6 closure handoff from ADR-0006 Open Threads)
+
+### FU-6.2 — Path 3 (fal.ai proxy) economics revisit
+
+- **Priority:** 🟡 Medium
+- **Related Story:** Epic 6 closure (REJECT-track) — input for next model-selection brainstorm
+- **Source:** ADR-0006 Open Threads + brainstorm 2026-05-06 Path 3 (fal.ai proxy with 30-50% margin tax noted)
+- **Description:** Calculate per-call economics of fal.ai (or Replicate) hosted proxy for FLUX dev quality reference. Compare margin tax (30-50%) vs self-host operational savings at servegate's projected volumes. License-clean path (consumer of hosted SaaS, not weight redistributor). Output: economics matrix for fal.ai vs Replicate vs self-host on quality-comparable models, decisioning whether proxy is sustainable as primary path or only as fallback.
+- **Suggested Owner:** `@pm` + `@analyst`
+- **Estimated Effort:** ~4-6 hours (rate-card cross-comparison + projection model + memo)
+- **Tags:** economics-evaluation, hosted-proxy, epic-6-followup, brainstorm-input
+- **Unblock Condition:** None
+- **Created:** 2026-05-07 by @po (Epic 6 closure handoff from ADR-0006 Open Threads)
+
+### FU-6.3 — Llama-replacement feasibility study (HiDream-I1 watch-list condition)
+
+- **Priority:** 🟢 Low
+- **Related Story:** Epic 6 closure (REJECT-track) — WATCH-LIST condition #3 (community fine-tune of HiDream backbone on Apache encoder)
+- **Source:** ADR-0006 Open Threads + WATCH-LIST re-evaluation conditions
+- **Description:** Theoretical study: can the HiDream-I1 diffusion backbone be fine-tuned to use an Apache-licensed text encoder (Qwen, Gemma, Phi, Mistral Apache variant) instead of the Llama 3.1 8B Instruct currently embedded? Engineering cost? Quality cost? Should be triggered ONLY if a community group publishes such a fine-tune (do not commission it from servegate). Mostly a watch-and-wait task — entry exists to ensure we have it on radar if a watch-list signal appears.
+- **Suggested Owner:** `@analyst`
+- **Estimated Effort:** ~1 hour quarterly check + ~4 hours analysis IF a community fine-tune appears
+- **Tags:** hidream-watchlist, encoder-replacement, epic-6-followup
+- **Unblock Condition:** Community fine-tune of HiDream backbone on Apache encoder published with parity benchmarks
+- **Created:** 2026-05-07 by @po (Epic 6 closure handoff from ADR-0006 Open Threads)
 
 ### FU-4.2.1 — KV writes/day monitoring + alert at 80% of free-tier ceiling
 
