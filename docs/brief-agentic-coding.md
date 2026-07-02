@@ -40,13 +40,14 @@ The category joins existing pod capabilities:
 
 ## Proposed Solution
 
-Install **one** open-weights agentic-coding LLM on the existing pod, expose it as an **OpenAI-compatible HTTP endpoint** (via vLLM, SGLang, or Ollama), and connect it to the owner's local Claude Code / IDE via an OpenAI-compat client shim — so the model can be swapped in as an alternative provider without changing the daily UX.
+Install **one** open-weights agentic-coding LLM on the existing pod, expose it as an **OpenAI-compatible HTTP endpoint** (via vLLM), and drive it from the owner's laptop **via CLI only** — `curl` / `httpie` scripts + shell aliases — with no IDE / MCP integration. Scope explicitly locked to CLI-only per owner elicitation (Q4).
 
 **Key characteristics:**
-- **Serving stack:** OpenAI-compatible endpoint on the pod. Choice between vLLM (throughput, function-calling maturity), SGLang (structured output), or Ollama (simplest, less feature-complete on tool_calls). Pick one, benchmark, done.
-- **Access pattern:** SSH tunnel or Tailscale from owner's laptop → pod:8000. No exposure through the servegate gateway. No `GATEWAY_API_KEY_*` involvement.
+- **Serving stack:** vLLM 0.6+ with OpenAI-compatible endpoint on `localhost:8000`. Native `tools` / `tool_choice` support. SGLang as fallback only if vLLM has bugs on the chosen model's tool-call shape.
+- **Access pattern:** SSH tunnel from owner's laptop → pod:8000 (existing `pod.sh` flow). No exposure through the servegate gateway. No `GATEWAY_API_KEY_*` involvement. No Tailscale (deferred until latency proves to be a problem).
+- **Interaction pattern:** owner runs `curl` / `httpie` calls with tool-use prompts from laptop shell; model returns code, owner copies to IDE for review + apply. Explicitly NOT a Claude Code-style continuous agent loop. Episodic query pattern.
 - **Model choice:** one model to start; rotate if unsatisfactory. Not a menu of options — decision fatigue is the enemy of internal tooling adoption.
-- **Session pattern:** on-demand pod start (existing `pod.sh start/stop` flow) — not always-on. Owner spins up before a coding session, tears down after.
+- **Session pattern:** on-demand pod start (existing `pod.sh start/stop` flow) — not always-on. Owner spins up before a coding block, tears down after.
 
 **Differentiators from just "using Claude Code":**
 - Zero variable cost per token — flat $0.69/hr while running
@@ -79,15 +80,16 @@ Install **one** open-weights agentic-coding LLM on the existing pod, expose it a
 
 ### Owner Objectives
 
-- **O1.** Have a working local coding LLM installed, benchmarked against the owner's real tasks, and integrated into daily flow within **4-6 weeks** of brief acceptance
-- **O2.** Zero impact on production model categories on the same pod — installation must be additive, isolated by directory (e.g., `/workspace/coding/`)
+- **O1.** Have a working local coding LLM installed and used for at least one real coding task within **4-6 weeks** of brief acceptance
+- **O2.** Zero impact on production model categories on the same pod — installation must be additive, isolated by directory (`/workspace/coding/`)
 - **O3.** License-clean per repo precedent — no revenue cliffs, no restrictive RAI clauses. Apache-2.0 / MIT / equivalent only
+- **O4.** Build a first-hand quality/limitation map of open coders on real tasks — informational, feeds any future decision about whether this category deserves more investment (e.g., promote to product line, or scrap)
 
 ### Success Signals
 
-- **SS1.** At least **1 real work session** completed end-to-end with the local model (no falling back to Claude Code mid-session) within 30 days of install
-- **SS2.** Measured wall-clock time for a **standardized reference task** (e.g., "add a new endpoint to the gateway with tests") on the local model documented in a decision memo, alongside the same task on Claude Code, so the quality/speed gap is quantified rather than guessed
-- **SS3.** Total pod hours spent on this category tracked; cost/month reported in monthly review
+- **SS1.** At least **1 real coding task** completed using the local model via CLI (curl/httpie prompts → code returned → copied to IDE → applied → shipped or reviewed). Task chosen from actual servegate backlog — not a synthetic benchmark
+- **SS2.** A 1-page memo at `docs/research/agentic-coding-mvp-outcome-<date>.md` capturing: what the model got right, what it got wrong, wall-clock cost per task, and gut-feel comparison to how Claude Code would have handled the same task
+- **SS3.** Total pod hours spent on this category tracked; cost/month reported in monthly review (target ≤ 60h/mo)
 
 ### Anti-signals (things that would mean this failed)
 
@@ -101,24 +103,28 @@ Install **one** open-weights agentic-coding LLM on the existing pod, expose it a
 
 ### Core Features (Must Have)
 
-- **Model installed** on pod `/workspace/coding/` with weights, config, and serving stack pinned to specific versions
-- **OpenAI-compatible endpoint** (`http://localhost:8000/v1/chat/completions`) responding to tool-call requests with well-formed `tool_calls[]` in the response
-- **Tunnel or Tailscale path** from owner's laptop to the pod endpoint so Claude Code / IDE clients can hit it as an OpenAI-compat provider
-- **Install/teardown script** at `spike/agentic-coding/` mirroring existing spike pattern (`spike/hidream-poc/` etc.) — reproducible, self-documented
-- **Baseline benchmark memo** at `docs/research/agentic-coding-baseline-<date>.md` capturing the reference task run locally vs. Claude Code
+- **Model installed** on the mounted persistent volume `/workspace/coding/models/{name}/` with weights, config, and vLLM version pinned to specific tags — survives pod stop/start
+- **OpenAI-compatible endpoint** on `http://localhost:8000/v1/chat/completions` responding to tool-call requests with well-formed `tool_calls[]` in the response
+- **SSH tunnel one-liner** (`ssh -L 8000:localhost:8000 ...`) documented in `spike/agentic-coding/README.md` so owner opens the tunnel and starts making calls in <1 min
+- **CLI helper alias / small wrapper** (`~/.local/bin/agentcode 'prompt here'`) that shapes the OpenAI-compat request and prints the response — keeps friction minimal
+- **Install/teardown script** at `spike/agentic-coding/` mirroring the existing spike pattern (`spike/hidream-poc/` etc.) — reproducible, self-documented
+- **MVP outcome memo** at `docs/research/agentic-coding-mvp-outcome-<date>.md` capturing one real task run + qualitative assessment
 
 ### Out of Scope for MVP
 
-- SDK method / public gateway endpoint (deliberately excluded per elicitation)
-- Multi-model comparison ("try 5 models") — pick one on paper, benchmark that one; if it fails, pivot to next single model, not a bake-off
+- SDK method / public gateway endpoint (excluded per elicitation)
+- IDE integration / MCP shim (excluded per elicitation Q4 — CLI-only)
+- Multi-model comparison ("try 5 models") — pick one on paper, use that one; if it fails, pivot to next single model, not a bake-off
 - Fine-tuning / LoRA
-- Persistent chat history / owner-facing UI beyond the OpenAI-compat protocol
+- Persistent chat history / owner-facing UI beyond the CLI wrapper
+- Formal evaluation harness with multiple tasks and wall-clock stats (excluded per elicitation Q5 — single subjective session is enough)
 - Automatic pod lifecycle (auto-start on client connect, auto-stop after idle) — manual `pod.sh start/stop` for MVP
 - Cost dashboards / usage tracking beyond the manual monthly note
+- Always-on serving pattern
 
 ### MVP Success Criteria
 
-Owner completes at least one **non-trivial coding task** (say, a Story implementation in servegate itself) end-to-end on the local model, without needing to fall back to Claude Code, and writes a 1-page memo summarizing what worked and what didn't. Ship-or-scrap decision made from that memo.
+Owner uses the local model to accomplish at least one **real coding task** from the servegate backlog (any TD / FU / small story) via the CLI wrapper, and writes a 1-page memo summarizing what worked, what didn't, and whether it displaced any fraction of the effort that would have gone to Claude Code. Ship-or-scrap decision made from that memo.
 
 ---
 
@@ -173,11 +179,12 @@ Following the audit precedent (ADR-0003 FLUX NC, ADR-0006 HiDream/Llama, FU-6.1 
 
 Rationale: cleanest license (Apache-2.0, no RAI, no thresholds), proven quality, ~18GB weights at 4-bit fits in 48GB VRAM comfortably (or 24GB tightly). Qwen3-Coder is a swap-in target when the ecosystem tooling for it stabilizes.
 
-### Integration surface
+### Integration surface (CLI-only per Q4)
 
-- **Claude Code (owner's primary IDE-adjacent tool):** already supports custom OpenAI-compatible endpoints. **⚠️ VERIFY** current mechanism (env var? config file?) — landscape moves quickly.
-- **MCP:** if the model doesn't emit `tool_calls` in exactly the OpenAI shape Claude Code expects, an MCP adapter layer may be needed. Complexity: low if vLLM handles it natively; medium if we need a small shim.
-- **CLI usage:** the OpenAI-compat endpoint is trivially callable via `curl` + `httpie` for scripting — no special work.
+- **CLI wrapper:** small shell script or Python one-file (`~/.local/bin/agentcode`) that reads prompt from argv/stdin, formats the OpenAI-compat request with tool definitions from a config file, posts to `localhost:8000/v1/chat/completions` through the SSH tunnel, and prints the response (either free-form text or extracted `tool_calls[]`). ~50 LOC.
+- **SSH tunnel:** existing `pod.sh` opens SSH; wrapper opens local port forward `-L 8000:localhost:8000`. Documented one-liner in the spike README.
+- **No IDE integration.** No MCP adapter. No Claude Code custom provider config. Owner reads model output in the shell, copies to IDE by hand for review + apply. Deliberately episodic query pattern.
+- **Consequence:** the shape of `tool_calls[]` returned by vLLM must be OpenAI-standard, but there is no downstream consumer that will break if the shape is slightly off — the wrapper can normalize before printing. This removes an entire failure mode.
 
 ### License Stack Audit gate (per memory `feedback_brainstorm_license_audit`)
 
@@ -222,16 +229,16 @@ Output the audit as a section in the eventual PoC report or spike README, in the
 | R2 | Local model quality gap is so large that owner never uses it | Medium | Medium | 4-week hard MVP cap; ship-or-scrap decision, not sunk-cost extension |
 | R3 | Pod cost spirals (owner leaves it running) | Medium | Low | 60h/month soft cap + monthly cost note in owner's review; `pod.sh stop` habit |
 | R4 | Serving stack (vLLM etc.) has function-calling regressions between versions | Medium | Low | Pin exact vLLM version at install; upgrade only on deliberate cadence |
-| R5 | Tool-call shape mismatch breaks Claude Code integration | Medium | Medium | MCP adapter shim as fallback; document integration surface before install |
+| R5 | Tool-call shape divergence between model output and OpenAI spec | Low | Low | CLI-only scope removes downstream consumers; wrapper normalizes at print time. Was Medium/Medium before Q4 elicitation |
 | R6 | Distraction from paying tenants (Contabhub, etc.) | Medium | High | Time-box strictly; no work on this during production incidents; not on critical path |
 
 ### Open Questions
 
 - **Q1.** ⏳ **In progress via background retry:** exact GPU tier confirmed via `nvidia-smi`. Pod couldn't start on 2026-07-02 at 13:14 BRT — RunPod host has no free GPUs. Retry loop scheduled: 10 attempts × 10min = 1h40min max window. Status log at `/tmp/claude-1000/.../scratchpad/pod-start-status.log`. If loop times out, owner should try starting later from own shell or file a RunPod support ticket for capacity.
-- **Q2.** ⚠️ VERIFY at spike start: exact Claude Code custom-provider mechanism (env var? config file? MCP profile?). Landscape moves in weeks.
+- **Q2.** ✅ **Resolved by Q4 answer:** no Claude Code custom-provider integration needed. CLI-only path selected by owner.
 - **Q3.** ✅ **Resolved:** DeepSeek-V3 (MIT+ModelLicense with RAI clauses — clean for owner-internal), GLM-4.5-Air (MIT clean), Kimi-K2 (Modified MIT with attribution triggered at >100M MAU or >$20M/mo revenue — unreachable). All 4 candidates approved for owner-internal use. Full findings in Technical Considerations table.
-- **Q4.** ⚠️ Owner decision needed at spike kickoff: CLI-only (`curl` scripts + `httpie`) acceptable path, or IDE integration hard requirement? If former, MCP shim work drops entirely; if latter, budget ~1 day for MCP adapter if the model's tool-call shape diverges from Claude Code's expectation.
-- **Q5.** ⚠️ Owner decision: single subjective session vs. small evaluation harness (5 gateway-story-shaped tasks with wall-clock + acceptance recorded). Analyst recommendation: single session for MVP; small harness only if MVP passes and owner decides to promote toward a scheduled always-on pattern.
+- **Q4.** ✅ **Resolved 2026-07-02:** CLI-only. MCP shim work dropped from scope; no IDE integration in MVP.
+- **Q5.** ✅ **Resolved 2026-07-02:** single subjective session — one real coding task from servegate backlog, memo captured. Evaluation harness deferred to post-MVP if this category ever gets promoted.
 - **Q6.** ⏳ **Awaiting pod boot:** can `/pods/{podId}/update` accept `networkVolumeId` at runtime to attach `mqqgzwnfp1` to the existing pod without recreation? If not, pod recreation in `US-IL-1` is the plan.
 
 ---
@@ -264,3 +271,4 @@ Output the audit as a section in the eventual PoC report or spike README, in the
 |------|--------|--------|
 | 2026-07-02 | @analyst (Alex) | Initial YOLO draft. Scope: internal-only tooling, tool-use-native models, single-model spike-first path. 5 VERIFY items flagged for owner confirmation. Candidates triaged license-first per repo precedent (Qwen3-Coder + Qwen2.5-Coder-32B lead; Codestral + StarCoder2 rejected upstream). |
 | 2026-07-02 | @analyst (Alex) | Verification pass (Q3 fully resolved; Q1/Q6 in progress via background retry). LICENSE-MODEL / LICENSE files read directly for DeepSeek-V3, GLM-4.5-Air, Kimi-K2 — all 4 non-rejected candidates cleared for owner-internal use. Repo rejection pattern (revenue cliff) confirmed NOT triggered. Pod metadata queried: 20GB container disk + 0GB persistent volume = design blocker for anything above 7B tier. **Resolution locked:** an existing 150GB Network Volume `mqqgzwnfp1` (`ollama-models`, `US-IL-1`) already provisioned in the RunPod account — attach path pending same-DC confirmation once pod boots. Pod start currently blocked by RunPod host capacity; retry loop scheduled 10× at 10min intervals. GPU tier inferred to A6000/A40 48GB from cost + RAM + vCPU profile; empirical confirm pending. |
+| 2026-07-02 | @analyst (Alex) | **Q4 + Q5 locked by owner.** Q4: CLI-only (no IDE, no MCP shim). Q5: single subjective session (no eval harness). Scope tightening cascaded: MVP core features reduced (CLI wrapper `~/.local/bin/agentcode` replaces IDE integration); SS1 rewritten as CLI-driven task from real backlog; R5 downgraded Low/Low (no downstream consumer to break); Q2 fully retired (no Claude Code custom-provider needed). Brief is now scope-complete for merge — only Q1/Q6 remain PENDING as verification-in-flight, and those feed the downstream spike story, not the brief itself. |
