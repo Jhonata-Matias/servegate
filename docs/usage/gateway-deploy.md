@@ -155,6 +155,66 @@ npm run deploy
 # Update consumers (SDK config + demo .env)
 ```
 
+## Multi-tenant API keys (Story 2.10 — interim allowlist)
+
+O gateway aceita até **4 keys simultaneamente** via slots enumerados: `GATEWAY_API_KEY` (tenant 1, obrigatório) + `GATEWAY_API_KEY_2..4` (opcionais). Todas passam pelo mesmo `validateAuth` com comparação constant-time; cada key gera um `api_key_hash` distinto em logs e no bucket de quota de vídeo (`VIDEOS_KV`), preservando atribuição por-tenant.
+
+> **Teto de 4:** decisão pragmática de alpha (Story 2.10 Dev Notes). Ao atingir ≥3 tenants ativos, escalar para Story 2.11 (KV allowlist com tenant_id lookup) — não estender adicionando slots `_5`, `_6`, etc.
+
+### Adicionar tenant novo
+
+```bash
+# 1. Gerar key nova (offline, no host do owner)
+NEW_KEY=$(openssl rand -hex 32)
+echo "$NEW_KEY"   # salvar em password manager + preparar entrega criptografada
+
+# 2. Escolher próximo slot livre (2, 3 ou 4). Verificar quais estão em uso:
+npx wrangler secret list | grep GATEWAY_API_KEY
+
+# 3. Publicar no slot livre (exemplo: slot 2)
+npx wrangler secret put GATEWAY_API_KEY_2
+#    (prompt interativo — colar o NEW_KEY)
+
+# 4. Redeploy para hot reload (secrets aplicam imediato, mas re-deploy é defensivo)
+npm run deploy
+
+# 5. Smoke test:
+curl -sS -H "X-API-Key: $NEW_KEY" \
+     -H "Content-Type: application/json" \
+     -X POST https://gemma4-gateway.jhonata-matias.workers.dev/jobs \
+     -d '{"input":{"prompt":"smoke","steps":4}}' | jq -r '.job_id'
+# Expect: UUID retornado (200 OK). 401 = key não bateu (revisar slot escolhido).
+```
+
+### Rotate per-tenant
+
+Substitua a key **daquele slot** sem afetar os outros:
+
+```bash
+# Ex: rotate tenant no slot 3
+NEW_KEY=$(openssl rand -hex 32)
+npx wrangler secret put GATEWAY_API_KEY_3   # cola NEW_KEY
+npm run deploy
+
+# Após tenant confirmar recepção da NEW_KEY, o slot já está atualizado.
+# Nenhuma ação em GATEWAY_API_KEY, _2, ou _4.
+```
+
+### Revoke per-tenant
+
+Remove o secret do slot — o próximo request daquele tenant recebe 401 imediatamente:
+
+```bash
+npx wrangler secret delete GATEWAY_API_KEY_3
+npm run deploy   # opcional; delete propaga em segundos
+```
+
+> **Nota — quota residual em `VIDEOS_KV`:** o bucket `videos:YYYY-MM-DD:{api_key_hash}` do tenant revogado permanece até seu TTL de 48h. **Isto é normal e não requer cleanup manual** — o hash não é mais aceito, então não pode ser reincrementado. Se quiser zerar por motivo de audit, `npx wrangler kv key delete "videos:$(date -u +%Y-%m-%d):{hash}" --binding=VIDEOS_KV`.
+
+### Non-goal (Story 2.10 AC10)
+
+Rate-limit de **imagem** (`RATE_LIMIT_KV` chave `count:YYYY-MM-DD`) permanece **global** — não é per-tenant. Story 2.11 (KV allowlist futura) endereça isso via `count:date:tenant_id`. Ver backlog FU-4.3.1.
+
 ## Logs (`wrangler tail`)
 
 ```bash
@@ -174,7 +234,7 @@ Stream JSON logs em real-time. Format:
 | Symptom | Cause | Fix |
 |---|---|---|
 | **`curl (35) SSL handshake failure` após deploy** | **Cert propagation delay — subdomain recém-criado leva 1-5min para cert wildcard propagar globalmente no Cloudflare edge** | **Aguardar 2-5min e retry. Verificar via `curl -sS -o /dev/null -w "%{http_code}" https://<your-url>` — se retornar 405, TLS propagou. Se persistir >10min, checar Cloudflare dashboard → Workers → seu worker → Settings → Triggers** |
-| 401 every request | GATEWAY_API_KEY mismatch | Re-run `secret:list` + `secret:gateway-key` |
+| 401 every request | Key não bate nenhum slot ativo (`GATEWAY_API_KEY` ou `_2..4`) | `npx wrangler secret list \| grep GATEWAY_API_KEY` para conferir slots publicados; se tenant revogado, reemitir via seção Multi-tenant acima |
 | 429 imediato após deploy | KV não resetou após day boundary OU smoke anterior consumiu quota | `npx wrangler kv key delete "count:$(date -u +%Y-%m-%d)" --binding=RATE_LIMIT_KV` |
 | 504 upstream timeout | RunPod cold start (~150s) | Per ADR-0001 Path A, expected; SDK retry handles |
 | 502 upstream_error | RunPod 5xx | Check RunPod dashboard `endpointId={your-id}` health |

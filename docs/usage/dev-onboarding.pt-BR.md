@@ -36,6 +36,8 @@ O acesso é invite-only durante o alpha. Para pedir uma `GATEWAY_API_KEY`:
 
 Para casos onde uma issue pública não é apropriada (avaliação enterprise com NDA, disclosure sensível), envie um GitHub DM para [@Jhonata-Matias](https://github.com/Jhonata-Matias). O mesmo processo de revisão se aplica.
 
+> **Uma key por consumer.** Cada requester aprovado recebe uma `GATEWAY_API_KEY` **distinta** — NÃO compartilhe sua key com outro time ou outro app. Se sua organização precisa de uma segunda key (staging vs. produção, times separados), abra uma segunda issue explicando o escopo. Keys distintas permitem que o owner revogue ou rotacione um tenant sem afetar os demais (ver [`docs/usage/gateway-deploy.md`](gateway-deploy.md#multi-tenant-api-keys-story-210--interim-allowlist) para o fluxo do operador).
+
 ## Passo 2 — Instale o SDK
 
 ### TypeScript / Node.js 18+
