@@ -21,7 +21,13 @@ export interface Env {
   R2_VIDEOS_BUCKET: R2Bucket;
 
   // Secrets (configured via `wrangler secret put`)
+  // Story 2.10 — multi-tenant allowlist. GATEWAY_API_KEY is the primary
+  // (tenant 1, required). Slots _2.._4 are optional additional tenants;
+  // helper `collectApiKeys(env)` in ./auth.ts filters unset slots.
   GATEWAY_API_KEY: string;
+  GATEWAY_API_KEY_2?: string;
+  GATEWAY_API_KEY_3?: string;
+  GATEWAY_API_KEY_4?: string;
   RUNPOD_API_KEY: string;
   RUNPOD_ENDPOINT_ID: string;
   RUNPOD_LTX_ENDPOINT_ID?: string;

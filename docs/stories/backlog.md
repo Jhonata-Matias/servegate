@@ -122,6 +122,29 @@
 - **Cost Impact:** +<incremental cost> recurring (covered within Phase 0 cost-model headroom: alpha projection $12-15/mo + $5 = $17-20/mo, still well under <alpha cost ceiling>)
 - **Created:** 2026-04-24 by `@po` (Pax)
 
+### FU-2.10.1 — Tenant portal management observability + trigger for Story 2.11
+
+- **Priority:** 🟢 Low (monitoring / decision-support item; not a code defect)
+- **Related Story:** 2.10 (Multi-tenant gateway auth — interim secret-list allowlist)
+- **Source:** @pm review 2026-07-02 on operator UX in Cloudflare dashboard for `GATEWAY_API_KEY_2..4` slots
+- **Context:** Story 2.10 delivered secret-list multi-tenancy (teto=4 slots) with rotation/revoke via `wrangler secret put/delete` OR Cloudflare portal Edit/Delete. Portal shows slot names + encrypted values but does NOT provide: tenant identity mapping (slot→tenant lives in owner's password manager, off-repo per public-mirror sanitization), per-slot usage metrics, last-modified timestamps, per-slot audit trail, or preview-vs-prod slot sync. Model works comfortably for 2-4 tenants; degrades for 5+ or first enterprise NDA request needing formal audit.
+- **Description:** Track operational signals that indicate Story 2.11 (KV-backed allowlist with tenant_id lookup) should be prioritized. Not a coding task — this is a **decision-gate observability item**:
+  - Maintain owner-private tenant registry (spreadsheet or 1Password vault) mapping `slot → tenant_id · issued_at · contact · revoked_at`
+  - Rotate tenant-1 `GATEWAY_API_KEY` quarterly as security hygiene (calendar reminder, ~10 min/rotation)
+  - Watch for the following triggers, each of which should open Story 2.11:
+    - **3rd active real tenant** onboarded (not PoC) — password manager mental model starts to strain
+    - **First enterprise NDA request** requiring formal audit trail per-key
+    - **First request for per-tenant usage report** ("quanto minha empresa consumiu este mês?")
+    - **First need for capability-scoped keys** (e.g., "só imagens, sem vídeo")
+    - **5th tenant approach** — no slot left; extending to `_5` would be a gambiarra
+- **Story 2.11 scope (parked for now):** KV namespace `API_KEYS_KV` with `sha256(key) → {tenant_id, capabilities[], quota_overrides, created_at, revoked_at}`; per-tenant image rate-limit (`count:date:tenant_id`) resolving AC10 non-goal from Story 2.10; audit log per key change.
+- **Suggested Owner:** `@pm` (monitor triggers) + `@architect` (author Story 2.11 spec when triggered)
+- **Estimated Effort:** ~0h ongoing (passive monitoring); ~2h if any trigger fires to open Story 2.11 (spec + PRD update)
+- **Tags:** multi-tenant, operator-ux, story-2.10-followup, story-2.11-trigger, epic-2, observability
+- **Trigger:** Any of the 5 conditions above
+- **Related Backlog:** FU-4.3.1 (Workers Paid upgrade — will land alongside Story 2.11 since per-tenant KV writes triple the cost)
+- **Created:** 2026-07-02 by `@pm` (Morgan) — post Story 2.10 QA gate CONCERNS handoff
+
 ---
 
 ## ✨ Enhancements
@@ -176,3 +199,4 @@
 | 2026-04-29 | @po (Pax) | Added ENH-2.9 (Refactor landing into Astro Starlight docs portal) following @ux-design-expert spec. Triggered by multi-image i2i merge (PR #15) needing docs update + user reference to RunPod docs portal pattern. Spec at `docs/design/landing-docs-portal-refactor.md`. |
 | 2026-04-30 | @po (Pax) | **Closed ENH-2.9** — delivered via Story 2.9 (PR #19 main impl + PR #20 archive/tooling, both merged). QA gate PASS 96. Production live at `deploy-lp-one.vercel.app/` with new Astro Starlight docs portal. Effort actual ~14h (vs estimated ~9-12h, +2-5h drift driven by Codex sandbox blocker recovery + 2 QA rounds + 1 pre-cutover bug fix). **Added ENH-2.10** consolidating 11 V2 polish follow-ups (font bundling, light theme, IconLinkCard atom, custom 404, ADR index, dedicated sub-pages, API split, i18n, versioned docs, Algolia, "Copy page") with individual trigger conditions per item. |
 | 2026-05-07 | @pm (Morgan) | **Closed FU-6.1** (SD 3.5L $1M ARR cliff assessment) — REJECT verdict via decision memo at `docs/decisions/2026-05-07-sd35l-arr-cliff-memo.md`. License Stack Audit confirmed Stability Community License is the composite (MMDiT + VAE = core weights). Cliff is architectural (auto-termination + discretionary re-licensing), not financial. "Directly or indirectly" clause amplifies cliff to entire servegate portfolio revenue. Same architectural pattern as ADR-0006 (Llama Community) and ADR-0003 (FLUX NC + Stability Community). Path 2 closed; FU-6.2 (Path 3 fal.ai proxy) becomes effective default candidate for next model-selection brainstorm. Effort actual ~1.5h (vs estimated 2-4h). Watch-list condition defined: re-opens if Stability changes terms. |
+| 2026-07-02 | @pm (Morgan) | **Added FU-2.10.1** (Tenant portal management observability + trigger for Story 2.11) after Story 2.10 QA gate handoff. Not a code defect — decision-gate observability item tracking 5 signals that should open Story 2.11 (KV-backed allowlist): 3rd active tenant, first enterprise NDA audit request, first per-tenant usage report ask, first capability-scoped key need, or 5th tenant approach. Cloudflare portal exposes slot names + encrypted values but no tenant mapping, no per-slot audit trail, no usage metrics — owner-private registry required for interim model. Related to FU-4.3.1 (Workers Paid upgrade will land alongside Story 2.11 due to 3× KV write cost). |

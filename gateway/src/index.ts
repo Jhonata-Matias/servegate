@@ -20,7 +20,7 @@
  *   - CON-6: POST / returns 404 (no fallback)
  */
 
-import { validateAuth } from './auth.js';
+import { collectApiKeys, validateAuth } from './auth.js';
 import { CAPABILITIES_RESPONSE } from './capabilities-constants.js';
 import { handleCorsPreflight, handleGenerate } from './generate.js';
 import { getClientIp, log } from './log.js';
@@ -147,7 +147,7 @@ async function routeSubmit(
   ip: string | null,
   start: number,
 ): Promise<Response> {
-  const authFailure = validateAuth(request, env.GATEWAY_API_KEY);
+  const authFailure = validateAuth(request, collectApiKeys(env));
   if (authFailure) {
     log({
       timestamp: Date.now(),
@@ -185,7 +185,7 @@ async function handleSubmit(
   start: number,
 ): Promise<Response> {
   // 1. Auth
-  const authFailure = validateAuth(request, env.GATEWAY_API_KEY);
+  const authFailure = validateAuth(request, collectApiKeys(env));
   if (authFailure) {
     log({
       timestamp: Date.now(),
@@ -298,7 +298,7 @@ async function handleStatus(
   jobId: string,
 ): Promise<Response> {
   // 1. Auth
-  const authFailure = validateAuth(request, env.GATEWAY_API_KEY);
+  const authFailure = validateAuth(request, collectApiKeys(env));
   if (authFailure) {
     log({
       timestamp: Date.now(),

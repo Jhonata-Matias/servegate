@@ -1,4 +1,4 @@
-import { validateAuth } from './auth.js';
+import { collectApiKeys, validateAuth } from './auth.js';
 import { log } from './log.js';
 import { checkVideoQuota } from './rate-limit.js';
 import { RunpodUpstreamError, submitJob } from './runpod.js';
@@ -39,7 +39,7 @@ export async function handleVideoSubmit(
   ip: string | null,
   start: number,
 ): Promise<Response> {
-  const authFailure = validateAuth(request, env.GATEWAY_API_KEY);
+  const authFailure = validateAuth(request, collectApiKeys(env));
   if (authFailure) {
     log({
       timestamp: Date.now(),

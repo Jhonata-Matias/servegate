@@ -1,7 +1,11 @@
 /**
- * Auth middleware — validates X-API-Key header against GATEWAY_API_KEY secret.
- * Uses constant-time comparison to mitigate timing attacks.
+ * Auth middleware — validates X-API-Key header against the configured
+ * GATEWAY_API_KEY allowlist (Story 2.10). Uses constant-time comparison
+ * to mitigate timing attacks and iterates the full list without early-exit
+ * so match-position is not leaked via timing.
  */
+
+import type { Env } from './types.js';
 
 /**
  * Constant-time string comparison.
@@ -26,10 +30,33 @@ export function constantTimeEqual(a: string, b: string): boolean {
 }
 
 /**
- * Validates the request's X-API-Key header against the configured secret.
- * Returns null on success, or a 401 Response on failure.
+ * Collects the set of currently-valid API keys from the Env, in order:
+ * GATEWAY_API_KEY (required, tenant 1), then GATEWAY_API_KEY_2..4
+ * (optional additional tenants — Story 2.10 interim allowlist, teto=4).
+ *
+ * Undefined/empty slots are filtered out. Callers can safely pass the
+ * result to validateAuth even when only the primary key is configured.
  */
-export function validateAuth(request: Request, expectedKey: string): Response | null {
+export function collectApiKeys(env: Env): string[] {
+  const slots = [
+    env.GATEWAY_API_KEY,
+    env.GATEWAY_API_KEY_2,
+    env.GATEWAY_API_KEY_3,
+    env.GATEWAY_API_KEY_4,
+  ];
+  return slots.filter((k): k is string => typeof k === 'string' && k.length > 0);
+}
+
+/**
+ * Validates the request's X-API-Key header against the configured allowlist.
+ * Returns null on success, or a 401 Response on failure.
+ *
+ * SECURITY: the loop iterates every candidate without early-exit so that
+ * total comparison time is O(sum of key lengths) regardless of which slot
+ * matches — the response time cannot be used to fingerprint which tenant
+ * a valid key belongs to.
+ */
+export function validateAuth(request: Request, keys: readonly string[]): Response | null {
   const provided = request.headers.get('X-API-Key');
   if (!provided) {
     return Response.json(
@@ -37,7 +64,19 @@ export function validateAuth(request: Request, expectedKey: string): Response | 
       { status: 401 },
     );
   }
-  if (!constantTimeEqual(provided, expectedKey)) {
+  if (keys.length === 0) {
+    // Defense-in-depth: should never happen if collectApiKeys is used and
+    // GATEWAY_API_KEY is set (Env schema marks it required). Fail closed.
+    return Response.json(
+      { error: 'server_misconfigured', reason: 'no_api_keys_configured' },
+      { status: 500 },
+    );
+  }
+  let matched = false;
+  for (const candidate of keys) {
+    matched = constantTimeEqual(provided, candidate) || matched;
+  }
+  if (!matched) {
     return Response.json(
       { error: 'invalid_api_key', reason: 'mismatch' },
       { status: 401 },
