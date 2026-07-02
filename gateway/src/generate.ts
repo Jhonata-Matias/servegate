@@ -1,4 +1,4 @@
-import { validateAuth } from './auth.js';
+import { collectApiKeys, validateAuth } from './auth.js';
 import { getClientIp, log } from './log.js';
 import {
   checkTokenBudget,
@@ -23,7 +23,7 @@ export async function handleGenerate(
   const start = Date.now();
   const ip = getClientIp(request);
 
-  const authFailure = validateAuth(authCompatibleRequest(request), env.GATEWAY_API_KEY);
+  const authFailure = validateAuth(authCompatibleRequest(request), collectApiKeys(env));
   if (authFailure) {
     return withGenerateHeaders(authFailure, defaultTokenState(), DEFAULT_TEXT_MODEL, env);
   }
