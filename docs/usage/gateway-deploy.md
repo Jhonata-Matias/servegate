@@ -161,6 +161,8 @@ O gateway aceita até **4 keys simultaneamente** via slots enumerados: `GATEWAY_
 
 > **Teto de 4:** decisão pragmática de alpha (Story 2.10 Dev Notes). Ao atingir ≥3 tenants ativos, escalar para Story 2.11 (KV allowlist com tenant_id lookup) — não estender adicionando slots `_5`, `_6`, etc.
 
+> **⚠️ Deploy obrigatório na primeira publicação em um Worker desatualizado.** Se o Worker em produção ainda está numa versão de código **anterior** ao merge da Story 2.10, publicar `GATEWAY_API_KEY_2..4` via `wrangler secret put` **não** faz o slot funcionar — o código antigo só lê `env.GATEWAY_API_KEY`. Sintoma: novo slot retorna `401 mismatch`. Fix: `npm run deploy` (ou `npx wrangler deploy`) uma vez para subir o código da Story 2.10, depois o slot ativa imediatamente. **Descoberto em 2026-07-02** ao publicar o primeiro slot secundário. Rotações e revokes subsequentes NÃO precisam de deploy — secrets aplicam em segundos. Regra: `deploy` só quando o **código** muda; `secret put/delete` sozinhos apenas trocam valores.
+
 ### Adicionar tenant novo
 
 ```bash
@@ -175,7 +177,10 @@ npx wrangler secret list | grep GATEWAY_API_KEY
 npx wrangler secret put GATEWAY_API_KEY_2
 #    (prompt interativo — colar o NEW_KEY)
 
-# 4. Redeploy para hot reload (secrets aplicam imediato, mas re-deploy é defensivo)
+# 4. Deploy do Worker.
+#    - Se código da Story 2.10 já está em prod: passo puramente defensivo (secrets aplicam imediato).
+#    - Se é a PRIMEIRA vez publicando um slot _2..4 num Worker que ainda roda código antigo: OBRIGATÓRIO
+#      (código antigo só lê env.GATEWAY_API_KEY; sem deploy, novo slot retorna 401 mismatch).
 npm run deploy
 
 # 5. Smoke test:
