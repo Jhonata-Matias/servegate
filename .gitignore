@@ -75,3 +75,13 @@ AGENTS.md
 
 # Story 6.1 HiDream PoC — measurement JSON, PNG archive, regression evidence (large / sensitive)
 .aiox/notes/story-6.1/
+
+# Codex CLI delegation runs (local execution logs, not for repo)
+.aiox/codex-runs/
+
+# Cloudflare Wrangler local state (cache + generated worker types)
+.wrangler/
+worker-configuration.d.ts
+
+# Spike runtime measurement artifacts (PoC runs, large/local-only)
+spike/runs/
