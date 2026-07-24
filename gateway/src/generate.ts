@@ -15,6 +15,100 @@ const MAX_BODY_BYTES = 2 * 1024 * 1024;
 
 type WaitUntilContext = Pick<ExecutionContext, 'waitUntil'>;
 
+// ===========================================================================
+// Story 1.1 FR-3 — Envelope normalization helpers
+// ===========================================================================
+
+/** Generates a chatcmpl-{uuid} ID, constant for all frames of one response. */
+function generateChatCompletionId(): string {
+  return `chatcmpl-${crypto.randomUUID()}`;
+}
+
+/** Returns current epoch in seconds (not ms). */
+function getEpochSeconds(): number {
+  return Math.floor(Date.now() / 1000);
+}
+
+/**
+ * Transforms an upstream SSE stream, injecting `id` and `created` into every
+ * `data:` frame. Non-data lines (comments, empty lines) pass through unchanged.
+ * `data: [DONE]` is passed through as-is.
+ */
+function envelopeStream(
+  upstreamBody: ReadableStream<Uint8Array>,
+  id: string,
+  created: number,
+  model: string,
+): ReadableStream<Uint8Array> {
+  const encoder = new TextEncoder();
+  const decoder = new TextDecoder();
+
+  return new ReadableStream({
+    async start(controller) {
+      const reader = upstreamBody.getReader();
+      let buffer = '';
+
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          // Keep the last (potentially incomplete) line in the buffer
+          buffer = lines.pop() ?? '';
+
+          for (const line of lines) {
+            const trimmed = line.trimEnd();
+
+            // Pass through empty lines and comments
+            if (trimmed === '' || trimmed.startsWith(':')) {
+              controller.enqueue(encoder.encode(line + '\n'));
+              continue;
+            }
+
+            // Pass through [DONE] unchanged
+            if (trimmed === 'data: [DONE]') {
+              controller.enqueue(encoder.encode(line + '\n'));
+              continue;
+            }
+
+            // Parse data: {...} and inject id/created
+            if (trimmed.startsWith('data: ')) {
+              const jsonStr = trimmed.slice(6);
+              try {
+                const chunk = JSON.parse(jsonStr);
+                chunk.id = id;
+                chunk.created = created;
+                if (!chunk.model) chunk.model = model;
+                controller.enqueue(encoder.encode(`data: ${JSON.stringify(chunk)}\n`));
+              } catch {
+                // Malformed JSON — pass through as-is
+                controller.enqueue(encoder.encode(line + '\n'));
+              }
+            } else {
+              // Non-data line — pass through
+              controller.enqueue(encoder.encode(line + '\n'));
+            }
+          }
+        }
+
+        // Flush remaining buffer
+        if (buffer.length > 0) {
+          controller.enqueue(encoder.encode(buffer));
+        }
+
+        // Success path — close the stream cleanly
+        controller.close();
+      } catch (err) {
+        controller.error(err);
+      } finally {
+        reader.releaseLock();
+      }
+    },
+  });
+}
+
 export async function handleGenerate(
   request: Request,
   env: Env,
@@ -22,6 +116,10 @@ export async function handleGenerate(
 ): Promise<Response> {
   const start = Date.now();
   const ip = getClientIp(request);
+
+  // Story 1.1 FR-3: generate id and created once per request
+  const completionId = generateChatCompletionId();
+  const created = getEpochSeconds();
 
   const authFailure = validateAuth(authCompatibleRequest(request), collectApiKeys(env));
   if (authFailure) {
@@ -59,6 +157,7 @@ export async function handleGenerate(
   }
 
   const body = validation.value;
+  const model = body.model ?? DEFAULT_TEXT_MODEL;
   const approxTokens = estimateMaxPossibleTokens(rawBody, body.max_tokens ?? DEFAULT_MAX_TOKENS);
   const { state: tokenState, allowed } = await checkTokenBudget(env.RATE_LIMIT_KV, approxTokens);
   if (!allowed) {
@@ -70,7 +169,7 @@ export async function handleGenerate(
       elapsed_ms: Date.now() - start,
       error_code: 'rate_limit_exceeded',
     });
-    return generateError(429, 'rate_limit_exceeded', tokenState, body.model ?? DEFAULT_TEXT_MODEL, env);
+    return generateError(429, 'rate_limit_exceeded', tokenState, model, env);
   }
 
   log({
@@ -85,21 +184,25 @@ export async function handleGenerate(
   try {
     upstream = await forwardToTextEndpoint(body, env, request.signal);
   } catch (err) {
-    return handleGenerateUpstreamError(err, ip, start, tokenState, body.model ?? DEFAULT_TEXT_MODEL, env);
+    return handleGenerateUpstreamError(err, ip, start, tokenState, model, env);
   }
 
   if (body.stream !== false) {
     if (!upstream.body) {
-      return generateError(502, 'upstream_error', tokenState, body.model ?? DEFAULT_TEXT_MODEL, env);
+      return generateError(502, 'upstream_error', tokenState, model, env);
     }
     recordAsync(ctx, env, approxTokens);
-    return new Response(upstream.body, {
+
+    // Story 1.1 FR-3: wrap upstream stream with envelope normalization
+    const enveloped = envelopeStream(upstream.body, completionId, created, model);
+
+    return new Response(enveloped, {
       status: upstream.status,
       headers: {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',
         Connection: 'keep-alive',
-        ...tokenHeaders(tokenState, body.model ?? DEFAULT_TEXT_MODEL),
+        ...tokenHeaders(tokenState, model),
         ...corsHeaders(env),
       },
     });
@@ -109,8 +212,12 @@ export async function handleGenerate(
   try {
     payload = (await upstream.json()) as GenerateResponse;
   } catch {
-    return generateError(502, 'upstream_error', tokenState, body.model ?? DEFAULT_TEXT_MODEL, env);
+    return generateError(502, 'upstream_error', tokenState, model, env);
   }
+
+  // Story 1.1 FR-3: inject id and created into non-streaming response
+  payload.id = completionId;
+  payload.created = created;
 
   const actualTokens = payload.usage?.total_tokens ?? approxTokens;
   recordAsync(ctx, env, actualTokens);
@@ -124,7 +231,7 @@ export async function handleGenerate(
   });
 
   return json(200, payload, {
-    ...tokenHeaders(tokenState, body.model ?? DEFAULT_TEXT_MODEL),
+    ...tokenHeaders(tokenState, model),
     ...corsHeaders(env),
   });
 }

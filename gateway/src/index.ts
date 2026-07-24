@@ -4,13 +4,20 @@
  * Original: Story 2.5 (sync proxy). Refactored 2026-04-23 for
  * INC-2026-04-23-gateway-504 per ADR-0002 (async gateway pattern).
  *
- * Public contract (single):
- *   POST /jobs         → auth → rate-limit → RunPod /run → 202 + {job_id, status_url, est_wait_seconds:"unknown"}
- *                        + headers: Location: /jobs/{job_id}, Retry-After: 5
- *   GET  /jobs/{id}    → auth → KV read → RunPod /status → 200 (done) | 202 (running) | 404 (gone) | 504 (timeout) | 500 (failed/cancelled)
- *                        GET does NOT consume rate-limit quota (EC-5)
- *   POST /             → 404 + {error:"endpoint_removed", migration_doc:"/docs/api/migration-async.md"} (CON-6, EC-8)
- *   Other              → 405 method_not_allowed
+ * Story 1.1 (OpenAI compat contract): Added /v1/chat/completions alias,
+ * /v1/models endpoint, and envelope normalization (FR-1 through FR-4).
+ *
+ * Public contract:
+ *   POST /v1/chat/completions → alias → handleGenerate (Story 1.1 FR-1)
+ *   GET  /v1/models          → model catalog (Story 1.1 FR-2)
+ *   GET  /v1/models/{id}     → single model lookup (Story 1.1 FR-2)
+ *   POST /v1/generate        → text generation SSE/non-streaming
+ *   POST /jobs               → auth → rate-limit → RunPod /run → 202
+ *   GET  /jobs/{id}          → auth → KV read → RunPod /status → 200|202|404|504|500
+ *   GET  /capabilities       → public capability discovery
+ *   GET  /videos/{id}        → token-authenticated R2 video proxy
+ *   POST /                   → 404 (legacy removed)
+ *   Other                    → 405 method_not_allowed
  *
  * Architectural decisions honored:
  *   - AD-1: /status response carries image_b64 INLINE in output — no /view fetch
@@ -24,6 +31,7 @@ import { collectApiKeys, validateAuth } from './auth.js';
 import { CAPABILITIES_RESPONSE } from './capabilities-constants.js';
 import { handleCorsPreflight, handleGenerate } from './generate.js';
 import { getClientIp, log } from './log.js';
+import { handleModels } from './openai-models.js';
 import {
   buildRateLimitResponse,
   checkAndIncrement,
@@ -59,6 +67,33 @@ export default {
     // Global CORS preflight for image + text clients
     if (method === 'OPTIONS') {
       return handleCorsPreflight(env);
+    }
+
+    // -------- /v1/* OpenAI-compatible routes (Story 1.1) -----------------
+
+    // POST /v1/chat/completions — alias to /v1/generate (FR-1)
+    if (pathname === '/v1/chat/completions') {
+      if (method !== 'POST') {
+        return json(405, {
+          error: {
+            message: 'Method not allowed. Use POST.',
+            type: 'invalid_request_error',
+            code: 'method_not_allowed',
+          },
+        });
+      }
+      return handleGenerate(request, env, ctx);
+    }
+
+    // GET /v1/models — model catalog (FR-2)
+    if (method === 'GET' && pathname === '/v1/models') {
+      return handleModels(request, env);
+    }
+
+    // GET /v1/models/{id} — single model lookup (FR-2)
+    const modelsMatch = method === 'GET' && /^\/v1\/models\/([^/]+)$/.exec(pathname);
+    if (modelsMatch) {
+      return handleModels(request, env, modelsMatch[1]);
     }
 
     // POST /v1/generate — text generation SSE/non-streaming endpoint
