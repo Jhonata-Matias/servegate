@@ -102,19 +102,63 @@ describe('SSE pass-through', () => {
     expect(init.signal).toBe(req.signal);
   });
 
-  it('tolerates partial frames because gateway does not parse or reframe', async () => {
+  it('tolerates partial frames and enriches them with id/created (Story 1.1 FR-3)', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => streamResponse(['data: {"a"', ':1}\n\n'])));
 
     const res = await worker.fetch(generateRequest(), makeEnv(), makeCtx());
+    const text = await res.text();
 
-    await expect(res.text()).resolves.toBe('data: {"a":1}\n\n');
+    // Story 1.1 FR-3: envelope normalization injects id, created, model into every frame.
+    // The partial frame "data: {"a":1}" is parsed and enriched.
+    expect(text).toContain('"a":1');
+    expect(text).toContain('"id":"chatcmpl-');
+    expect(text).toContain('"created":');
+    expect(text).toContain('"model":"gemma4:e4b"');
   });
 
-  it('closes gracefully when upstream omits [DONE] sentinel', async () => {
+  it('closes gracefully when upstream omits [DONE] sentinel (with envelope enrichment)', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => streamResponse(['data: {"done":false}\n\n'])));
 
     const res = await worker.fetch(generateRequest(), makeEnv(), makeCtx());
 
-    await expect(res.text()).resolves.toContain('data: {"done":false}');
+    // Story 1.1 FR-3: frame is enriched with id, created, model
+    const text = await res.text();
+    expect(text).toContain('"done":false');
+    expect(text).toContain('"id":"chatcmpl-');
+    expect(text).toContain('"created":');
+  });
+
+  it('emits usage frame before [DONE] when stream_options.include_usage=true', async () => {
+    // Upstream sends two data frames then a DONE sentinel
+    const frames = [
+      'data: {"choices":[{"delta":{"content":"hello"}}]}\n\n',
+      'data: {"choices":[{"delta":{"content":"world"}}]}\n\n',
+      'data: [DONE]\n',
+    ];
+    vi.stubGlobal('fetch', vi.fn(async () => streamResponse(frames)));
+
+    const req = new Request('https://worker.test/v1/generate', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-API-Key': 'test-gateway-key',
+      },
+      body: JSON.stringify({ messages: [{ role: 'user', content: 'hi' }], stream: true, stream_options: { include_usage: true } }),
+    });
+
+    const res = await worker.fetch(req, makeEnv(), makeCtx());
+    const text = await res.text();
+
+    // Expect at least 3 data: occurrences (2 chunks + usage frame) before the final [DONE]
+    const parts = text.split(/\n/).filter(Boolean);
+    const dataLines = parts.map((l, i) => ({ l, i })).filter(x => x.l.startsWith('data:'));
+    expect(dataLines.length).toBeGreaterThanOrEqual(3);
+
+    const usageLine = dataLines.find(x => x.l.includes('"usage"'));
+    expect(usageLine).toBeDefined();
+
+    const doneLine = dataLines.find(x => x.l === 'data: [DONE]' || x.l.includes('[DONE]'));
+    expect(doneLine).toBeDefined();
+    expect(usageLine!.i).toBeLessThan(doneLine!.i);
   });
 });
