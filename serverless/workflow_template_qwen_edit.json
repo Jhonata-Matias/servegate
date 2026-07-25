@@ -56,7 +56,7 @@
     "class_type": "TextEncodeQwenImageEdit",
     "inputs": {
       "clip": ["14", 1],
-      "prompt": "",
+      "prompt": "${negative_prompt}",
       "vae": ["12", 0],
       "image": ["13", 0]
     }
@@ -66,7 +66,7 @@
     "inputs": {
       "seed": "${seed}",
       "steps": "${steps}",
-      "cfg": 1.0,
+      "cfg": "${cfg}",
       "sampler_name": "euler",
       "scheduler": "simple",
       "denoise": "${strength}",

@@ -18,6 +18,9 @@ export interface NormalizedEditRequest {
   seed?: number;
   steps?: number;
   aspect_ratio?: string;
+  cfg?: number;
+  negative_prompt?: string;
+  use_lightning_lora?: boolean;
 }
 
 interface ImageMeta {
@@ -179,6 +182,19 @@ export async function validateAndNormalizeEditInput(input: unknown): Promise<Nor
     throw new ValidationError({ field: 'steps', reason: `must be between ${MIN_EDIT_STEPS} and ${MAX_EDIT_STEPS}` });
   }
 
+  validateOptionalNumber(obj.cfg, 'cfg');
+  if (obj.cfg !== undefined && (obj.cfg < 0.5 || obj.cfg > 10.0)) {
+    throw new ValidationError({ field: 'cfg', reason: 'must be between 0.5 and 10.0' });
+  }
+
+  if (obj.negative_prompt !== undefined && typeof obj.negative_prompt !== 'string') {
+    throw new ValidationError({ field: 'negative_prompt', reason: 'must be a string when provided' });
+  }
+
+  if (obj.use_lightning_lora !== undefined && typeof obj.use_lightning_lora !== 'boolean') {
+    throw new ValidationError({ field: 'use_lightning_lora', reason: 'must be a boolean when provided' });
+  }
+
   const inputImageB64 = await normalizeEditImage(obj.image, 'image', obj.autoDownsample);
   const inputImageB642 = obj.image2 === undefined
     ? undefined
@@ -193,6 +209,9 @@ export async function validateAndNormalizeEditInput(input: unknown): Promise<Nor
   if (obj.seed !== undefined) request.seed = obj.seed;
   if (obj.steps !== undefined) request.steps = obj.steps;
   if (obj.aspect_ratio !== undefined) request.aspect_ratio = obj.aspect_ratio;
+  if (obj.cfg !== undefined) request.cfg = obj.cfg;
+  if (obj.negative_prompt !== undefined) request.negative_prompt = obj.negative_prompt;
+  if (obj.use_lightning_lora !== undefined) request.use_lightning_lora = obj.use_lightning_lora;
   return request;
 }
 

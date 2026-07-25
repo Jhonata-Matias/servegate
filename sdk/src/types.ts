@@ -22,6 +22,12 @@ export interface EditInput {
   steps?: number;
   aspect_ratio?: string;
   autoDownsample?: boolean;
+  /** Classifier-Free Guidance scale. 1.0 = no prompt influence, 3.5 = recommended, 5.0 = aggressive. */
+  cfg?: number;
+  /** Text to guide the model away from. Empty string = no negative guidance. */
+  negative_prompt?: string;
+  /** If true (default), applies the Lightning 8-step LoRA for faster inference. */
+  use_lightning_lora?: boolean;
 }
 
 export interface GenerateMetadata {
