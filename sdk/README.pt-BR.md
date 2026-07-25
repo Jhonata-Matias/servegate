@@ -1,3 +1,54 @@
+# `@jhonata-matias/flux-client` — Guia em Português
+
+Este é um resumo em português do SDK TypeScript para o gateway FLUX do projeto `servegate`.
+
+## Visão geral
+
+O SDK expõe `FluxClient` com métodos principais: `generate()`, `edit()` e `warmup()`. A interface de rede usa o contrato assíncrono de submit/poll (`POST /jobs` + `GET /jobs/{id}`).
+
+## `edit()` — Quickstart
+
+```typescript
+import { FluxClient, ValidationError } from '@jhonata-matias/flux-client';
+import { readFileSync, writeFileSync } from 'node:fs';
+
+const client = new FluxClient({ apiKey: process.env.GATEWAY_API_KEY!, gatewayUrl: process.env.GATEWAY_URL! });
+
+await client.warmup();
+
+try {
+  const result = await client.edit({
+    prompt: 'torne a jaqueta verde, mantendo o fundo inalterado',
+    image: readFileSync('input.png'),
+    strength: 0.85,
+    steps: 8,
+    seed: 42,
+  });
+  writeFileSync('edited.png', Buffer.from(result.output.image_b64.split(',').pop()!, 'base64'));
+} catch (e) {
+  if (e instanceof ValidationError) console.error(e.field, e.reason);
+  else throw e;
+}
+```
+
+## Regras de validação (importante)
+
+- `input_image_b64`/`image` deve ser PNG, JPEG ou WebP.
+- Imagens com razão 1:1 exata são rejeitadas pelo cliente (`ValidationError`).
+- Payload decodificado não pode exceder 8 MiB.
+- Imagens maiores que 1 MP serão reduzidas automaticamente se `autoDownsample: true` estiver ativado (Node.js com `sharp` instalado melhora qualidade). O handler reexpande o PNG final para as dimensões solicitadas após inferência.
+- `strength` deve estar em `(0.0, 1.0]`; `steps` deve estar entre `4` e `50`.
+
+## Boas práticas
+
+- Use `warmup()` em background para reduzir latência de primeira chamada.
+- Valide entradas no cliente para evitar taxas desnecessárias e melhorar UX.
+- Não exponha segredos (ex.: `RUNPOD_API_KEY`) no SDK.
+
+## Referências
+
+- `docs/api/post-jobs-i2i.md` — referência do payload i2i e contrato submit/poll
+- `docs/legal/QWEN_IMAGE_EDIT_NOTICE.md` — template NOTICE para deploy com artefatos Apache-2.0
 # `@jhonata-matias/flux-client`
 
 [![alpha](https://img.shields.io/badge/status-alpha-orange)](../docs/legal/TERMS.pt-BR.md) [![license MIT](https://img.shields.io/badge/license-MIT-blue)](./LICENSE)
