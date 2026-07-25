@@ -45,6 +45,9 @@ COMFY_POLL_INTERVAL_S = float(os.environ.get("COMFY_POLL_INTERVAL_S", "0.25"))
 DEFAULT_STEPS = 4
 DEFAULT_I2I_STEPS = 8
 DEFAULT_STRENGTH = 0.85
+DEFAULT_I2I_CFG = 3.5
+DEFAULT_I2I_NEGATIVE_PROMPT = ""
+DEFAULT_USE_LIGHTNING_LORA = True
 DEFAULT_WIDTH = 1024
 DEFAULT_HEIGHT = 1024
 MAX_STEPS = 50
@@ -154,6 +157,9 @@ def build_qwen_edit_workflow(
     strength: float,
     seed: int,
     steps: int,
+    cfg: float = DEFAULT_I2I_CFG,
+    negative_prompt: str = DEFAULT_I2I_NEGATIVE_PROMPT,
+    use_lightning_lora: bool = DEFAULT_USE_LIGHTNING_LORA,
     input_image_filename_2: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Qwen-Image-Edit workflow per ADR-0003.
@@ -169,8 +175,15 @@ def build_qwen_edit_workflow(
     Input images are loaded from ComfyUI's input directory by basename; the
     handler() caller MUST write decoded bytes to COMFY_INPUT_DIR before
     submitting and clean up afterward (see write_input_image / cleanup helpers).
+
+    cfg: Classifier-Free Guidance scale. 1.0 = no prompt influence, 3.5 = recommended,
+         5.0 = aggressive. Clamped to [0.5, 10.0] by normalize_input.
+    negative_prompt: Text to guide away from. Empty string = no negative guidance.
+    use_lightning_lora: If True (default), applies the Lightning 8-step LoRA for
+         faster inference. If False, skips the LoRA and uses the base UNet directly
+         (slower but better prompt-following; steps default should be 20-30).
     """
-    workflow = {
+    workflow: Dict[str, Any] = {
         "10": {
             "class_type": "UNETLoader",
             "inputs": {"unet_name": QWEN_UNET_NAME, "weight_dtype": "fp8_e4m3fn"},
@@ -187,16 +200,6 @@ def build_qwen_edit_workflow(
             "class_type": "LoadImage",
             "inputs": {"image": input_image_filename},
         },
-        "14": {
-            "class_type": "LoraLoader",
-            "inputs": {
-                "model": ["10", 0],
-                "clip": ["11", 0],
-                "lora_name": QWEN_LIGHTNING_LORA_NAME,
-                "strength_model": 1.0,
-                "strength_clip": 1.0,
-            },
-        },
         "15": {
             "class_type": "VAEEncode",
             "inputs": {"pixels": ["13", 0], "vae": ["12", 0]},
@@ -204,7 +207,7 @@ def build_qwen_edit_workflow(
         "16": {
             "class_type": "TextEncodeQwenImageEdit",
             "inputs": {
-                "clip": ["14", 1],
+                "clip": ["14", 1] if use_lightning_lora else ["11", 0],
                 "prompt": prompt,
                 "vae": ["12", 0],
                 "image": ["13", 0],
@@ -213,8 +216,8 @@ def build_qwen_edit_workflow(
         "17": {
             "class_type": "TextEncodeQwenImageEdit",
             "inputs": {
-                "clip": ["14", 1],
-                "prompt": "",
+                "clip": ["14", 1] if use_lightning_lora else ["11", 0],
+                "prompt": negative_prompt,
                 "vae": ["12", 0],
                 "image": ["13", 0],
             },
@@ -224,11 +227,11 @@ def build_qwen_edit_workflow(
             "inputs": {
                 "seed": seed,
                 "steps": steps,
-                "cfg": 1.0,
+                "cfg": cfg,
                 "sampler_name": "euler",
                 "scheduler": "simple",
                 "denoise": strength,
-                "model": ["14", 0],
+                "model": ["14", 0] if use_lightning_lora else ["10", 0],
                 "positive": ["16", 0],
                 "negative": ["17", 0],
                 "latent_image": ["15", 0],
@@ -241,6 +244,18 @@ def build_qwen_edit_workflow(
         "20": {"class_type": "SaveImage", "inputs": {"images": ["19", 0], "filename_prefix": "qwen-edit"}},
     }
 
+    if use_lightning_lora:
+        workflow["14"] = {
+            "class_type": "LoraLoader",
+            "inputs": {
+                "model": ["10", 0],
+                "clip": ["11", 0],
+                "lora_name": QWEN_LIGHTNING_LORA_NAME,
+                "strength_model": 1.0,
+                "strength_clip": 1.0,
+            },
+        }
+
     if input_image_filename_2 is None:
         return workflow
 
@@ -251,7 +266,7 @@ def build_qwen_edit_workflow(
     workflow["16"] = {
         "class_type": "TextEncodeQwenImageEditPlus",
         "inputs": {
-            "clip": ["14", 1],
+            "clip": ["14", 1] if use_lightning_lora else ["11", 0],
             "prompt": prompt,
             "vae": ["12", 0],
             "image1": ["13", 0],
@@ -502,8 +517,29 @@ def _normalize_i2i_input(raw: Dict[str, Any], prompt: str, seed: int) -> Dict[st
     if strength <= 0.0 or strength > 1.0:
         raise InputValidationError("invalid_strength", "input.strength must be > 0.0 and <= 1.0")
 
+    cfg = _coerce_optional_float(raw, "cfg", DEFAULT_I2I_CFG)
+    if cfg < 0.5 or cfg > 10.0:
+        raise InputValidationError("invalid_cfg", "input.cfg must be between 0.5 and 10.0")
+
+    negative_prompt = raw.get("negative_prompt", DEFAULT_I2I_NEGATIVE_PROMPT)
+    if not isinstance(negative_prompt, str):
+        raise InputValidationError("invalid_negative_prompt", "negative_prompt must be a string")
+
+    use_lightning_lora = raw.get("use_lightning_lora", DEFAULT_USE_LIGHTNING_LORA)
+    if not isinstance(use_lightning_lora, bool):
+        raise InputValidationError("invalid_use_lightning_lora", "use_lightning_lora must be a boolean")
+
     image = _normalize_i2i_image(raw.get("input_image_b64"))
-    normalized = {"prompt": prompt, "steps": steps, "seed": seed, "strength": strength, **image}
+    normalized = {
+        "prompt": prompt,
+        "steps": steps,
+        "seed": seed,
+        "strength": strength,
+        "cfg": cfg,
+        "negative_prompt": negative_prompt,
+        "use_lightning_lora": use_lightning_lora,
+        **image,
+    }
     if "input_image_b64_2" in raw:
         normalized.update(_normalize_second_i2i_image(raw.get("input_image_b64_2")))
     return normalized
@@ -526,6 +562,9 @@ def i2i_params(
         "strength": params["strength"],
         "seed": params["seed"],
         "steps": params["steps"],
+        "cfg": params["cfg"],
+        "negative_prompt": params["negative_prompt"],
+        "use_lightning_lora": params["use_lightning_lora"],
     }
     if input_image_filename_2 is not None:
         workflow_params["input_image_filename_2"] = input_image_filename_2
@@ -539,6 +578,8 @@ def safe_log_fields(params: Dict[str, Any]) -> Dict[str, Any]:
             "seed": params["seed"],
             "steps": params["steps"],
             "strength": params["strength"],
+            "cfg": params["cfg"],
+            "use_lightning_lora": params["use_lightning_lora"],
             "input_width": params["input_width"],
             "input_height": params["input_height"],
             "input_mime_type": params["input_mime_type"],

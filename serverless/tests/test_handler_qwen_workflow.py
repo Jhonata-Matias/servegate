@@ -56,6 +56,8 @@ def test_qwen_edit_workflow_matches_reference_template():
             "${strength}": 0.85,
             "${seed}": 42,
             "${steps}": 8,
+            "${cfg}": 3.5,
+            "${negative_prompt}": "",
         },
     )
     actual = build_qwen_edit_workflow(
