@@ -21,7 +21,7 @@
     "secret:list": "wrangler secret list"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=20"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20240909.0",

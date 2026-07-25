@@ -1,6 +1,6 @@
 import { collectApiKeys, validateAuth } from './auth.js';
 import { getClientIp, log } from './log.js';
-import { openaiErrorResponse, openaiStreamErrorFrame, type OpenAIErrorBody } from './openai-error.js';
+import { openaiErrorResponse, type OpenAIErrorBody } from './openai-error.js';
 import {
   checkTokenBudget,
   recordTokenUsage,
