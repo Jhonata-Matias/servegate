@@ -284,8 +284,8 @@ curl -s "$BASE/v1/generate" \
 - [x] Suíte de regressão (§8.1 do PRD) passando integralmente
 - [x] Nenhuma quebra em `/v1/generate`, `/jobs`, `/capabilities`
 - [x] `id` constante verificado em todos os frames do mesmo stream
-- [ ] Branch criada: `feature/1-1-openai-compat-contract`
-- [ ] PR aberto via @github-devops
+- [x] Branch criada: `feature/1-1-openai-compat-contract`
+- [x] PR aberto via @github-devops (#34)
 
 ---
 
@@ -305,3 +305,4 @@ curl -s "$BASE/v1/generate" \
 | 2026-07-24 | @qa (Quinn) | QA Gate | CONCERNS: bug em envelopeStream finally + gap de cobertura. Status: InReview → InProgress |
 | 2026-07-24 | @dev (Dex) | Fixes aplicados | Fix 1: controller.close() movido para dentro do try. Fix 2: 24 novos testes em openai-compat.test.ts. 152/152 passando. Status: InProgress → InReview |
 | 2026-07-24 | @qa (Quinn) | QA Gate (re-review) | PASS. Ambos os issues resolvidos. 152/152 testes. Status: InReview → Done |
+| 2026-07-24 | @devops (Gage) | Push + PR | Branch feature/1-1-openai-compat-contract pushed. PR #34 aberto. |

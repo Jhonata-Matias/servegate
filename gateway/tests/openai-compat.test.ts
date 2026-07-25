@@ -116,7 +116,8 @@ describe('POST /v1/chat/completions (FR-1)', () => {
 
     const res = await worker.fetch(req, makeEnv(), makeCtx());
 
-    expect(res.status).toBe(405);
+    // OpenAI-style error envelope now maps this to a 400 invalid_request
+    expect(res.status).toBe(400);
     const body = (await res.json()) as Record<string, unknown>;
     expect(body.error).toBeDefined();
   });
@@ -129,7 +130,8 @@ describe('POST /v1/chat/completions (FR-1)', () => {
 
     const res = await worker.fetch(req, makeEnv(), makeCtx());
 
-    expect(res.status).toBe(405);
+    // OpenAI-style error envelope now maps this to a 400 invalid_request
+    expect(res.status).toBe(400);
   });
 
   it('returns 405 for DELETE on /v1/chat/completions', async () => {
@@ -140,7 +142,8 @@ describe('POST /v1/chat/completions (FR-1)', () => {
 
     const res = await worker.fetch(req, makeEnv(), makeCtx());
 
-    expect(res.status).toBe(405);
+    // OpenAI-style error envelope now maps this to a 400 invalid_request
+    expect(res.status).toBe(400);
   });
 
   it('accepts Authorization: Bearer as auth on /v1/chat/completions', async () => {

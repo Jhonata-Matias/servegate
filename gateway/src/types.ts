@@ -64,9 +64,13 @@ export interface GenerateRequest {
   model?: string;
   messages: GenerateMessage[];
   max_tokens?: number;
+  max_completion_tokens?: number;
   temperature?: number;
   top_p?: number;
+  stop?: string | string[];
   stream?: boolean;
+  stream_options?: { include_usage?: boolean };
+  n?: number;
 }
 
 export interface GenerateResponse {

@@ -128,7 +128,11 @@ describe('POST /v1/generate contract', () => {
     const res = await worker.fetch(request({ stream: false }), makeEnv(), makeCtx());
 
     expect(res.status).toBe(400);
-    expect(await res.json()).toMatchObject({ error: 'missing_messages' });
+    // Story 1.2 FR-6: OpenAI error envelope
+    const body = (await res.json()) as Record<string, unknown>;
+    const err = body.error as Record<string, unknown>;
+    expect(err.code).toBe('missing_messages');
+    expect(err.type).toBe('invalid_request_error');
   });
 
   it('rejects invalid JSON with 400', async () => {
@@ -141,7 +145,11 @@ describe('POST /v1/generate contract', () => {
     const res = await worker.fetch(req, makeEnv(), makeCtx());
 
     expect(res.status).toBe(400);
-    expect(await res.json()).toMatchObject({ error: 'invalid_json' });
+    // Story 1.2 FR-6: OpenAI error envelope
+    const body = (await res.json()) as Record<string, unknown>;
+    const err = body.error as Record<string, unknown>;
+    expect(err.code).toBe('invalid_json');
+    expect(err.type).toBe('invalid_request_error');
   });
 
   it('rejects body over 2MB with 413', async () => {
@@ -174,7 +182,10 @@ describe('POST /v1/generate contract', () => {
     );
 
     expect(res.status).toBe(502);
-    expect(await res.json()).toMatchObject({ error: 'upstream_error' });
+    // OpenAI-style error envelope
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body.error).toBeDefined();
+    expect(((body.error as unknown) as Record<string, unknown>).code).toBe('upstream_error');
   });
 
   it('returns CORS preflight headers', async () => {

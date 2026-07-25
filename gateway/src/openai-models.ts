@@ -9,6 +9,7 @@
  */
 
 import { collectApiKeys, dualAuthResponse, validateAuthDual } from './auth.js';
+import { openaiErrorResponse } from './openai-error.js';
 import type { Env } from './types.js';
 
 // ---------------------------------------------------------------------------
@@ -69,19 +70,7 @@ export async function handleModels(
   if (modelId !== undefined) {
     const model = MODEL_CATALOG.find((m) => m.id === modelId);
     if (!model) {
-      return new Response(
-        JSON.stringify({
-          error: {
-            message: `Model '${modelId}' not found.`,
-            type: 'invalid_request_error',
-            code: 'model_not_found',
-          },
-        }),
-        {
-          status: 404,
-          headers: { 'Content-Type': 'application/json' },
-        },
-      );
+      return openaiErrorResponse('model_not_found');
     }
     return new Response(JSON.stringify(model), {
       status: 200,

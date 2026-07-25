@@ -127,4 +127,38 @@ describe('SSE pass-through', () => {
     expect(text).toContain('"id":"chatcmpl-');
     expect(text).toContain('"created":');
   });
+
+  it('emits usage frame before [DONE] when stream_options.include_usage=true', async () => {
+    // Upstream sends two data frames then a DONE sentinel
+    const frames = [
+      'data: {"choices":[{"delta":{"content":"hello"}}]}\n\n',
+      'data: {"choices":[{"delta":{"content":"world"}}]}\n\n',
+      'data: [DONE]\n',
+    ];
+    vi.stubGlobal('fetch', vi.fn(async () => streamResponse(frames)));
+
+    const req = new Request('https://worker.test/v1/generate', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-API-Key': 'test-gateway-key',
+      },
+      body: JSON.stringify({ messages: [{ role: 'user', content: 'hi' }], stream: true, stream_options: { include_usage: true } }),
+    });
+
+    const res = await worker.fetch(req, makeEnv(), makeCtx());
+    const text = await res.text();
+
+    // Expect at least 3 data: occurrences (2 chunks + usage frame) before the final [DONE]
+    const parts = text.split(/\n/).filter(Boolean);
+    const dataLines = parts.map((l, i) => ({ l, i })).filter(x => x.l.startsWith('data:'));
+    expect(dataLines.length).toBeGreaterThanOrEqual(3);
+
+    const usageLine = dataLines.find(x => x.l.includes('"usage"'));
+    expect(usageLine).toBeDefined();
+
+    const doneLine = dataLines.find(x => x.l === 'data: [DONE]' || x.l.includes('[DONE]'));
+    expect(doneLine).toBeDefined();
+    expect(usageLine!.i).toBeLessThan(doneLine!.i);
+  });
 });

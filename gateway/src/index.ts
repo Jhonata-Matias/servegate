@@ -31,6 +31,7 @@ import { collectApiKeys, validateAuth } from './auth.js';
 import { CAPABILITIES_RESPONSE } from './capabilities-constants.js';
 import { handleCorsPreflight, handleGenerate } from './generate.js';
 import { getClientIp, log } from './log.js';
+import { openaiErrorResponse } from './openai-error.js';
 import { handleModels } from './openai-models.js';
 import {
   buildRateLimitResponse,
@@ -74,13 +75,7 @@ export default {
     // POST /v1/chat/completions — alias to /v1/generate (FR-1)
     if (pathname === '/v1/chat/completions') {
       if (method !== 'POST') {
-        return json(405, {
-          error: {
-            message: 'Method not allowed. Use POST.',
-            type: 'invalid_request_error',
-            code: 'method_not_allowed',
-          },
-        });
+        return openaiErrorResponse('invalid_request');
       }
       return handleGenerate(request, env, ctx);
     }
