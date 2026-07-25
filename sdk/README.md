@@ -4,6 +4,8 @@
 
 TypeScript SDK para o gateway de geração de imagens FLUX do projeto **servegate** (ex-gemma4). Encapsula chamadas ao gateway autenticado (Story 2.5), trata cold-start realista (~130s, ADR-0001 Path A) via `warmup()` + polling assíncrono transparente, e expõe error classes tipadas para UX flows diferenciados.
 
+Português: veja `sdk/README.pt-BR.md` para instruções em pt-BR.
+
 ## v0.3.0 — Image editing (2026-04-24)
 
 `v0.3.0` adds `client.edit()` for image-to-image edits through the same async submit/poll gateway contract. This is strictly additive: `generate()`, `GenerateInput`, `GenerateOutput`, and typed errors remain compatible with `v0.2.x`.

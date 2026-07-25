@@ -1,0 +1,36 @@
+name: Copy QWEN NOTICE to RunPod volume
+
+on:
+  workflow_dispatch:
+    inputs:
+      src:
+        description: 'Source NOTICE file (repo path)'
+        required: false
+        default: 'docs/legal/QWEN_IMAGE_EDIT_NOTICE.md'
+      dest:
+        description: 'Destination path on runner (e.g., /runpod-volume/ComfyUI/NOTICE.md)'
+        required: false
+        default: '/runpod-volume/ComfyUI/NOTICE.md'
+
+jobs:
+  copy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Show inputs
+        run: |
+          echo "SRC=${{ github.event.inputs.src }}"
+          echo "DEST=${{ github.event.inputs.dest }}"
+
+      - name: Run copy script
+        run: |
+          chmod +x ./scripts/copy_notice_to_runpod.sh
+          ./scripts/copy_notice_to_runpod.sh "${{ github.event.inputs.src }}" "${{ github.event.inputs.dest }}"
+
+      - name: Upload NOTICE as artifact (for audit)
+        uses: actions/upload-artifact@v4
+        with:
+          name: qwen-notice
+          path: ${{ github.event.inputs.src }}
