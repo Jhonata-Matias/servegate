@@ -9,6 +9,8 @@
 # - RUNPOD_API_KEY  — same as serverless/.env (Story 2.1)
 # - RUNPOD_ENDPOINT_ID — endpoint ID from Story 2.1 deploy
 # - RUNPOD_TEXT_ENDPOINT_ID — text endpoint ID from Story 4.2 deploy
+# - RUNPOD_CODER_ENDPOINT_ID — coder endpoint ID from Story 7.1 deploy (Qwen3-Coder-30B).
+#   Optional: when unset, model=qwen3-coder:30b requests return 404 model_not_found.
 
 name = "gemma4-gateway"
 main = "src/index.ts"

@@ -14,6 +14,31 @@ const DEFAULT_MAX_TOKENS = 512;
 const MAX_ALPHA_TOKENS = 2048;
 const MAX_BODY_BYTES = 2 * 1024 * 1024;
 
+// Story 7.1 — Supported models catalog. Extend this list AND `resolveModelEndpoint`
+// AND `openai-models.ts::MODEL_CATALOG` together (single source of truth intentionally
+// avoided to keep the /v1/models endpoint independently mockable in tests). The
+// `SUPPORTED_MODELS invariant` test in tests/model-routing.test.ts catches drift.
+const SUPPORTED_MODELS = ['gemma4:e4b', 'qwen3-coder:30b'] as const;
+
+/**
+ * Story 7.1 — Resolves a model id to its RunPod Serverless endpoint id.
+ * Returns null when the model is known but its endpoint secret is unset
+ * (e.g. qwen3-coder:30b during a rollback where RUNPOD_CODER_ENDPOINT_ID
+ * was deleted but the code branch remains). Caller converts null into a
+ * 404 `model_not_found` response via `openaiErrorResponse('model_not_found')`
+ * (see ERROR_MAP in openai-error.ts — code → status).
+ */
+export function resolveModelEndpoint(model: string, env: Env): string | null {
+  switch (model) {
+    case 'gemma4:e4b':
+      return env.RUNPOD_TEXT_ENDPOINT_ID ?? null;
+    case 'qwen3-coder:30b':
+      return env.RUNPOD_CODER_ENDPOINT_ID ?? null;
+    default:
+      return null;
+  }
+}
+
 type WaitUntilContext = Pick<ExecutionContext, 'waitUntil'>;
 
 // ===========================================================================
@@ -211,9 +236,18 @@ export async function handleGenerate(
     elapsed_ms: Date.now() - start,
   });
 
+  // Story 7.1: resolve model→endpoint. If unresolvable (secret missing during
+  // a partial rollback, or transitional deploy), return model_not_found instead
+  // of a 502 upstream error — the model IS defined in SUPPORTED_MODELS but its
+  // infra isn't provisioned, which is a client-visible config problem.
+  const endpointId = resolveModelEndpoint(model, env);
+  if (!endpointId) {
+    return generateError(404, 'model_not_found', tokenState, model, env);
+  }
+
   let upstream: Response;
   try {
-    upstream = await forwardToTextEndpoint(body, env, request.signal);
+    upstream = await forwardToTextEndpoint(body, env, endpointId, request.signal);
   } catch (err) {
     return handleGenerateUpstreamError(err, ip, start, tokenState, model, env);
   }
@@ -349,12 +383,12 @@ function normalizeGenerateRequest(value: unknown): { value: GenerateRequest } | 
     return { error: 'invalid_request' };
   }
 
-  // Story 1.2 FR-5: validate model against catalog
+  // Story 1.2 FR-5 + Story 7.1: validate model against catalog (multi-model support).
   const model = typeof value.model === 'string' && value.model.length > 0
     ? value.model
     : DEFAULT_TEXT_MODEL;
 
-  if (model !== DEFAULT_TEXT_MODEL) {
+  if (!(SUPPORTED_MODELS as readonly string[]).includes(model)) {
     return { error: 'model_not_found' };
   }
 
@@ -557,6 +591,8 @@ function json(status: number, body: unknown, headers: Record<string, string> = {
 
 export const generateInternals = {
   DEFAULT_TEXT_MODEL,
+  SUPPORTED_MODELS,
   estimateMaxPossibleTokens,
   normalizeGenerateRequest,
+  resolveModelEndpoint,
 };

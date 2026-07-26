@@ -11,19 +11,28 @@ export class TextUpstreamError extends Error {
   }
 }
 
+/**
+ * Forwards a chat completion request to a RunPod Serverless OpenAI-compat endpoint.
+ *
+ * Story 7.1: `endpointId` was extracted as a parameter (previously hardcoded to
+ * `env.RUNPOD_TEXT_ENDPOINT_ID`) so the same forwarder can route to either
+ * gemma4:e4b (text endpoint) or qwen3-coder:30b (coder endpoint). Caller
+ * resolves model→endpoint via `resolveModelEndpoint()` in generate.ts.
+ */
 export async function forwardToTextEndpoint(
   body: GenerateRequest,
   env: Env,
+  endpointId: string,
   signal?: AbortSignal,
 ): Promise<Response> {
-  if (!env.RUNPOD_TEXT_ENDPOINT_ID) {
+  if (!endpointId) {
     throw new TextUpstreamError('text endpoint id missing', 'network');
   }
   if (!env.RUNPOD_API_KEY) {
     throw new TextUpstreamError('text API key missing', 'network');
   }
 
-  const url = `https://api.runpod.ai/v2/${env.RUNPOD_TEXT_ENDPOINT_ID}/openai/v1/chat/completions`;
+  const url = `https://api.runpod.ai/v2/${endpointId}/openai/v1/chat/completions`;
   const init: RequestInit = {
     method: 'POST',
     headers: {

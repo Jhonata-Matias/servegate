@@ -32,6 +32,10 @@ export interface Env {
   RUNPOD_ENDPOINT_ID: string;
   RUNPOD_LTX_ENDPOINT_ID?: string;
   RUNPOD_TEXT_ENDPOINT_ID?: string;
+  // Story 7.1 — Qwen3-Coder-30B agentic coding endpoint (VS Code BYOK).
+  // Optional: when unset, model=qwen3-coder:30b requests return 400 model_not_found.
+  // Rollback = wrangler secret delete RUNPOD_CODER_ENDPOINT_ID (gemma4:e4b unaffected).
+  RUNPOD_CODER_ENDPOINT_ID?: string;
   VIDEO_DAILY_LIMIT?: string;
   CORS_ALLOWED_ORIGIN?: string;
   // Public origin of the worker used to build absolute URLs returned to clients.

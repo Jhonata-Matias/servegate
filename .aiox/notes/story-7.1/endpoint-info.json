@@ -1,0 +1,53 @@
+{
+  "story": "7.1",
+  "provisioned_at": "2026-07-26T02:58:48Z",
+  "endpoint_id": "h0m46d6ox487r8",
+  "template_id": "8ceweaqam0",
+  "name": "qwen3-coder-vscode-poc-2026-07-25",
+  "model": "qwen3-coder:30b",
+  "serving_stack": "ollama (svenbrnn/runpod-ollama:0.21.2)",
+  "gpu_tiers_configured": [
+    "NVIDIA A100 80GB PCIe",
+    "NVIDIA A100-SXM4-80GB",
+    "NVIDIA H100 80GB HBM3",
+    "NVIDIA H100 PCIe",
+    "NVIDIA RTX A6000",
+    "NVIDIA L40S",
+    "NVIDIA A40",
+    "NVIDIA RTX 6000 Ada Generation",
+    "NVIDIA GeForce RTX 4090",
+    "NVIDIA GeForce RTX 3090",
+    "NVIDIA RTX A5000",
+    "NVIDIA L4"
+  ],
+  "volume_id": "mqqgzwnfp1",
+  "workers_max": 1,
+  "workers_min": 0,
+  "idle_timeout_s": 60,
+  "execution_timeout_ms": 600000,
+  "quota_borrowed_from": {
+    "endpoint_id": "6mbyn0qow3xesv",
+    "endpoint_name": "endpoint-video-gen-spike-rtx4090-v6",
+    "workersMax_before": 1,
+    "workersMax_after": 0,
+    "reason": "account quota at 10/10 max; borrowed 1 slot from a stale spike endpoint",
+    "reversible": true,
+    "reversal_blocked_by": "quota still at 10/10 after Qwen creation; owner can DELETE stale spike endpoint OR reduce another endpoint's workersMax before restoring"
+  },
+  "smoke_test_status": "FAILED — capacity",
+  "smoke_test_details": {
+    "attempts": 3,
+    "total_wait_minutes": 35,
+    "outcome": "0 workers spawned across 12 GPU tiers even with workersMin=1 forcing",
+    "root_cause_hypothesis": "RunPod Community Cloud capacity crunch (Sunday early morning UTC) for NEW endpoint spawns. Other endpoints on the account remain functional because their workers were pre-warmed at earlier times.",
+    "retry_when": "monday business hours OR any weekday afternoon/evening UTC",
+    "retry_procedure": "1) verify at least one GPU tier is available via RunPod dashboard, 2) hit gateway with POST /v1/chat/completions model=qwen3-coder:30b, 3) first cold start ~5-10min (Ollama pulls 19GB weights + loads), 4) subsequent warm calls ~30-60s TTFT",
+    "gateway_state_verified": "prod deploy 707ef2c9 lists qwen3-coder:30b in /v1/models catalog, routing configured, RUNPOD_CODER_ENDPOINT_ID secret set — everything upstream of RunPod is ready"
+  },
+  "cost_ledger_setup_phase_usd": 0.00,
+  "next_actions": {
+    "owner_or_qa": "Retry smoke test on next business day when RunPod capacity returns",
+    "if_persistently_no_capacity": "Consider Secure Cloud tier (higher price, better availability) — PATCH gpuTypeIds to include secure-cloud-only options",
+    "if_kill_decided": "Run bash spike/qwen3-coder-vscode/teardown.sh"
+  }
+}
