@@ -134,17 +134,21 @@ export function openaiErrorResponse(
  * Always followed by `data: [DONE]\n\n`.
  *
  * @param code - Error code
+ * @param completionId - Optional chatcmpl-* id for client correlation (Story 7.1.1)
  * @returns SSE-formatted string: `data: {error}\n\ndata: [DONE]\n\n`
  */
-export function openaiStreamErrorFrame(code: string): string {
+export function openaiStreamErrorFrame(code: string, completionId?: string): string {
   const mapping = ERROR_MAP[code];
-  const body: OpenAIErrorBody = {
+  const body: OpenAIErrorBody & { id?: string } = {
     error: {
       message: mapping?.message ?? 'An unexpected error occurred.',
       type: mapping?.type ?? 'api_error',
       code,
     },
   };
+  // Story 7.1.1: mirror the `id` field that envelopeStream injects into
+  // success chunks — VS Code Copilot BYOK correlates every frame by id.
+  if (completionId) body.id = completionId;
   return `data: ${JSON.stringify(body)}\n\ndata: [DONE]\n\n`;
 }
 

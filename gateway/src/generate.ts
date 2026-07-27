@@ -196,23 +196,23 @@ export async function handleGenerate(
 
   const authFailure = validateAuth(authCompatibleRequest(request), collectApiKeys(env));
   if (authFailure) {
-    return withGenerateHeaders(authFailure, defaultTokenState(), DEFAULT_TEXT_MODEL, env);
+    return withGenerateHeaders(authFailure, defaultTokenState(), DEFAULT_TEXT_MODEL, env, completionId);
   }
 
   const contentLength = Number.parseInt(request.headers.get('Content-Length') ?? '0', 10);
   if (contentLength > MAX_BODY_BYTES) {
-    return generateError(413, 'request_too_large', defaultTokenState(), DEFAULT_TEXT_MODEL, env);
+    return generateError(413, 'request_too_large', defaultTokenState(), DEFAULT_TEXT_MODEL, env, completionId);
   }
 
   let rawBody: string;
   try {
     rawBody = await request.text();
   } catch {
-    return generateError(400, 'invalid_request', defaultTokenState(), DEFAULT_TEXT_MODEL, env);
+    return generateError(400, 'invalid_request', defaultTokenState(), DEFAULT_TEXT_MODEL, env, completionId);
   }
 
   if (new TextEncoder().encode(rawBody).byteLength > MAX_BODY_BYTES) {
-    return generateError(413, 'request_too_large', defaultTokenState(), DEFAULT_TEXT_MODEL, env);
+    return generateError(413, 'request_too_large', defaultTokenState(), DEFAULT_TEXT_MODEL, env, completionId);
   }
 
   let parsed: unknown;
@@ -220,13 +220,13 @@ export async function handleGenerate(
     parsed = JSON.parse(rawBody);
   } catch {
     logGenerateInvalid(ip, start, 'invalid_json');
-    return generateError(400, 'invalid_json', defaultTokenState(), DEFAULT_TEXT_MODEL, env);
+    return generateError(400, 'invalid_json', defaultTokenState(), DEFAULT_TEXT_MODEL, env, completionId);
   }
 
   const validation = normalizeGenerateRequest(parsed);
   if ('error' in validation) {
     logGenerateInvalid(ip, start, validation.error);
-    return generateError(400, validation.error, defaultTokenState(), DEFAULT_TEXT_MODEL, env);
+    return generateError(400, validation.error, defaultTokenState(), DEFAULT_TEXT_MODEL, env, completionId);
   }
 
   const body = validation.value;
@@ -254,7 +254,7 @@ export async function handleGenerate(
         elapsed_ms: Date.now() - start,
         error_code: 'rate_limit_exceeded',
       });
-      return generateError(429, 'rate_limit_exceeded', tokenState, model, env);
+      return generateError(429, 'rate_limit_exceeded', tokenState, model, env, completionId);
     }
   }
 
@@ -273,7 +273,7 @@ export async function handleGenerate(
   // client-visible config problem.
   const upstreamTarget = resolveModelUpstream(model, env);
   if (!upstreamTarget) {
-    return generateError(404, 'model_not_found', tokenState, model, env);
+    return generateError(404, 'model_not_found', tokenState, model, env, completionId);
   }
 
   // Story 7.1: track last-request timestamp for POD idle-shutdown scheduler.
@@ -292,12 +292,12 @@ export async function handleGenerate(
   try {
     upstream = await forwardToTextEndpoint(body, env, upstreamTarget, request.signal);
   } catch (err) {
-    return handleGenerateUpstreamError(err, ip, start, tokenState, model, env);
+    return handleGenerateUpstreamError(err, ip, start, tokenState, model, env, completionId);
   }
 
   if (body.stream !== false) {
     if (!upstream.body) {
-      return generateError(502, 'upstream_error', tokenState, model, env);
+      return generateError(502, 'upstream_error', tokenState, model, env, completionId);
     }
     if (!bypassTokenBudget) {
       recordAsync(ctx, env, approxTokens);
@@ -329,7 +329,7 @@ export async function handleGenerate(
   try {
     payload = (await upstream.json()) as GenerateResponse;
   } catch {
-    return generateError(502, 'upstream_error', tokenState, model, env);
+    return generateError(502, 'upstream_error', tokenState, model, env, completionId);
   }
 
   // Story 1.1 FR-3: inject id and created into non-streaming response
@@ -522,6 +522,7 @@ function handleGenerateUpstreamError(
   tokenState: TokenBudgetState,
   model: string,
   env: Env,
+  completionId?: string,
 ): Response {
   let status = 503;
   let error = 'upstream_unavailable';
@@ -545,7 +546,7 @@ function handleGenerateUpstreamError(
     error_code: error,
   });
 
-  return generateError(status, error, tokenState, model, env);
+  return generateError(status, error, tokenState, model, env, completionId);
 }
 
 function logGenerateInvalid(ip: string | null, start: number, errorCode: string): void {
@@ -586,15 +587,27 @@ function generateError(
   tokenState: TokenBudgetState,
   model: string,
   env: Env,
+  completionId?: string,
 ): Response {
   // Story 1.2 FR-6: use OpenAI error envelope
+  // Story 7.1.1: emit x-request-id on error paths too — VS Code Copilot BYOK
+  // crashes with `Cannot read properties of undefined (reading 'headerRequestId')`
+  // when the header is missing. Commit 07a6a2c added it to success paths only;
+  // this closes the regression on 400/401/404/413/429/502/503.
   return openaiErrorResponse(error, {
+    ...(completionId ? { 'x-request-id': completionId } : {}),
     ...tokenHeaders(tokenState, model),
     ...corsHeaders(env),
   });
 }
 
-function withGenerateHeaders(response: Response, tokenState: TokenBudgetState, model: string, env: Env): Response {
+function withGenerateHeaders(
+  response: Response,
+  tokenState: TokenBudgetState,
+  model: string,
+  env: Env,
+  completionId?: string,
+): Response {
   // Story 1.2 FR-6: auth errors from validateAuth use old format — wrap in OpenAI envelope
   const headers = new Headers();
   for (const [key, value] of Object.entries(tokenHeaders(tokenState, model))) {
@@ -603,6 +616,9 @@ function withGenerateHeaders(response: Response, tokenState: TokenBudgetState, m
   for (const [key, value] of Object.entries(corsHeaders(env))) {
     headers.set(key, value);
   }
+  // Story 7.1.1: same rationale as generateError — client BYOK reads
+  // x-request-id on every response. Auth early-return was missing it too.
+  if (completionId) headers.set('x-request-id', completionId);
   // Map old auth error to OpenAI envelope
   const body: OpenAIErrorBody = {
     error: {
