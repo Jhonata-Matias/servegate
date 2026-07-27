@@ -48,6 +48,7 @@ import {
   VIDEO_URL_TTL_SECONDS,
   type VideoMetadata,
 } from './r2-video.js';
+import { handleScheduled } from './pod-scheduler.js';
 import { getMapping, putMapping, updateStatus } from './storage.js';
 import { getStatus, mapStatus, submitJob, RunpodUpstreamError } from './runpod.js';
 import { handleVideoSubmit } from './video.js';
@@ -57,6 +58,16 @@ const POLL_RETRY_AFTER_SECONDS = 5;
 const GENERATION_TIMEOUT_S = 280; // aligned with RunPod COMFY_GENERATION_TIMEOUT_S (FR-4)
 
 export default {
+  // Story 7.1 — Cron triggers for POD lifecycle (start/stop/idle-check).
+  // See gateway/src/pod-scheduler.ts for cron patterns and semantics.
+  async scheduled(
+    event: { cron: string; scheduledTime: number },
+    env: Env,
+    ctx: ExecutionContext,
+  ): Promise<void> {
+    await handleScheduled(event, env, ctx);
+  },
+
   async fetch(request: Request, env: Env, ctx?: ExecutionContext): Promise<Response> {
     const start = Date.now();
     const ip = getClientIp(request);

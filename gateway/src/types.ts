@@ -32,10 +32,18 @@ export interface Env {
   RUNPOD_ENDPOINT_ID: string;
   RUNPOD_LTX_ENDPOINT_ID?: string;
   RUNPOD_TEXT_ENDPOINT_ID?: string;
-  // Story 7.1 — Qwen3-Coder-30B agentic coding endpoint (VS Code BYOK).
-  // Optional: when unset, model=qwen3-coder:30b requests return 400 model_not_found.
-  // Rollback = wrangler secret delete RUNPOD_CODER_ENDPOINT_ID (gemma4:e4b unaffected).
-  RUNPOD_CODER_ENDPOINT_ID?: string;
+  // Story 7.1 — Qwen3-Coder-30B agentic coding via RunPod POD (not Serverless).
+  // Ollama-based, HF community weights (~18GB Q4). POD provides better UX than
+  // Serverless for agentic loops (no per-request cold start once loaded to VRAM).
+  //
+  // - RUNPOD_CODER_POD_ID: needed by scheduled handler for start/stop API calls
+  //   (POST /v1/pods/{id}/start, POST /v1/pods/{id}/stop).
+  // - RUNPOD_CODER_POD_URL: full URL to Ollama OpenAI-compat endpoint (proxy).
+  //   Pattern: https://{pod_id}-11434.proxy.runpod.net/v1/chat/completions
+  //
+  // Rollback: `wrangler secret delete RUNPOD_CODER_POD_URL` — gemma4:e4b unaffected.
+  RUNPOD_CODER_POD_ID?: string;
+  RUNPOD_CODER_POD_URL?: string;
   VIDEO_DAILY_LIMIT?: string;
   CORS_ALLOWED_ORIGIN?: string;
   // Public origin of the worker used to build absolute URLs returned to clients.

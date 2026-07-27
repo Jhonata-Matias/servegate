@@ -12,33 +12,47 @@ export class TextUpstreamError extends Error {
 }
 
 /**
- * Forwards a chat completion request to a RunPod Serverless OpenAI-compat endpoint.
+ * Story 7.1 — Upstream target for a text-gen model. Two flavors:
  *
- * Story 7.1: `endpointId` was extracted as a parameter (previously hardcoded to
- * `env.RUNPOD_TEXT_ENDPOINT_ID`) so the same forwarder can route to either
- * gemma4:e4b (text endpoint) or qwen3-coder:30b (coder endpoint). Caller
- * resolves model→endpoint via `resolveModelEndpoint()` in generate.ts.
+ * - Serverless (RunPod /v2/{id}/openai/v1/chat/completions with Bearer auth)
+ * - POD (Ollama proxy URL; anonymous auth via URL secrecy)
+ *
+ * Caller (`resolveModelUpstream` in generate.ts) picks per model.
+ */
+export interface UpstreamTarget {
+  url: string;
+  requiresRunpodAuth: boolean;
+}
+
+/**
+ * Forwards a chat completion request to the chosen upstream. Story 7.1 changed
+ * the signature: previously took an endpointId (serverless-only) and built the
+ * URL here. Now takes a fully-resolved target so it can transparently proxy
+ * either serverless (Bearer-auth) or POD (URL-only) upstreams.
  */
 export async function forwardToTextEndpoint(
   body: GenerateRequest,
   env: Env,
-  endpointId: string,
+  target: UpstreamTarget,
   signal?: AbortSignal,
 ): Promise<Response> {
-  if (!endpointId) {
-    throw new TextUpstreamError('text endpoint id missing', 'network');
+  if (!target.url) {
+    throw new TextUpstreamError('text endpoint url missing', 'network');
   }
-  if (!env.RUNPOD_API_KEY) {
+  if (target.requiresRunpodAuth && !env.RUNPOD_API_KEY) {
     throw new TextUpstreamError('text API key missing', 'network');
   }
 
-  const url = `https://api.runpod.ai/v2/${endpointId}/openai/v1/chat/completions`;
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+  if (target.requiresRunpodAuth) {
+    headers.Authorization = `Bearer ${env.RUNPOD_API_KEY}`;
+  }
+
   const init: RequestInit = {
     method: 'POST',
-    headers: {
-      Authorization: `Bearer ${env.RUNPOD_API_KEY}`,
-      'Content-Type': 'application/json',
-    },
+    headers,
     body: JSON.stringify(body),
   };
   if (signal) {
@@ -47,7 +61,7 @@ export async function forwardToTextEndpoint(
 
   let response: Response;
   try {
-    response = await fetch(url, init);
+    response = await fetch(target.url, init);
   } catch (err) {
     if (signal?.aborted) {
       throw new TextUpstreamError('text generation aborted', 'network');

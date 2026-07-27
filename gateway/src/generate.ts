@@ -6,7 +6,7 @@ import {
   recordTokenUsage,
   TOKEN_DAILY_LIMIT,
 } from './rate-limit.js';
-import { forwardToTextEndpoint, TextUpstreamError } from './runpod-text.js';
+import { forwardToTextEndpoint, TextUpstreamError, type UpstreamTarget } from './runpod-text.js';
 import type { Env, GenerateMessage, GenerateRequest, GenerateResponse, TokenBudgetState } from './types.js';
 
 const DEFAULT_TEXT_MODEL = 'gemma4:e4b';
@@ -21,19 +21,30 @@ const MAX_BODY_BYTES = 2 * 1024 * 1024;
 const SUPPORTED_MODELS = ['gemma4:e4b', 'qwen3-coder:30b'] as const;
 
 /**
- * Story 7.1 — Resolves a model id to its RunPod Serverless endpoint id.
- * Returns null when the model is known but its endpoint secret is unset
- * (e.g. qwen3-coder:30b during a rollback where RUNPOD_CODER_ENDPOINT_ID
- * was deleted but the code branch remains). Caller converts null into a
- * 404 `model_not_found` response via `openaiErrorResponse('model_not_found')`
- * (see ERROR_MAP in openai-error.ts — code → status).
+ * Story 7.1 — Resolves a model id to its upstream target (URL + auth flavor).
+ *
+ * - `gemma4:e4b` → RunPod Serverless (Bearer auth, built URL from endpoint id).
+ * - `qwen3-coder:30b` → RunPod POD (anonymous, Ollama proxy URL as-is).
+ *
+ * Returns null when the model is known but its secret is unset (e.g.
+ * qwen3-coder:30b during rollback where RUNPOD_CODER_POD_URL was deleted).
+ * Caller converts null into a 404 `model_not_found` response.
  */
-export function resolveModelEndpoint(model: string, env: Env): string | null {
+export function resolveModelUpstream(model: string, env: Env): UpstreamTarget | null {
   switch (model) {
-    case 'gemma4:e4b':
-      return env.RUNPOD_TEXT_ENDPOINT_ID ?? null;
-    case 'qwen3-coder:30b':
-      return env.RUNPOD_CODER_ENDPOINT_ID ?? null;
+    case 'gemma4:e4b': {
+      const id = env.RUNPOD_TEXT_ENDPOINT_ID;
+      if (!id) return null;
+      return {
+        url: `https://api.runpod.ai/v2/${id}/openai/v1/chat/completions`,
+        requiresRunpodAuth: true,
+      };
+    }
+    case 'qwen3-coder:30b': {
+      const url = env.RUNPOD_CODER_POD_URL;
+      if (!url) return null;
+      return { url, requiresRunpodAuth: false };
+    }
     default:
       return null;
   }
@@ -236,18 +247,31 @@ export async function handleGenerate(
     elapsed_ms: Date.now() - start,
   });
 
-  // Story 7.1: resolve model→endpoint. If unresolvable (secret missing during
-  // a partial rollback, or transitional deploy), return model_not_found instead
-  // of a 502 upstream error — the model IS defined in SUPPORTED_MODELS but its
-  // infra isn't provisioned, which is a client-visible config problem.
-  const endpointId = resolveModelEndpoint(model, env);
-  if (!endpointId) {
+  // Story 7.1: resolve model→upstream (URL + auth flavor). If unresolvable
+  // (secret missing during a partial rollback, or transitional deploy), return
+  // model_not_found instead of a 502 upstream error — the model IS defined
+  // in SUPPORTED_MODELS but its infra isn't provisioned, which is a
+  // client-visible config problem.
+  const upstreamTarget = resolveModelUpstream(model, env);
+  if (!upstreamTarget) {
     return generateError(404, 'model_not_found', tokenState, model, env);
+  }
+
+  // Story 7.1: track last-request timestamp for POD idle-shutdown scheduler.
+  // Only meaningful for POD-backed models — Serverless has its own idleTimeout.
+  if (model === 'qwen3-coder:30b') {
+    // Fire-and-forget — do not block the request path.
+    const kvWrite = env.RATE_LIMIT_KV.put('coder:last_request_ms', String(Date.now()));
+    if (ctx) {
+      ctx.waitUntil(kvWrite);
+    } else {
+      kvWrite.catch(() => {});
+    }
   }
 
   let upstream: Response;
   try {
-    upstream = await forwardToTextEndpoint(body, env, endpointId, request.signal);
+    upstream = await forwardToTextEndpoint(body, env, upstreamTarget, request.signal);
   } catch (err) {
     return handleGenerateUpstreamError(err, ip, start, tokenState, model, env);
   }
@@ -594,5 +618,5 @@ export const generateInternals = {
   SUPPORTED_MODELS,
   estimateMaxPossibleTokens,
   normalizeGenerateRequest,
-  resolveModelEndpoint,
+  resolveModelUpstream,
 };
