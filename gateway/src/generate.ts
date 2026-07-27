@@ -232,17 +232,30 @@ export async function handleGenerate(
   const body = validation.value;
   const model = body.model ?? DEFAULT_TEXT_MODEL;
   const approxTokens = estimateMaxPossibleTokens(rawBody, body.max_tokens ?? DEFAULT_MAX_TOKENS);
-  const { state: tokenState, allowed } = await checkTokenBudget(env.RATE_LIMIT_KV, approxTokens);
-  if (!allowed) {
-    log({
-      timestamp: Date.now(),
-      event: 'generate_rate_limited',
-      ip,
-      status: 429,
-      elapsed_ms: Date.now() - start,
-      error_code: 'rate_limit_exceeded',
-    });
-    return generateError(429, 'rate_limit_exceeded', tokenState, model, env);
+
+  // Story 7.1 — Token daily budget only guards models with per-token upstream
+  // cost (gemma4:e4b on RunPod Serverless). qwen3-coder:30b runs on a
+  // flat-rate POD ($0.69/hr regardless of tokens), gated by owner-only API
+  // access, so it's protected by cron start/stop + idle shutdown (see
+  // pod-scheduler.ts) — NOT by per-token counters. Without this bypass, a
+  // single VS Code Copilot agentic loop (10-20 requests × 8K max_tokens
+  // estimate) burns 50k daily budget on the very first prompt.
+  const bypassTokenBudget = model === 'qwen3-coder:30b';
+  let tokenState = defaultTokenState();
+  if (!bypassTokenBudget) {
+    const check = await checkTokenBudget(env.RATE_LIMIT_KV, approxTokens);
+    tokenState = check.state;
+    if (!check.allowed) {
+      log({
+        timestamp: Date.now(),
+        event: 'generate_rate_limited',
+        ip,
+        status: 429,
+        elapsed_ms: Date.now() - start,
+        error_code: 'rate_limit_exceeded',
+      });
+      return generateError(429, 'rate_limit_exceeded', tokenState, model, env);
+    }
   }
 
   log({
@@ -286,7 +299,9 @@ export async function handleGenerate(
     if (!upstream.body) {
       return generateError(502, 'upstream_error', tokenState, model, env);
     }
-    recordAsync(ctx, env, approxTokens);
+    if (!bypassTokenBudget) {
+      recordAsync(ctx, env, approxTokens);
+    }
 
     // Story 1.1 FR-3: wrap upstream stream with envelope normalization
     const includeUsage = !!(body.stream_options && (body.stream_options as Record<string, unknown>).include_usage);
@@ -317,7 +332,9 @@ export async function handleGenerate(
   payload.created = created;
 
   const actualTokens = payload.usage?.total_tokens ?? approxTokens;
-  recordAsync(ctx, env, actualTokens);
+  if (!bypassTokenBudget) {
+    recordAsync(ctx, env, actualTokens);
+  }
 
   log({
     timestamp: Date.now(),

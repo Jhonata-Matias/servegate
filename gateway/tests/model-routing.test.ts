@@ -463,6 +463,77 @@ describe('handleGenerate — routing by model field', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Rate-limit bypass for qwen3-coder (POD flat-rate — token budget doesn't apply)
+// ---------------------------------------------------------------------------
+
+describe('rate-limit — qwen3-coder bypass', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it('qwen3-coder request passes even when today token bucket is over the daily limit', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => Response.json(makeOllamaUpstreamCompletion(false), { status: 200 })),
+    );
+    // Prime KV with today's counter well above the 50k daily budget
+    const today = new Date().toISOString().slice(0, 10);
+    const kv = makeKv({ [`tokens:${today}`]: '999999' });
+    const env = makeEnv({ RATE_LIMIT_KV: kv });
+    const req = chatRequest({
+      model: 'qwen3-coder:30b',
+      messages: [{ role: 'user', content: 'hi' }],
+      max_tokens: 8192, // VS Code default — under normal rules this reserves ~8.5k
+      stream: false,
+    });
+    const resp = await worker.fetch(req, env, makeCtx());
+    // NO 429 — bypass in effect
+    expect(resp.status).toBe(200);
+  });
+
+  it('gemma4:e4b request STILL respects the 50k daily token budget (regression check)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => Response.json(makeOpenAIUpstreamCompletion(), { status: 200 })),
+    );
+    const today = new Date().toISOString().slice(0, 10);
+    const kv = makeKv({ [`tokens:${today}`]: '999999' });
+    const env = makeEnv({ RATE_LIMIT_KV: kv });
+    const req = chatRequest({
+      model: 'gemma4:e4b',
+      messages: [{ role: 'user', content: 'hi' }],
+      max_tokens: 5,
+      stream: false,
+    });
+    const resp = await worker.fetch(req, env, makeCtx());
+    expect(resp.status).toBe(429);
+    const body = (await resp.json()) as { error: { code: string } };
+    expect(body.error.code).toBe('rate_limit_exceeded');
+  });
+
+  it('qwen3-coder request does NOT increment the shared token counter', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => Response.json(makeOllamaUpstreamCompletion(false), { status: 200 })),
+    );
+    const kv = makeKv();
+    const env = makeEnv({ RATE_LIMIT_KV: kv });
+    const req = chatRequest({
+      model: 'qwen3-coder:30b',
+      messages: [{ role: 'user', content: 'hi' }],
+      max_tokens: 100,
+      stream: false,
+    });
+    await worker.fetch(req, env, makeCtx());
+    // Bypass covers both check AND record — token counter stays absent
+    const today = new Date().toISOString().slice(0, 10);
+    const store = (kv as unknown as { store: Map<string, string> }).store;
+    expect(store.has(`tokens:${today}`)).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // /v1/models catalog
 // ---------------------------------------------------------------------------
 
