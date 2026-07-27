@@ -226,6 +226,11 @@ interface OpenAIChatCompletion {
   object: 'chat.completion';
   created: number;
   model: string;
+  // Story 7.1 — VS Code Copilot BYOK client crashes on missing `system_fingerprint`
+  // in the parsed chunks (Ollama's own OpenAI-compat layer includes it; the
+  // gemma4:e4b path inherits it end-to-end). Emit a stable placeholder here
+  // so the translated Qwen path matches the shape.
+  system_fingerprint: string;
   choices: Array<{
     index: number;
     message: {
@@ -294,6 +299,7 @@ export function translateOllamaToOpenAI(
     object: 'chat.completion',
     created: parseCreatedAt(ollamaResp.created_at),
     model: modelId,
+    system_fingerprint: 'fp_ollama',
     choices: [{ index: 0, message, finish_reason }],
     usage: {
       prompt_tokens: promptTokens,
@@ -326,6 +332,7 @@ function buildOpenAISSEStream(resp: OpenAIChatCompletion): ReadableStream<Uint8A
     object: 'chat.completion.chunk',
     created: resp.created,
     model: resp.model,
+    system_fingerprint: resp.system_fingerprint,
     choices: resp.choices.map((c) => ({
       index: c.index,
       delta: {
@@ -350,6 +357,7 @@ function buildOpenAISSEStream(resp: OpenAIChatCompletion): ReadableStream<Uint8A
     object: 'chat.completion.chunk',
     created: resp.created,
     model: resp.model,
+    system_fingerprint: resp.system_fingerprint,
     choices: resp.choices.map((c) => ({
       index: c.index,
       delta: {},

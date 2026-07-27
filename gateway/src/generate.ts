@@ -314,6 +314,11 @@ export async function handleGenerate(
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',
         Connection: 'keep-alive',
+        // Story 7.1 — VS Code Copilot BYOK client reads `x-request-id` from every
+        // response and crashes with `Cannot read properties of undefined (reading
+        // 'headerRequestId')` when missing. Reuse the completion id (chatcmpl-*)
+        // as the request id — makes gateway logs correlate with client-side traces.
+        'x-request-id': completionId,
         ...tokenHeaders(tokenState, model),
         ...corsHeaders(env),
       },
@@ -345,6 +350,8 @@ export async function handleGenerate(
   });
 
   return json(200, payload, {
+    // Story 7.1 — See streaming path above for the `x-request-id` rationale.
+    'x-request-id': completionId,
     ...tokenHeaders(tokenState, model),
     ...corsHeaders(env),
   });
