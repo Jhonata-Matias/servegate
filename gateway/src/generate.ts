@@ -38,12 +38,18 @@ export function resolveModelUpstream(model: string, env: Env): UpstreamTarget | 
       return {
         url: `https://api.runpod.ai/v2/${id}/openai/v1/chat/completions`,
         requiresRunpodAuth: true,
+        apiFormat: 'openai',
       };
     }
     case 'qwen3-coder:30b': {
       const url = env.RUNPOD_CODER_POD_URL;
       if (!url) return null;
-      return { url, requiresRunpodAuth: false };
+      // Story 7.1 patch — Ollama's OpenAI-compat layer drops `tool_calls[]` for
+      // Qwen3-Coder (returns the raw <tool_call> XML as content). Route to
+      // Ollama's native /api/chat and let forwardToTextEndpoint translate the
+      // response back to OpenAI shape. Secret can be either a base URL or a
+      // full /v1/chat/completions URL — forwarder strips the suffix if present.
+      return { url, requiresRunpodAuth: false, apiFormat: 'ollama' };
     }
     default:
       return null;
@@ -425,6 +431,12 @@ function normalizeGenerateRequest(value: unknown): { value: GenerateRequest } | 
   // Story 1.2 FR-5: stop — pass through if present and valid
   const stop = normalizeStop(value);
 
+  // Story 7.1 — Pass through tools + tool_choice untouched for the Ollama-native
+  // route. Gateway doesn't validate the schema; Ollama's chat template renders
+  // them as XML for Qwen and returns structured tool_calls.
+  const tools = Array.isArray(value.tools) && value.tools.length > 0 ? value.tools : undefined;
+  const toolChoice = value.tool_choice;
+
   return {
     value: {
       model,
@@ -434,6 +446,8 @@ function normalizeGenerateRequest(value: unknown): { value: GenerateRequest } | 
       ...(topP !== undefined ? { top_p: topP } : {}),
       ...(stop !== undefined ? { stop } : {}),
       ...(streamOptions !== undefined ? { stream_options: streamOptions } : {}),
+      ...(tools !== undefined ? { tools } : {}),
+      ...(toolChoice !== undefined ? { tool_choice: toolChoice } : {}),
       stream,
     },
   };

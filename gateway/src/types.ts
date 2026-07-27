@@ -83,6 +83,11 @@ export interface GenerateRequest {
   stream?: boolean;
   stream_options?: { include_usage?: boolean };
   n?: number;
+  // Story 7.1 — Function/tool calling (OpenAI shape). Passed through unchanged
+  // to the upstream (Ollama /api/chat translates them natively). Gateway does
+  // not validate their schema — that's the upstream's job.
+  tools?: unknown[];
+  tool_choice?: unknown;
 }
 
 export interface GenerateResponse {
