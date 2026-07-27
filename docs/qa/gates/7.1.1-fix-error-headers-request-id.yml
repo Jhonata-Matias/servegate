@@ -1,0 +1,123 @@
+schema: 1
+story: '7.1.1'
+story_title: 'Fix: emitir x-request-id em todos os paths de erro do gateway'
+story_type: 'bug-fix (regressão de header em contrato HTTP público)'
+gate: PASS
+signal: APPROVE
+status_reason: 'Regressão do commit 07a6a2c fechada de forma additive-only e retrocompat. Todos os 11 call sites de generateError + auth failure + upstream error propagam completionId; openaiStreamErrorFrame preparado para mid-stream errors futuros. Typecheck limpo; 194 passed (191 baseline + 3 novos = 3 ACs de teste satisfeitos), zero regressão em success paths. AC6 (validação empírica pós-deploy) delegado ao @devops conforme agent-authority.md — não bloqueia gate.'
+reviewer: 'Quinn (Test Architect)'
+updated: '2026-07-27T17:55:00-03:00'
+
+coderabbit_skipped: true
+coderabbit_skip_reason: 'coderabbit_integration não habilitado em core-config.yaml (declarado na story). Review manual conforme story-lifecycle.md.'
+
+quality_score: 95
+expires: '2026-08-27T23:59:59-03:00'
+
+evidence:
+  artifacts_reviewed:
+    - path: 'gateway/src/generate.ts'
+      kind: source-modified
+      lines_delta: '+30 / -12'
+      note: '4 assinaturas + 11 threading points'
+    - path: 'gateway/src/openai-error.ts'
+      kind: source-modified
+      lines_delta: '+6 / -2'
+      note: 'openaiStreamErrorFrame preparatório (0 call sites atuais)'
+    - path: 'gateway/tests/error-headers.test.ts'
+      kind: test-new
+      lines: 126
+      note: '3 regression tests: 502/429/401'
+    - path: 'docs/stories/7.1.1.fix-error-headers-request-id.story.md'
+      kind: story-doc
+      lines: 314
+    - path: 'commit 8aad8e7'
+      kind: git-commit
+      branch: 'spike/qwen3-coder-vscode-poc'
+      note: 'não pushado; @devops autoridade exclusiva de push+deploy'
+
+  tests_reviewed: 3
+  tests_reviewed_note: 'Novos: 502 upstream_error (mock TextUpstreamError http_5xx), 429 rate_limit_exceeded (KV budget 49999), 401 invalid_api_key (sem X-API-Key). Todos afirmam header matches /^chatcmpl-[a-f0-9-]{36}$/. Reusam padrão de generate.test.ts (mockKv/makeEnv/stubJsonUpstream) — nada inventado.'
+
+  risks_identified: 2
+
+  trace:
+    ac_covered: [1, 2, 3, 4, 5]
+    ac_gaps: [6]
+    ac_6_note: 'AC6 é validação empírica pós-deploy (wrangler deploy + curl -D + smoke VS Code). Delegado ao @devops per agent-authority.md — não bloqueia gate de código.'
+    given_when_then: |
+      Given commit 07a6a2c adicionou x-request-id só em success paths (VS Code Copilot BYOK crash em 502 transiente);
+      When 7.1.1 estende generateError/withGenerateHeaders/handleGenerateUpstreamError/openaiStreamErrorFrame com param opcional completionId e threading nos 11+1+1 call sites;
+      Then 3 testes de regressão (502/429/401) verdes, 191 testes preexistentes intactos, typecheck limpo, contrato public HTTP passa a garantir x-request-id em toda response de /v1/generate com body válido de handleGenerate.
+
+nfr_validation:
+  security:
+    status: PASS
+    notes: |
+      Header injection usa completionId gerado por crypto.randomUUID() (chatcmpl-<uuid>) — cryptographically-safe, não user-controlled. Zero surface de user input em nome ou valor de header. Sem eval, innerHTML, SQL string interpolation, hardcoded secrets, ou CORS changes. Nenhuma nova dep introduzida.
+
+  performance:
+    status: PASS
+    notes: |
+      Overhead: 1 spread + 1 string por error response. Sub-microsegundo. Nenhum impacto em happy path (código não muda). Sem alocação extra em SSE stream (openaiStreamErrorFrame só executa quando há erro mid-stream, e ainda não tem call sites).
+
+  reliability:
+    status: PASS
+    notes: |
+      Retrocompat mantida: completionId é opcional, chamadas antigas continuam válidas. Se qualquer call site novo esquecer de passar completionId, comportamento pre-fix é preservado (regressão silenciosa possível — mitigado por convenção de threading). Rollback trivial via git revert 8aad8e7 (additive-only).
+
+  maintainability:
+    status: PASS
+    notes: |
+      Comentários "Story 7.1.1" nos loci principais permitem rastreabilidade. Padrão de threading segue convenção existente (Story 1.1 FR-3 fez o mesmo para id/created em envelopeStream). Assinatura pública de openaiErrorResponse preservada — mudança contida em call sites internos.
+
+top_issues: []
+
+observations:
+  - id: O1
+    severity: low
+    category: test-coverage
+    description: |
+      Testes cobrem 3 de 7 error codes (502/429/401). Os outros 4 (400 invalid_json, 400 invalid_request, 404 model_not_found, 413 request_too_large) são cobertos pelo mesmo code path (generateError), então implicit coverage via 502/429/401 é razoável — mas asserção explícita evitaria drift se generateError for split no futuro.
+    recommendation: 'Considerar adicionar 1 teste por code em iteração futura; não bloqueante agora.'
+    impact: 'Baixo — regressão semelhante seria pega pelo teste de 502 se generateError for tocado.'
+
+  - id: O2
+    severity: low
+    category: preventive-code
+    description: |
+      openaiStreamErrorFrame ganhou param completionId mas não tem call sites. É mudança preparatória. Se nunca for chamada, virou código morto.
+    recommendation: 'Aceito porque o esforço é mínimo (+6 linhas) e o custo de adicionar depois seria maior. Se em 60 dias nenhum call site aparecer, considerar revert desta parte específica.'
+    impact: 'Nenhum — não afeta comportamento atual.'
+
+risks:
+  - id: R1
+    severity: medium
+    category: post-deploy
+    description: 'AC6 (deploy + smoke) fica pendente. Se @devops deploy falhar OU smoke VS Code ainda mostrar headerRequestId crash (root cause diferente), gate precisa reabrir.'
+    mitigation: 'wrangler tail durante primeiro smoke real do owner — response da 502 mostra headers atuais em produção.'
+  - id: R2
+    severity: low
+    category: silent-drift
+    description: 'Novos error paths adicionados no futuro em handleGenerate podem esquecer de passar completionId, regressão silenciosa.'
+    mitigation: 'Convenção documentada no comentário de generateError; lint rule opcional (deferido).'
+
+decision_rationale: |
+  APPROVE por:
+  1. Root cause diagnosticado corretamente pelo @qa (mesmo agente) — não é hipótese, é bug rastreado até file:line.
+  2. Fix é additive-only, retrocompat, sem risco de regressão em success paths (verificado empiricamente — 191 tests baseline intactos).
+  3. Test coverage suficiente para AC4 (3+ tests, todos verdes).
+  4. AC6 (smoke live) é etapa de deploy — não bloqueia gate de código.
+  5. Delegate.sh Codex falhou mas fallback direto foi autorizado + rastreado no Change Log — transparência preservada.
+
+next_actions:
+  - '@devops: git push origin spike/qwen3-coder-vscode-poc'
+  - '@devops: cd gateway && wrangler deploy — capturar version hash'
+  - '@devops: curl -D - forcing 401 (sem auth) e 502 (endpoint inválido) → confirmar x-request-id em ambas'
+  - 'Owner: smoke VS Code Copilot BYOK com qwen3-coder:30b — startar POD antes (RunPod REST /pods/{id}/start ou aguardar cron 11 UTC próximo dia útil)'
+  - 'Após smoke OK: Story 7.1.1 → Done; Story 7.1 pai desbloqueada para gate final'
+
+related:
+  parent_story: '7.1'
+  regression_of_commit: '07a6a2c'
+  fix_commit: '8aad8e7'
