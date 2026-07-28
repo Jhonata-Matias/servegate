@@ -116,15 +116,23 @@ function envelopeStream(
             // Pass through [DONE] but ensure usage frame is emitted before it
             if (trimmed === 'data: [DONE]') {
               if (includeUsage && !emittedUsage) {
+                // Story 7.1.5 — Usage frame MUST use `object: "chat.completion.chunk"`
+                // (OpenAI streaming spec). Prior value `chat.completion` broke
+                // GitHubCopilotChat/0.58.0 parser: it dereferenced the frame as a
+                // full completion and crashed with `Cannot read properties of
+                // undefined (reading 'headerRequestId')`. gemma4:e4b path was
+                // unaffected because Ollama's own OpenAI-compat proxy emits a
+                // correctly-shaped usage frame upstream, which `emittedUsage` locks
+                // out before we ever synthesize this one.
                 const usageFrame: any = {
                   id,
+                  object: 'chat.completion.chunk',
                   created,
-                  object: 'chat.completion',
                   model,
                   choices: [],
                 };
                 if (usageObj) usageFrame.usage = usageObj;
-                controller.enqueue(encoder.encode(`data: ${JSON.stringify(usageFrame)}\n`));
+                controller.enqueue(encoder.encode(`data: ${JSON.stringify(usageFrame)}\n\n`));
                 emittedUsage = true;
               }
               controller.enqueue(encoder.encode(line + '\n'));
@@ -158,17 +166,19 @@ function envelopeStream(
           controller.enqueue(encoder.encode(buffer));
         }
 
-        // If the stream ended without an explicit [DONE], ensure usage/done ordering
+        // If the stream ended without an explicit [DONE], ensure usage/done ordering.
+        // Story 7.1.5 — same spec-compliance fix as above: object must be
+        // `chat.completion.chunk`, not `chat.completion`.
         if (includeUsage && !emittedUsage) {
           const usageFrame: any = {
             id,
+            object: 'chat.completion.chunk',
             created,
-            object: 'chat.completion',
             model,
             choices: [],
           };
           if (usageObj) usageFrame.usage = usageObj;
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify(usageFrame)}\n`));
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify(usageFrame)}\n\n`));
         }
 
         // Success path — close the stream cleanly
@@ -409,13 +419,29 @@ function normalizeGenerateRequest(value: unknown): { value: GenerateRequest } | 
     if (!isRecord(message)) {
       return { error: 'invalid_request' };
     }
-    if (message.role !== 'system' && message.role !== 'user' && message.role !== 'assistant') {
+    const role = message.role;
+    if (role !== 'system' && role !== 'user' && role !== 'assistant' && role !== 'tool') {
       return { error: 'invalid_request' };
     }
-    if (typeof message.content !== 'string' || message.content.length === 0) {
+    // Story 7.1.7 — Copilot Chat sends role:"tool" messages carrying tool
+    // execution results (with `tool_call_id`) and role:"assistant" messages
+    // that requested the tool (with `tool_calls` + often empty content).
+    // Prior validation rejected both with 400 invalid_request, breaking agent
+    // mode on any turn beyond the first. Allow empty content when the message
+    // has tool_calls (assistant) or tool_call_id (tool result).
+    const rawContent = message.content;
+    const hasToolCalls = Array.isArray(message.tool_calls) && message.tool_calls.length > 0;
+    const isToolResult = role === 'tool' && typeof message.tool_call_id === 'string';
+    if (typeof rawContent !== 'string') {
       return { error: 'invalid_request' };
     }
-    normalizedMessages.push({ role: message.role, content: message.content });
+    if (rawContent.length === 0 && !hasToolCalls && !isToolResult) {
+      return { error: 'invalid_request' };
+    }
+    const normalized: GenerateMessage = { role, content: rawContent };
+    if (hasToolCalls) normalized.tool_calls = message.tool_calls as unknown[];
+    if (isToolResult) normalized.tool_call_id = message.tool_call_id as string;
+    normalizedMessages.push(normalized);
   }
 
   // Story 1.2 FR-5: max_completion_tokens takes precedence over max_tokens

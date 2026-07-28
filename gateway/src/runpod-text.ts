@@ -138,11 +138,18 @@ interface OllamaChatResponse {
 
 /**
  * Talks to Ollama's `/api/chat` (native format) which reliably emits structured
- * `tool_calls` for Qwen3-Coder. Always requests `stream: false` from Ollama —
- * gateway wraps the buffered response into either JSON or a single-chunk SSE
- * stream depending on the client's `body.stream` preference. "Fake streaming"
- * is acceptable for tool-calling loops because clients need the full tool_calls
- * array in one piece anyway before executing tools.
+ * `tool_calls` for Qwen3-Coder.
+ *
+ * Story 7.1.4 — Requests `stream: true` from Ollama and translates the NDJSON
+ * stream to OpenAI-shaped SSE chunks in real time. Prior "fake streaming"
+ * (buffered + 2 SSE chunks) crashed GitHubCopilotChat/0.58.0 even when the
+ * delta shape matched gemma4's exactly. Gemma4:e4b works because Ollama's own
+ * OpenAI-compat proxy emits per-token chunks; we now match that behaviour
+ * end-to-end through the translation layer.
+ *
+ * When the client requested `stream: false`, we still stream from Ollama but
+ * buffer the accumulated content on our side and return a single JSON
+ * completion (spec-compliant behaviour).
  */
 async function forwardOllamaNative(
   body: GenerateRequest,
@@ -154,11 +161,16 @@ async function forwardOllamaNative(
 
   const ollamaReq: OllamaChatRequest = {
     model: body.model ?? 'qwen3-coder:30b',
-    messages: body.messages as unknown[],
-    stream: false,
+    // Story 7.1.8 — Copilot Chat sends conversation history that includes
+    // assistant messages with `tool_calls[].function.arguments` as a JSON
+    // STRING (OpenAI spec). Ollama's chat template for Qwen3-Coder expects
+    // that same field as an OBJECT and returns 400 "Value looks like object,
+    // but can't find closing '}' symbol" when handed a string. Convert on the
+    // way out. Also normalize role:"tool" messages, which some upstream Ollama
+    // builds accept as-is but others prefer with the tool name/id merged in.
+    messages: normalizeMessagesForOllama(body.messages as unknown[]),
+    stream: true,
   };
-  // Passthrough tools + tool_choice when present (unknown fields on GenerateRequest —
-  // gateway does not strictly enforce them; Ollama consumes them natively).
   const rawBody = body as unknown as Record<string, unknown>;
   if (Array.isArray(rawBody.tools) && rawBody.tools.length > 0) {
     ollamaReq.tools = rawBody.tools as unknown[];
@@ -195,30 +207,326 @@ async function forwardOllamaNative(
   if (response.status >= 400) {
     throw new TextUpstreamError('text endpoint returned 4xx', 'http_4xx', response.status);
   }
-
-  let ollamaResp: OllamaChatResponse;
-  try {
-    ollamaResp = (await response.json()) as OllamaChatResponse;
-  } catch {
-    throw new TextUpstreamError('ollama returned invalid JSON', 'http_5xx');
+  if (!response.body) {
+    throw new TextUpstreamError('ollama returned no body', 'http_5xx');
   }
 
-  const modelId = body.model ?? ollamaResp.model;
-  const openAIResp = translateOllamaToOpenAI(ollamaResp, modelId);
-
-  // Client asked for streaming? Wrap in single-chunk SSE.
+  const modelId = body.model ?? 'qwen3-coder:30b';
   const clientWantsStream = body.stream !== false;
+
   if (clientWantsStream) {
-    const sseBody = buildOpenAISSEStream(openAIResp);
+    const sseBody = translateOllamaStreamToOpenAISSE(response.body, modelId);
     return new Response(sseBody, {
       status: 200,
       headers: { 'Content-Type': 'text/event-stream' },
     });
   }
-  return new Response(JSON.stringify(openAIResp), {
+
+  // Client asked for JSON — buffer the Ollama stream, aggregate into a single
+  // completion, return as JSON. Preserves the non-streaming API contract for
+  // callers that don't set stream:true.
+  const buffered = await bufferOllamaStream(response.body, modelId);
+  return new Response(JSON.stringify(buffered), {
     status: 200,
     headers: { 'Content-Type': 'application/json' },
   });
+}
+
+/**
+ * Reads Ollama's NDJSON stream, accumulates content and (any) tool_calls, and
+ * returns a single OpenAIChatCompletion shaped like the non-streaming response
+ * we used to build via `translateOllamaToOpenAI`.
+ */
+async function bufferOllamaStream(
+  body: ReadableStream<Uint8Array>,
+  modelId: string,
+): Promise<OpenAIChatCompletion> {
+  const decoder = new TextDecoder();
+  const reader = body.getReader();
+  let buffer = '';
+  let accumulatedContent = '';
+  let toolCalls: OllamaToolCall[] | undefined;
+  let doneReason: string | undefined;
+  let promptTokens = 0;
+  let completionTokens = 0;
+  let createdIso: string | undefined;
+  let observedModel: string | undefined;
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() ?? '';
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed) continue;
+        let chunk: OllamaChatResponse;
+        try {
+          chunk = JSON.parse(trimmed) as OllamaChatResponse;
+        } catch {
+          continue;
+        }
+        observedModel ??= chunk.model;
+        createdIso ??= chunk.created_at;
+        if (typeof chunk.message?.content === 'string' && chunk.message.content.length > 0) {
+          accumulatedContent += chunk.message.content;
+        }
+        if (chunk.done === true) {
+          if (Array.isArray(chunk.message?.tool_calls) && chunk.message.tool_calls.length > 0) {
+            toolCalls = chunk.message.tool_calls;
+          }
+          if (typeof chunk.done_reason === 'string') doneReason = chunk.done_reason;
+          if (typeof chunk.prompt_eval_count === 'number') promptTokens = chunk.prompt_eval_count;
+          if (typeof chunk.eval_count === 'number') completionTokens = chunk.eval_count;
+        }
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  const aggregated: OllamaChatResponse = {
+    model: observedModel ?? modelId,
+    created_at: createdIso ?? new Date().toISOString(),
+    message: {
+      role: 'assistant',
+      content: accumulatedContent,
+      ...(toolCalls ? { tool_calls: toolCalls } : {}),
+    },
+    done: true,
+    ...(doneReason ? { done_reason: doneReason } : {}),
+    prompt_eval_count: promptTokens,
+    eval_count: completionTokens,
+  };
+  return translateOllamaToOpenAI(aggregated, modelId);
+}
+
+/**
+ * Translates Ollama's NDJSON `/api/chat` stream into an OpenAI-shaped SSE
+ * ReadableStream. One SSE chunk per Ollama NDJSON line for content, plus
+ * dedicated chunks for tool_calls (arrive on the `done:true` line for Qwen)
+ * and the terminal `finish_reason`. Matches the per-token cadence emitted by
+ * Ollama's OpenAI-compat proxy for gemma4:e4b — the shape GitHubCopilotChat
+ * consumes successfully end-to-end.
+ */
+function translateOllamaStreamToOpenAISSE(
+  ollamaBody: ReadableStream<Uint8Array>,
+  modelId: string,
+): ReadableStream<Uint8Array> {
+  const encoder = new TextEncoder();
+  const decoder = new TextDecoder();
+  const id = `chatcmpl-${randomId()}`;
+  const created = Math.floor(Date.now() / 1000);
+
+  const base = {
+    id,
+    object: 'chat.completion.chunk' as const,
+    created,
+    model: modelId,
+    system_fingerprint: 'fp_ollama',
+  };
+
+  const contentChunk = (content: string) => ({
+    ...base,
+    choices: [{
+      index: 0,
+      delta: { role: 'assistant', content },
+      finish_reason: null,
+    }],
+  });
+  const toolCallsChunk = (tcs: OllamaToolCall[]) => ({
+    ...base,
+    choices: [{
+      index: 0,
+      delta: {
+        role: 'assistant',
+        content: '',
+        tool_calls: tcs.map((tc, i) => ({
+          index: i,
+          id: tc.id && tc.id.length > 0 ? tc.id : `call_${i}_${randomId()}`,
+          type: 'function' as const,
+          function: {
+            name: tc.function.name,
+            arguments:
+              typeof tc.function.arguments === 'string'
+                ? tc.function.arguments
+                : JSON.stringify(tc.function.arguments),
+          },
+        })),
+      },
+      finish_reason: null,
+    }],
+  });
+  const finishChunk = (reason: string) => ({
+    ...base,
+    choices: [{
+      index: 0,
+      delta: { role: 'assistant', content: '' },
+      finish_reason: reason,
+    }],
+  });
+
+  // Story 7.1.5 — Usage chunk emitted here (with system_fingerprint) so
+  // envelopeStream in generate.ts detects `chunk.usage` and marks its own
+  // synthesized frame as suppressed. Prior missing-system_fingerprint on the
+  // usage frame broke GitHubCopilotChat/0.58.0 parser (every other chunk had
+  // it; the usage frame did not, and the parser dereferenced it on the missing
+  // field). Real values come from Ollama's final done:true chunk.
+  const usageChunk = (prompt: number, completion: number) => ({
+    ...base,
+    choices: [],
+    usage: {
+      prompt_tokens: prompt,
+      completion_tokens: completion,
+      total_tokens: prompt + completion,
+    },
+  });
+
+  // Story 7.1.9 — Inactivity timeout guardrail. If Ollama stops emitting chunks
+  // for >90s we assume the upstream is dead and gracefully terminate the SSE
+  // stream (finish + usage + [DONE]) so the client (Copilot Chat) doesn't
+  // spin forever waiting for a next chunk that never arrives. 90s is well
+  // above normal per-chunk latency (typical 0-50ms, worst case a few seconds
+  // during model reload) so this triggers only on genuine upstream failure.
+  const INACTIVITY_TIMEOUT_MS = 90_000;
+
+  return new ReadableStream<Uint8Array>({
+    async start(controller) {
+      const reader = ollamaBody.getReader();
+      let buffer = '';
+      let sawAnyContent = false;
+      let sawToolCalls = false;
+      try {
+        while (true) {
+          // Race the next chunk against an inactivity deadline. If the deadline
+          // fires first, break out and emit a defensive finish.
+          const timeoutMarker = Symbol('inactivity_timeout');
+          let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+          const timeoutPromise = new Promise<typeof timeoutMarker>((resolve) => {
+            timeoutHandle = setTimeout(() => resolve(timeoutMarker), INACTIVITY_TIMEOUT_MS);
+          });
+          const readResult = await Promise.race([reader.read(), timeoutPromise]);
+          if (timeoutHandle) clearTimeout(timeoutHandle);
+          if (readResult === timeoutMarker) {
+            // Upstream idle > INACTIVITY_TIMEOUT_MS — treat as done and stop
+            // reading. `finally` below still releases the reader lock.
+            break;
+          }
+          const { done, value } = readResult as ReadableStreamReadResult<Uint8Array>;
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() ?? '';
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed) continue;
+            let chunk: OllamaChatResponse;
+            try {
+              chunk = JSON.parse(trimmed) as OllamaChatResponse;
+            } catch {
+              continue;
+            }
+            const msg = chunk.message;
+            if (typeof msg?.content === 'string' && msg.content.length > 0) {
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify(contentChunk(msg.content))}\n\n`));
+              sawAnyContent = true;
+            }
+            // Story 7.1.6 — Ollama emits structured `tool_calls` in the same
+            // chunk as content sometimes, and in intermediate (done:false)
+            // chunks when the model decides to call a tool. Prior code only
+            // checked on done:true, dropping every tool_call the model made
+            // mid-stream — Copilot Chat saw text-only responses even when the
+            // model wanted to invoke a tool. Track emissions so we don't repeat
+            // (and so deriveFinishReason still fires on done:true).
+            if (Array.isArray(msg?.tool_calls) && msg.tool_calls.length > 0) {
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify(toolCallsChunk(msg.tool_calls))}\n\n`));
+              sawToolCalls = true;
+            }
+            if (chunk.done === true) {
+              const finishReason = sawToolCalls
+                ? 'tool_calls'
+                : (chunk.done_reason && chunk.done_reason.length > 0 ? chunk.done_reason : 'stop');
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify(finishChunk(finishReason))}\n\n`));
+              // Story 7.1.5 — Always emit usage chunk WITH system_fingerprint.
+              // envelopeStream detects `chunk.usage` and skips its own frame
+              // (which would otherwise ship without system_fingerprint).
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify(usageChunk(
+                chunk.prompt_eval_count ?? 0,
+                chunk.eval_count ?? 0,
+              ))}\n\n`));
+              controller.enqueue(encoder.encode(`data: [DONE]\n\n`));
+              controller.close();
+              return;
+            }
+          }
+        }
+        if (!sawAnyContent) {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify(contentChunk(''))}\n\n`));
+        }
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify(finishChunk('stop'))}\n\n`));
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify(usageChunk(0, 0))}\n\n`));
+        controller.enqueue(encoder.encode(`data: [DONE]\n\n`));
+        controller.close();
+      } catch (err) {
+        controller.error(err);
+      } finally {
+        reader.releaseLock();
+      }
+    },
+  });
+}
+
+/**
+ * Story 7.1.8 — Rewrite outbound messages so Ollama's chat template accepts
+ * them cleanly. Two cases matter:
+ *
+ *   1. assistant messages with `tool_calls[].function.arguments` — OpenAI sends
+ *      arguments as a JSON string; Ollama expects an object. Parse-if-string.
+ *   2. role:"tool" messages — Ollama accepts these but the content must be a
+ *      string. Copilot already sends strings, so this is a pass-through with
+ *      the shape asserted defensively.
+ *
+ * Any message that doesn't match either shape passes through unchanged.
+ */
+function normalizeMessagesForOllama(messages: unknown[]): unknown[] {
+  return messages.map((msg) => {
+    if (!msg || typeof msg !== 'object') return msg;
+    const m = msg as Record<string, unknown>;
+    const rewritten: Record<string, unknown> = { ...m };
+    // Case 1 — assistant with tool_calls.
+    if (Array.isArray(m.tool_calls)) {
+      rewritten.tool_calls = m.tool_calls.map((tc) => {
+        if (!tc || typeof tc !== 'object') return tc;
+        const t = tc as Record<string, unknown>;
+        const fn = t.function as Record<string, unknown> | undefined;
+        if (!fn) return tc;
+        let args = fn.arguments;
+        if (typeof args === 'string') {
+          try {
+            args = JSON.parse(args);
+          } catch {
+            // Leave malformed strings alone — Ollama will surface its own error.
+          }
+        }
+        return {
+          ...t,
+          function: { ...fn, arguments: args },
+        };
+      });
+    }
+    return rewritten;
+  });
+}
+
+function deriveFinishReason(
+  toolCalls: OllamaToolCall[] | undefined,
+  doneReason: string | undefined,
+): string {
+  if (Array.isArray(toolCalls) && toolCalls.length > 0) return 'tool_calls';
+  if (doneReason && doneReason.length > 0) return doneReason;
+  return 'stop';
 }
 
 interface OpenAIChatCompletion {
@@ -321,52 +629,84 @@ function randomId(): string {
 
 /**
  * Emits an OpenAI-shaped SSE stream from a buffered non-streaming completion.
- * Two chunks — first carries the full content + tool_calls under `delta`, second
- * carries just `finish_reason`. Terminates with `data: [DONE]`. VS Code Copilot
- * BYOK accepts this shape (accumulates delta, finalizes on finish_reason).
+ *
+ * Story 7.1.3 — Matches the exact chunk shape that Ollama's OpenAI-compat
+ * proxy emits for gemma4:e4b (which we know works end-to-end with
+ * GitHubCopilotChat/0.58.0). Prior attempts (2-chunk merged, then 3-chunk
+ * split) both crashed the Copilot Chat parser with
+ * `Cannot read properties of undefined (reading 'headerRequestId')` because
+ * their `delta` shape omitted fields the parser dereferences unconditionally.
+ *
+ * Observed working shape (captured via curl on gemma4:e4b path):
+ *   data: {"choices":[{"delta":{"content":"Hello","role":"assistant"},"finish_reason":null,"index":0}], ...}
+ *   ... one chunk per token, ALL with both `role` AND `content` (string) ...
+ *   data: {"choices":[{"delta":{"content":"","role":"assistant"},"finish_reason":"stop","index":0}], ...}
+ *   data: [DONE]
+ *
+ * Key invariants Copilot Chat requires:
+ *   - EVERY delta carries both `role: "assistant"` AND `content: "..."` (string, may be empty)
+ *   - Finish chunk uses `content: ""` (empty string), NOT an empty delta
+ *   - For tool_calls, add `tool_calls: [...]` alongside role+content (content="" here)
+ *
+ * We still fake-stream (one payload chunk, then finish) because Ollama's
+ * native /api/chat is buffered. Real per-token streaming would require moving
+ * to Ollama /api/chat with `stream: true` + NDJSON parsing — deferred.
  */
 function buildOpenAISSEStream(resp: OpenAIChatCompletion): ReadableStream<Uint8Array> {
   const encoder = new TextEncoder();
-  const contentChunk = {
-    id: resp.id,
-    object: 'chat.completion.chunk',
-    created: resp.created,
-    model: resp.model,
-    system_fingerprint: resp.system_fingerprint,
-    choices: resp.choices.map((c) => ({
-      index: c.index,
-      delta: {
-        role: c.message.role,
-        ...(c.message.content !== null ? { content: c.message.content } : {}),
-        ...(c.message.tool_calls
-          ? {
-              tool_calls: c.message.tool_calls.map((tc, i) => ({
-                index: i,
-                id: tc.id,
-                type: tc.type,
-                function: tc.function,
-              })),
-            }
-          : {}),
+  const choice = resp.choices[0];
+  if (!choice) {
+    return new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(encoder.encode(`data: [DONE]\n\n`));
+        controller.close();
       },
-      finish_reason: null,
-    })),
-  };
-  const finishChunk = {
+    });
+  }
+
+  const baseChunk = {
     id: resp.id,
-    object: 'chat.completion.chunk',
+    object: 'chat.completion.chunk' as const,
     created: resp.created,
     model: resp.model,
     system_fingerprint: resp.system_fingerprint,
-    choices: resp.choices.map((c) => ({
-      index: c.index,
-      delta: {},
-      finish_reason: c.finish_reason,
-    })),
   };
+
+  // Payload chunk — always carries role + content (string). Add tool_calls
+  // alongside when present. Content stays as an empty string in the tool_calls
+  // case so the delta shape stays uniform across chunks.
+  const contentString = choice.message.content ?? '';
+  const payloadDelta: Record<string, unknown> = {
+    role: choice.message.role,
+    content: contentString,
+  };
+  if (choice.message.tool_calls && choice.message.tool_calls.length > 0) {
+    payloadDelta.tool_calls = choice.message.tool_calls.map((tc, i) => ({
+      index: i,
+      id: tc.id,
+      type: tc.type,
+      function: tc.function,
+    }));
+  }
+  const payloadChunk = {
+    ...baseChunk,
+    choices: [{ index: choice.index, delta: payloadDelta, finish_reason: null }],
+  };
+
+  // Finish chunk — role + empty content string (mirrors the working gemma4
+  // shape). NOT an empty delta.
+  const finishChunk = {
+    ...baseChunk,
+    choices: [{
+      index: choice.index,
+      delta: { role: choice.message.role, content: '' },
+      finish_reason: choice.finish_reason,
+    }],
+  };
+
   return new ReadableStream<Uint8Array>({
     start(controller) {
-      controller.enqueue(encoder.encode(`data: ${JSON.stringify(contentChunk)}\n\n`));
+      controller.enqueue(encoder.encode(`data: ${JSON.stringify(payloadChunk)}\n\n`));
       controller.enqueue(encoder.encode(`data: ${JSON.stringify(finishChunk)}\n\n`));
       controller.enqueue(encoder.encode(`data: [DONE]\n\n`));
       controller.close();

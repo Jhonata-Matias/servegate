@@ -120,6 +120,26 @@ function makeOllamaUpstreamCompletion(withToolCall = false): unknown {
   };
 }
 
+/**
+ * Story 7.1.4 — Wraps a single Ollama completion into an NDJSON stream Response
+ * so tests match the new production path (Ollama /api/chat with stream:true
+ * emits one JSON object per line, terminated by a `done:true` chunk).
+ */
+function makeOllamaNDJSONResponse(completion: unknown): Response {
+  const encoder = new TextEncoder();
+  const line = JSON.stringify(completion) + '\n';
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(encoder.encode(line));
+      controller.close();
+    },
+  });
+  return new Response(stream, {
+    status: 200,
+    headers: { 'Content-Type': 'application/x-ndjson' },
+  });
+}
+
 // ---------------------------------------------------------------------------
 // resolveModelUpstream — unit
 // ---------------------------------------------------------------------------
@@ -270,7 +290,7 @@ describe('handleGenerate — routing by model field', () => {
   it('qwen3-coder:30b hits POD /api/chat (NOT /v1/chat/completions) without Bearer auth (ollama apiFormat)', async () => {
     vi.stubGlobal(
       'fetch',
-      vi.fn(async () => Response.json(makeOllamaUpstreamCompletion(false), { status: 200 })),
+      vi.fn(async () => makeOllamaNDJSONResponse(makeOllamaUpstreamCompletion(false))),
     );
     const env = makeEnv();
     const req = chatRequest({
@@ -291,7 +311,7 @@ describe('handleGenerate — routing by model field', () => {
   it('Ollama route converts OpenAI max_tokens to options.num_predict in the upstream request body', async () => {
     vi.stubGlobal(
       'fetch',
-      vi.fn(async () => Response.json(makeOllamaUpstreamCompletion(false), { status: 200 })),
+      vi.fn(async () => makeOllamaNDJSONResponse(makeOllamaUpstreamCompletion(false))),
     );
     const env = makeEnv();
     const req = chatRequest({
@@ -306,7 +326,7 @@ describe('handleGenerate — routing by model field', () => {
     const upstreamBody = JSON.parse(
       (fetchMock.mock.calls[0]![1] as RequestInit).body as string,
     ) as Record<string, unknown>;
-    expect(upstreamBody.stream).toBe(false);
+    expect(upstreamBody.stream).toBe(true);
     expect(upstreamBody.options).toBeDefined();
     expect((upstreamBody.options as Record<string, unknown>).num_predict).toBe(42);
     expect((upstreamBody.options as Record<string, unknown>).temperature).toBe(0.5);
@@ -315,7 +335,7 @@ describe('handleGenerate — routing by model field', () => {
   it('Ollama route: response arrives in OpenAI shape with tool_calls when Ollama emitted them', async () => {
     vi.stubGlobal(
       'fetch',
-      vi.fn(async () => Response.json(makeOllamaUpstreamCompletion(true), { status: 200 })),
+      vi.fn(async () => makeOllamaNDJSONResponse(makeOllamaUpstreamCompletion(true))),
     );
     const env = makeEnv();
     const req = chatRequest({
@@ -343,7 +363,7 @@ describe('handleGenerate — routing by model field', () => {
   it('Ollama route with client stream:true returns SSE with data: [DONE] terminator', async () => {
     vi.stubGlobal(
       'fetch',
-      vi.fn(async () => Response.json(makeOllamaUpstreamCompletion(false), { status: 200 })),
+      vi.fn(async () => makeOllamaNDJSONResponse(makeOllamaUpstreamCompletion(false))),
     );
     const env = makeEnv();
     const req = chatRequest({
@@ -426,7 +446,7 @@ describe('handleGenerate — routing by model field', () => {
   it('writes last-request timestamp to RATE_LIMIT_KV on qwen3-coder request', async () => {
     vi.stubGlobal(
       'fetch',
-      vi.fn(async () => Response.json(makeOllamaUpstreamCompletion(false), { status: 200 })),
+      vi.fn(async () => makeOllamaNDJSONResponse(makeOllamaUpstreamCompletion(false))),
     );
     const env = makeEnv();
     const req = chatRequest({
@@ -475,7 +495,7 @@ describe('rate-limit — qwen3-coder bypass', () => {
   it('qwen3-coder request passes even when today token bucket is over the daily limit', async () => {
     vi.stubGlobal(
       'fetch',
-      vi.fn(async () => Response.json(makeOllamaUpstreamCompletion(false), { status: 200 })),
+      vi.fn(async () => makeOllamaNDJSONResponse(makeOllamaUpstreamCompletion(false))),
     );
     // Prime KV with today's counter well above the 50k daily budget
     const today = new Date().toISOString().slice(0, 10);
@@ -515,7 +535,7 @@ describe('rate-limit — qwen3-coder bypass', () => {
   it('qwen3-coder request does NOT increment the shared token counter', async () => {
     vi.stubGlobal(
       'fetch',
-      vi.fn(async () => Response.json(makeOllamaUpstreamCompletion(false), { status: 200 })),
+      vi.fn(async () => makeOllamaNDJSONResponse(makeOllamaUpstreamCompletion(false))),
     );
     const kv = makeKv();
     const env = makeEnv({ RATE_LIMIT_KV: kv });

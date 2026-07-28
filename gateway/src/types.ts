@@ -65,11 +65,19 @@ export interface TokenBudgetState {
   secondsUntilReset: number;
 }
 
-export type GenerateRole = 'system' | 'user' | 'assistant';
+export type GenerateRole = 'system' | 'user' | 'assistant' | 'tool';
 
 export interface GenerateMessage {
   role: GenerateRole;
+  // Story 7.1.7 — Content may be empty string when `tool_calls` is present
+  // on an assistant message (agentic tool-cycle turns from Copilot Chat).
   content: string;
+  // Story 7.1.7 — Assistant messages that requested tool execution carry the
+  // tool_calls history so the model can resume the conversation coherently.
+  tool_calls?: unknown[];
+  // Story 7.1.7 — Required on role:"tool" messages — echoes the id from the
+  // assistant's prior tool_calls entry so the model can associate result → call.
+  tool_call_id?: string;
 }
 
 export interface GenerateRequest {
