@@ -35,6 +35,16 @@ const MODEL_CATALOG: OpenAIModel[] = [
     created: 1700000000,
     owned_by: 'servegate',
   },
+  // Story 7.1 — Qwen3-Coder-30B agentic coding endpoint.
+  // Visible in /v1/models regardless of whether RUNPOD_CODER_ENDPOINT_ID is set;
+  // generate.ts::resolveModelEndpoint() converts an unset secret into a
+  // client-visible 404 model_not_found at the actual completion request.
+  {
+    id: 'qwen3-coder:30b',
+    object: 'model',
+    created: 1784937600, // 2026-07-25 (deploy target date)
+    owned_by: 'servegate',
+  },
 ];
 
 const MODELS_RESPONSE: ModelsListResponse = {

@@ -1,0 +1,23 @@
+{
+  "_comment": "Story 7.1 AC6 — running cost ledger. Append entries per phase. Circuit breaker: total_setup_usd > 5 during Tasks 2-5 → ABORT + escalate to @architect.",
+  "_schema": {
+    "phase": "download | provisioning | smoke | preview_validation | prod_deploy | steady_state",
+    "date": "ISO-8601",
+    "runtime_seconds": "int — GPU active time",
+    "rate_usd_per_sec": "float — RunPod Serverless rate (48GB A6000: 0.00034, 80GB A100: 0.00076)",
+    "gpu_tier": "48GB | 80GB",
+    "cost_usd": "float — runtime_seconds * rate_usd_per_sec",
+    "cumulative_setup_usd": "float — sum across setup phases (Tasks 2-5)",
+    "notes": "free text"
+  },
+  "entries": [],
+  "totals": {
+    "setup_usd": 0,
+    "steady_state_usd_current_month": 0,
+    "last_updated": null
+  },
+  "caps": {
+    "setup_hard_cap_usd": 5,
+    "monthly_soft_cap_usd": 60
+  }
+}

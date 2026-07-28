@@ -186,12 +186,14 @@ describe('GET /v1/models (FR-2)', () => {
     const body = (await res.json()) as Record<string, unknown>;
     expect(body.object).toBe('list');
     expect(Array.isArray(body.data)).toBe(true);
-    expect(body.data).toHaveLength(1);
-    const model = (body.data as Array<Record<string, unknown>>)[0]!;
-    expect(model.id).toBe('gemma4:e4b');
-    expect(model.object).toBe('model');
-    expect(model.owned_by).toBe('servegate');
-    expect(model.created).toBe(1700000000);
+    // Story 7.1: catalog extended from 1 (gemma4:e4b only) to include qwen3-coder:30b.
+    // This test still validates the original gemma4:e4b entry; multi-model coverage
+    // lives in tests/model-routing.test.ts.
+    const gemma = (body.data as Array<Record<string, unknown>>).find((m) => m.id === 'gemma4:e4b');
+    expect(gemma).toBeDefined();
+    expect(gemma!.object).toBe('model');
+    expect(gemma!.owned_by).toBe('servegate');
+    expect(gemma!.created).toBe(1700000000);
   });
 
   it('returns 200 with model list when authenticated via Authorization: Bearer', async () => {

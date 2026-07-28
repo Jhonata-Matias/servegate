@@ -9,6 +9,10 @@
 # - RUNPOD_API_KEY  — same as serverless/.env (Story 2.1)
 # - RUNPOD_ENDPOINT_ID — endpoint ID from Story 2.1 deploy
 # - RUNPOD_TEXT_ENDPOINT_ID — text endpoint ID from Story 4.2 deploy
+# - RUNPOD_CODER_POD_ID — POD id for Story 7.1 Qwen3-Coder POD (used by scheduler for start/stop).
+# - RUNPOD_CODER_POD_URL — full URL to Ollama OpenAI-compat endpoint on the POD.
+#   Both optional: when unset, model=qwen3-coder:30b requests return 404 model_not_found
+#   and the scheduler NO-OPs on cron ticks (gemma4:e4b unaffected).
 
 name = "gemma4-gateway"
 main = "src/index.ts"
@@ -86,6 +90,23 @@ bucket_name = "servegate-videos"
 # Observability — logs visible in `wrangler tail` and Cloudflare dashboard
 [observability]
 enabled = true
+
+# Story 7.1 — Cron Triggers for Qwen3-Coder POD lifecycle.
+# Owner asked for Mon-Fri 8h-18h GMT-3 business hours (11-21 UTC), with idle
+# auto-shutdown ACTIVE only during peak (10h-16h GMT-3 = 13-18 UTC).
+# Grace periods 8-10h and 16-18h GMT-3 keep the POD warm even if idle.
+#
+# See gateway/src/pod-scheduler.ts for handler logic.
+[triggers]
+crons = [
+  # Morning start — 08:00 GMT-3 = 11:00 UTC, Mon-Fri
+  "0 11 * * 1-5",
+  # Evening stop — 18:00 GMT-3 = 21:00 UTC, Mon-Fri
+  "0 21 * * 1-5",
+  # Peak idle-check every 5min — 10:00-15:55 GMT-3 = 13:00-18:55 UTC, Mon-Fri.
+  # Idle threshold 60min (defined in pod-scheduler.ts).
+  "*/5 13-18 * * 1-5",
+]
 
 # Optional: limit to specific routes (uncomment when custom domain configured)
 # [[routes]]

@@ -1,18 +1,60 @@
 import { collectApiKeys, validateAuth } from './auth.js';
 import { getClientIp, log } from './log.js';
-import { openaiErrorResponse, openaiStreamErrorFrame, type OpenAIErrorBody } from './openai-error.js';
+import { openaiErrorResponse, type OpenAIErrorBody } from './openai-error.js';
 import {
   checkTokenBudget,
   recordTokenUsage,
   TOKEN_DAILY_LIMIT,
 } from './rate-limit.js';
-import { forwardToTextEndpoint, TextUpstreamError } from './runpod-text.js';
+import { forwardToTextEndpoint, TextUpstreamError, type UpstreamTarget } from './runpod-text.js';
 import type { Env, GenerateMessage, GenerateRequest, GenerateResponse, TokenBudgetState } from './types.js';
 
 const DEFAULT_TEXT_MODEL = 'gemma4:e4b';
 const DEFAULT_MAX_TOKENS = 512;
 const MAX_ALPHA_TOKENS = 2048;
 const MAX_BODY_BYTES = 2 * 1024 * 1024;
+
+// Story 7.1 — Supported models catalog. Extend this list AND `resolveModelEndpoint`
+// AND `openai-models.ts::MODEL_CATALOG` together (single source of truth intentionally
+// avoided to keep the /v1/models endpoint independently mockable in tests). The
+// `SUPPORTED_MODELS invariant` test in tests/model-routing.test.ts catches drift.
+const SUPPORTED_MODELS = ['gemma4:e4b', 'qwen3-coder:30b'] as const;
+
+/**
+ * Story 7.1 — Resolves a model id to its upstream target (URL + auth flavor).
+ *
+ * - `gemma4:e4b` → RunPod Serverless (Bearer auth, built URL from endpoint id).
+ * - `qwen3-coder:30b` → RunPod POD (anonymous, Ollama proxy URL as-is).
+ *
+ * Returns null when the model is known but its secret is unset (e.g.
+ * qwen3-coder:30b during rollback where RUNPOD_CODER_POD_URL was deleted).
+ * Caller converts null into a 404 `model_not_found` response.
+ */
+export function resolveModelUpstream(model: string, env: Env): UpstreamTarget | null {
+  switch (model) {
+    case 'gemma4:e4b': {
+      const id = env.RUNPOD_TEXT_ENDPOINT_ID;
+      if (!id) return null;
+      return {
+        url: `https://api.runpod.ai/v2/${id}/openai/v1/chat/completions`,
+        requiresRunpodAuth: true,
+        apiFormat: 'openai',
+      };
+    }
+    case 'qwen3-coder:30b': {
+      const url = env.RUNPOD_CODER_POD_URL;
+      if (!url) return null;
+      // Story 7.1 patch — Ollama's OpenAI-compat layer drops `tool_calls[]` for
+      // Qwen3-Coder (returns the raw <tool_call> XML as content). Route to
+      // Ollama's native /api/chat and let forwardToTextEndpoint translate the
+      // response back to OpenAI shape. Secret can be either a base URL or a
+      // full /v1/chat/completions URL — forwarder strips the suffix if present.
+      return { url, requiresRunpodAuth: false, apiFormat: 'ollama' };
+    }
+    default:
+      return null;
+  }
+}
 
 type WaitUntilContext = Pick<ExecutionContext, 'waitUntil'>;
 
@@ -74,15 +116,23 @@ function envelopeStream(
             // Pass through [DONE] but ensure usage frame is emitted before it
             if (trimmed === 'data: [DONE]') {
               if (includeUsage && !emittedUsage) {
+                // Story 7.1.5 — Usage frame MUST use `object: "chat.completion.chunk"`
+                // (OpenAI streaming spec). Prior value `chat.completion` broke
+                // GitHubCopilotChat/0.58.0 parser: it dereferenced the frame as a
+                // full completion and crashed with `Cannot read properties of
+                // undefined (reading 'headerRequestId')`. gemma4:e4b path was
+                // unaffected because Ollama's own OpenAI-compat proxy emits a
+                // correctly-shaped usage frame upstream, which `emittedUsage` locks
+                // out before we ever synthesize this one.
                 const usageFrame: any = {
                   id,
+                  object: 'chat.completion.chunk',
                   created,
-                  object: 'chat.completion',
                   model,
                   choices: [],
                 };
                 if (usageObj) usageFrame.usage = usageObj;
-                controller.enqueue(encoder.encode(`data: ${JSON.stringify(usageFrame)}\n`));
+                controller.enqueue(encoder.encode(`data: ${JSON.stringify(usageFrame)}\n\n`));
                 emittedUsage = true;
               }
               controller.enqueue(encoder.encode(line + '\n'));
@@ -116,17 +166,19 @@ function envelopeStream(
           controller.enqueue(encoder.encode(buffer));
         }
 
-        // If the stream ended without an explicit [DONE], ensure usage/done ordering
+        // If the stream ended without an explicit [DONE], ensure usage/done ordering.
+        // Story 7.1.5 — same spec-compliance fix as above: object must be
+        // `chat.completion.chunk`, not `chat.completion`.
         if (includeUsage && !emittedUsage) {
           const usageFrame: any = {
             id,
+            object: 'chat.completion.chunk',
             created,
-            object: 'chat.completion',
             model,
             choices: [],
           };
           if (usageObj) usageFrame.usage = usageObj;
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify(usageFrame)}\n`));
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify(usageFrame)}\n\n`));
         }
 
         // Success path — close the stream cleanly
@@ -154,23 +206,23 @@ export async function handleGenerate(
 
   const authFailure = validateAuth(authCompatibleRequest(request), collectApiKeys(env));
   if (authFailure) {
-    return withGenerateHeaders(authFailure, defaultTokenState(), DEFAULT_TEXT_MODEL, env);
+    return withGenerateHeaders(authFailure, defaultTokenState(), DEFAULT_TEXT_MODEL, env, completionId);
   }
 
   const contentLength = Number.parseInt(request.headers.get('Content-Length') ?? '0', 10);
   if (contentLength > MAX_BODY_BYTES) {
-    return generateError(413, 'request_too_large', defaultTokenState(), DEFAULT_TEXT_MODEL, env);
+    return generateError(413, 'request_too_large', defaultTokenState(), DEFAULT_TEXT_MODEL, env, completionId);
   }
 
   let rawBody: string;
   try {
     rawBody = await request.text();
   } catch {
-    return generateError(400, 'invalid_request', defaultTokenState(), DEFAULT_TEXT_MODEL, env);
+    return generateError(400, 'invalid_request', defaultTokenState(), DEFAULT_TEXT_MODEL, env, completionId);
   }
 
   if (new TextEncoder().encode(rawBody).byteLength > MAX_BODY_BYTES) {
-    return generateError(413, 'request_too_large', defaultTokenState(), DEFAULT_TEXT_MODEL, env);
+    return generateError(413, 'request_too_large', defaultTokenState(), DEFAULT_TEXT_MODEL, env, completionId);
   }
 
   let parsed: unknown;
@@ -178,29 +230,42 @@ export async function handleGenerate(
     parsed = JSON.parse(rawBody);
   } catch {
     logGenerateInvalid(ip, start, 'invalid_json');
-    return generateError(400, 'invalid_json', defaultTokenState(), DEFAULT_TEXT_MODEL, env);
+    return generateError(400, 'invalid_json', defaultTokenState(), DEFAULT_TEXT_MODEL, env, completionId);
   }
 
   const validation = normalizeGenerateRequest(parsed);
   if ('error' in validation) {
     logGenerateInvalid(ip, start, validation.error);
-    return generateError(400, validation.error, defaultTokenState(), DEFAULT_TEXT_MODEL, env);
+    return generateError(400, validation.error, defaultTokenState(), DEFAULT_TEXT_MODEL, env, completionId);
   }
 
   const body = validation.value;
   const model = body.model ?? DEFAULT_TEXT_MODEL;
   const approxTokens = estimateMaxPossibleTokens(rawBody, body.max_tokens ?? DEFAULT_MAX_TOKENS);
-  const { state: tokenState, allowed } = await checkTokenBudget(env.RATE_LIMIT_KV, approxTokens);
-  if (!allowed) {
-    log({
-      timestamp: Date.now(),
-      event: 'generate_rate_limited',
-      ip,
-      status: 429,
-      elapsed_ms: Date.now() - start,
-      error_code: 'rate_limit_exceeded',
-    });
-    return generateError(429, 'rate_limit_exceeded', tokenState, model, env);
+
+  // Story 7.1 — Token daily budget only guards models with per-token upstream
+  // cost (gemma4:e4b on RunPod Serverless). qwen3-coder:30b runs on a
+  // flat-rate POD ($0.69/hr regardless of tokens), gated by owner-only API
+  // access, so it's protected by cron start/stop + idle shutdown (see
+  // pod-scheduler.ts) — NOT by per-token counters. Without this bypass, a
+  // single VS Code Copilot agentic loop (10-20 requests × 8K max_tokens
+  // estimate) burns 50k daily budget on the very first prompt.
+  const bypassTokenBudget = model === 'qwen3-coder:30b';
+  let tokenState = defaultTokenState();
+  if (!bypassTokenBudget) {
+    const check = await checkTokenBudget(env.RATE_LIMIT_KV, approxTokens);
+    tokenState = check.state;
+    if (!check.allowed) {
+      log({
+        timestamp: Date.now(),
+        event: 'generate_rate_limited',
+        ip,
+        status: 429,
+        elapsed_ms: Date.now() - start,
+        error_code: 'rate_limit_exceeded',
+      });
+      return generateError(429, 'rate_limit_exceeded', tokenState, model, env, completionId);
+    }
   }
 
   log({
@@ -211,18 +276,42 @@ export async function handleGenerate(
     elapsed_ms: Date.now() - start,
   });
 
+  // Story 7.1: resolve model→upstream (URL + auth flavor). If unresolvable
+  // (secret missing during a partial rollback, or transitional deploy), return
+  // model_not_found instead of a 502 upstream error — the model IS defined
+  // in SUPPORTED_MODELS but its infra isn't provisioned, which is a
+  // client-visible config problem.
+  const upstreamTarget = resolveModelUpstream(model, env);
+  if (!upstreamTarget) {
+    return generateError(404, 'model_not_found', tokenState, model, env, completionId);
+  }
+
+  // Story 7.1: track last-request timestamp for POD idle-shutdown scheduler.
+  // Only meaningful for POD-backed models — Serverless has its own idleTimeout.
+  if (model === 'qwen3-coder:30b') {
+    // Fire-and-forget — do not block the request path.
+    const kvWrite = env.RATE_LIMIT_KV.put('coder:last_request_ms', String(Date.now()));
+    if (ctx) {
+      ctx.waitUntil(kvWrite);
+    } else {
+      kvWrite.catch(() => {});
+    }
+  }
+
   let upstream: Response;
   try {
-    upstream = await forwardToTextEndpoint(body, env, request.signal);
+    upstream = await forwardToTextEndpoint(body, env, upstreamTarget, request.signal);
   } catch (err) {
-    return handleGenerateUpstreamError(err, ip, start, tokenState, model, env);
+    return handleGenerateUpstreamError(err, ip, start, tokenState, model, env, completionId);
   }
 
   if (body.stream !== false) {
     if (!upstream.body) {
-      return generateError(502, 'upstream_error', tokenState, model, env);
+      return generateError(502, 'upstream_error', tokenState, model, env, completionId);
     }
-    recordAsync(ctx, env, approxTokens);
+    if (!bypassTokenBudget) {
+      recordAsync(ctx, env, approxTokens);
+    }
 
     // Story 1.1 FR-3: wrap upstream stream with envelope normalization
     const includeUsage = !!(body.stream_options && (body.stream_options as Record<string, unknown>).include_usage);
@@ -235,6 +324,11 @@ export async function handleGenerate(
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',
         Connection: 'keep-alive',
+        // Story 7.1 — VS Code Copilot BYOK client reads `x-request-id` from every
+        // response and crashes with `Cannot read properties of undefined (reading
+        // 'headerRequestId')` when missing. Reuse the completion id (chatcmpl-*)
+        // as the request id — makes gateway logs correlate with client-side traces.
+        'x-request-id': completionId,
         ...tokenHeaders(tokenState, model),
         ...corsHeaders(env),
       },
@@ -245,7 +339,7 @@ export async function handleGenerate(
   try {
     payload = (await upstream.json()) as GenerateResponse;
   } catch {
-    return generateError(502, 'upstream_error', tokenState, model, env);
+    return generateError(502, 'upstream_error', tokenState, model, env, completionId);
   }
 
   // Story 1.1 FR-3: inject id and created into non-streaming response
@@ -253,7 +347,9 @@ export async function handleGenerate(
   payload.created = created;
 
   const actualTokens = payload.usage?.total_tokens ?? approxTokens;
-  recordAsync(ctx, env, actualTokens);
+  if (!bypassTokenBudget) {
+    recordAsync(ctx, env, actualTokens);
+  }
 
   log({
     timestamp: Date.now(),
@@ -264,6 +360,8 @@ export async function handleGenerate(
   });
 
   return json(200, payload, {
+    // Story 7.1 — See streaming path above for the `x-request-id` rationale.
+    'x-request-id': completionId,
     ...tokenHeaders(tokenState, model),
     ...corsHeaders(env),
   });
@@ -321,13 +419,29 @@ function normalizeGenerateRequest(value: unknown): { value: GenerateRequest } | 
     if (!isRecord(message)) {
       return { error: 'invalid_request' };
     }
-    if (message.role !== 'system' && message.role !== 'user' && message.role !== 'assistant') {
+    const role = message.role;
+    if (role !== 'system' && role !== 'user' && role !== 'assistant' && role !== 'tool') {
       return { error: 'invalid_request' };
     }
-    if (typeof message.content !== 'string' || message.content.length === 0) {
+    // Story 7.1.7 — Copilot Chat sends role:"tool" messages carrying tool
+    // execution results (with `tool_call_id`) and role:"assistant" messages
+    // that requested the tool (with `tool_calls` + often empty content).
+    // Prior validation rejected both with 400 invalid_request, breaking agent
+    // mode on any turn beyond the first. Allow empty content when the message
+    // has tool_calls (assistant) or tool_call_id (tool result).
+    const rawContent = message.content;
+    const hasToolCalls = Array.isArray(message.tool_calls) && message.tool_calls.length > 0;
+    const isToolResult = role === 'tool' && typeof message.tool_call_id === 'string';
+    if (typeof rawContent !== 'string') {
       return { error: 'invalid_request' };
     }
-    normalizedMessages.push({ role: message.role, content: message.content });
+    if (rawContent.length === 0 && !hasToolCalls && !isToolResult) {
+      return { error: 'invalid_request' };
+    }
+    const normalized: GenerateMessage = { role, content: rawContent };
+    if (hasToolCalls) normalized.tool_calls = message.tool_calls as unknown[];
+    if (isToolResult) normalized.tool_call_id = message.tool_call_id as string;
+    normalizedMessages.push(normalized);
   }
 
   // Story 1.2 FR-5: max_completion_tokens takes precedence over max_tokens
@@ -349,12 +463,12 @@ function normalizeGenerateRequest(value: unknown): { value: GenerateRequest } | 
     return { error: 'invalid_request' };
   }
 
-  // Story 1.2 FR-5: validate model against catalog
+  // Story 1.2 FR-5 + Story 7.1: validate model against catalog (multi-model support).
   const model = typeof value.model === 'string' && value.model.length > 0
     ? value.model
     : DEFAULT_TEXT_MODEL;
 
-  if (model !== DEFAULT_TEXT_MODEL) {
+  if (!(SUPPORTED_MODELS as readonly string[]).includes(model)) {
     return { error: 'model_not_found' };
   }
 
@@ -367,6 +481,12 @@ function normalizeGenerateRequest(value: unknown): { value: GenerateRequest } | 
   // Story 1.2 FR-5: stop — pass through if present and valid
   const stop = normalizeStop(value);
 
+  // Story 7.1 — Pass through tools + tool_choice untouched for the Ollama-native
+  // route. Gateway doesn't validate the schema; Ollama's chat template renders
+  // them as XML for Qwen and returns structured tool_calls.
+  const tools = Array.isArray(value.tools) && value.tools.length > 0 ? value.tools : undefined;
+  const toolChoice = value.tool_choice;
+
   return {
     value: {
       model,
@@ -376,6 +496,8 @@ function normalizeGenerateRequest(value: unknown): { value: GenerateRequest } | 
       ...(topP !== undefined ? { top_p: topP } : {}),
       ...(stop !== undefined ? { stop } : {}),
       ...(streamOptions !== undefined ? { stream_options: streamOptions } : {}),
+      ...(tools !== undefined ? { tools } : {}),
+      ...(toolChoice !== undefined ? { tool_choice: toolChoice } : {}),
       stream,
     },
   };
@@ -426,6 +548,7 @@ function handleGenerateUpstreamError(
   tokenState: TokenBudgetState,
   model: string,
   env: Env,
+  completionId?: string,
 ): Response {
   let status = 503;
   let error = 'upstream_unavailable';
@@ -449,7 +572,7 @@ function handleGenerateUpstreamError(
     error_code: error,
   });
 
-  return generateError(status, error, tokenState, model, env);
+  return generateError(status, error, tokenState, model, env, completionId);
 }
 
 function logGenerateInvalid(ip: string | null, start: number, errorCode: string): void {
@@ -490,15 +613,27 @@ function generateError(
   tokenState: TokenBudgetState,
   model: string,
   env: Env,
+  completionId?: string,
 ): Response {
   // Story 1.2 FR-6: use OpenAI error envelope
+  // Story 7.1.1: emit x-request-id on error paths too — VS Code Copilot BYOK
+  // crashes with `Cannot read properties of undefined (reading 'headerRequestId')`
+  // when the header is missing. Commit 07a6a2c added it to success paths only;
+  // this closes the regression on 400/401/404/413/429/502/503.
   return openaiErrorResponse(error, {
+    ...(completionId ? { 'x-request-id': completionId } : {}),
     ...tokenHeaders(tokenState, model),
     ...corsHeaders(env),
   });
 }
 
-function withGenerateHeaders(response: Response, tokenState: TokenBudgetState, model: string, env: Env): Response {
+function withGenerateHeaders(
+  response: Response,
+  tokenState: TokenBudgetState,
+  model: string,
+  env: Env,
+  completionId?: string,
+): Response {
   // Story 1.2 FR-6: auth errors from validateAuth use old format — wrap in OpenAI envelope
   const headers = new Headers();
   for (const [key, value] of Object.entries(tokenHeaders(tokenState, model))) {
@@ -507,6 +642,9 @@ function withGenerateHeaders(response: Response, tokenState: TokenBudgetState, m
   for (const [key, value] of Object.entries(corsHeaders(env))) {
     headers.set(key, value);
   }
+  // Story 7.1.1: same rationale as generateError — client BYOK reads
+  // x-request-id on every response. Auth early-return was missing it too.
+  if (completionId) headers.set('x-request-id', completionId);
   // Map old auth error to OpenAI envelope
   const body: OpenAIErrorBody = {
     error: {
@@ -557,6 +695,8 @@ function json(status: number, body: unknown, headers: Record<string, string> = {
 
 export const generateInternals = {
   DEFAULT_TEXT_MODEL,
+  SUPPORTED_MODELS,
   estimateMaxPossibleTokens,
   normalizeGenerateRequest,
+  resolveModelUpstream,
 };

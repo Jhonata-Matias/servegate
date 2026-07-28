@@ -32,6 +32,18 @@ export interface Env {
   RUNPOD_ENDPOINT_ID: string;
   RUNPOD_LTX_ENDPOINT_ID?: string;
   RUNPOD_TEXT_ENDPOINT_ID?: string;
+  // Story 7.1 — Qwen3-Coder-30B agentic coding via RunPod POD (not Serverless).
+  // Ollama-based, HF community weights (~18GB Q4). POD provides better UX than
+  // Serverless for agentic loops (no per-request cold start once loaded to VRAM).
+  //
+  // - RUNPOD_CODER_POD_ID: needed by scheduled handler for start/stop API calls
+  //   (POST /v1/pods/{id}/start, POST /v1/pods/{id}/stop).
+  // - RUNPOD_CODER_POD_URL: full URL to Ollama OpenAI-compat endpoint (proxy).
+  //   Pattern: https://{pod_id}-11434.proxy.runpod.net/v1/chat/completions
+  //
+  // Rollback: `wrangler secret delete RUNPOD_CODER_POD_URL` — gemma4:e4b unaffected.
+  RUNPOD_CODER_POD_ID?: string;
+  RUNPOD_CODER_POD_URL?: string;
   VIDEO_DAILY_LIMIT?: string;
   CORS_ALLOWED_ORIGIN?: string;
   // Public origin of the worker used to build absolute URLs returned to clients.
@@ -53,11 +65,19 @@ export interface TokenBudgetState {
   secondsUntilReset: number;
 }
 
-export type GenerateRole = 'system' | 'user' | 'assistant';
+export type GenerateRole = 'system' | 'user' | 'assistant' | 'tool';
 
 export interface GenerateMessage {
   role: GenerateRole;
+  // Story 7.1.7 — Content may be empty string when `tool_calls` is present
+  // on an assistant message (agentic tool-cycle turns from Copilot Chat).
   content: string;
+  // Story 7.1.7 — Assistant messages that requested tool execution carry the
+  // tool_calls history so the model can resume the conversation coherently.
+  tool_calls?: unknown[];
+  // Story 7.1.7 — Required on role:"tool" messages — echoes the id from the
+  // assistant's prior tool_calls entry so the model can associate result → call.
+  tool_call_id?: string;
 }
 
 export interface GenerateRequest {
@@ -71,6 +91,11 @@ export interface GenerateRequest {
   stream?: boolean;
   stream_options?: { include_usage?: boolean };
   n?: number;
+  // Story 7.1 — Function/tool calling (OpenAI shape). Passed through unchanged
+  // to the upstream (Ollama /api/chat translates them natively). Gateway does
+  // not validate their schema — that's the upstream's job.
+  tools?: unknown[];
+  tool_choice?: unknown;
 }
 
 export interface GenerateResponse {

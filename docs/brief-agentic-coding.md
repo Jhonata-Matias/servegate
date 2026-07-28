@@ -40,20 +40,20 @@ The category joins existing pod capabilities:
 
 ## Proposed Solution
 
-Install **one** open-weights agentic-coding LLM on the existing pod, expose it as an **OpenAI-compatible HTTP endpoint** (via vLLM), and drive it from the owner's laptop **via CLI only** — `curl` / `httpie` scripts + shell aliases — with no IDE / MCP integration. Scope explicitly locked to CLI-only per owner elicitation (Q4).
+Install **one** open-weights agentic-coding LLM as a **NEW isolated RunPod Serverless endpoint** (distinct from existing FLUX / Qwen-i2i / LTX / gemma4 endpoints), expose it via the **existing Cloudflare Worker gateway** at `https://gemma4-gateway.jhonata-matias.workers.dev/v1/chat/completions` selectable by the `model` field, and drive it from **VS Code via GitHub Copilot BYOK** (customendpoint vendor with `toolCalling: true`). Scope AMPLIFIED from original CLI-only path (Q4 superseded 2026-07-25 — see Change Log 2026-07-25 entry). Rationale for scope change: empirical PM analysis on 2026-07-25 (98 PRs from `contabhub/onety` over 14 days) showed the workload distribution justifies an agentic loop surface, not just episodic queries; VS Code BYOK is the lowest-friction agentic surface owner already uses.
 
 **Key characteristics:**
-- **Serving stack:** vLLM 0.6+ with OpenAI-compatible endpoint on `localhost:8000`. Native `tools` / `tool_choice` support. SGLang as fallback only if vLLM has bugs on the chosen model's tool-call shape.
-- **Access pattern:** SSH tunnel from owner's laptop → pod:8000 (existing `pod.sh` flow). No exposure through the servegate gateway. No `GATEWAY_API_KEY_*` involvement. No Tailscale (deferred until latency proves to be a problem).
-- **Interaction pattern:** owner runs `curl` / `httpie` calls with tool-use prompts from laptop shell; model returns code, owner copies to IDE for review + apply. Explicitly NOT a Claude Code-style continuous agent loop. Episodic query pattern.
-- **Model choice:** one model to start; rotate if unsatisfactory. Not a menu of options — decision fatigue is the enemy of internal tooling adoption.
-- **Session pattern:** on-demand pod start (existing `pod.sh start/stop` flow) — not always-on. Owner spins up before a coding block, tears down after.
+- **Serving stack:** vLLM 0.6+ OpenAI-compatible server with native `tools` / `tool_choice` support (parser `qwen3_xml` for Qwen3-Coder family). SGLang as fallback only if vLLM has bugs on the chosen model's tool-call shape.
+- **Access pattern:** VS Code → `https://gemma4-gateway.jhonata-matias.workers.dev/v1/chat/completions` (public HTTPS through Cloudflare Worker) → `RUNPOD_CODER_ENDPOINT_ID` serverless invocation. Same auth surface as gemma4:e4b (X-API-Key or Bearer). No SSH tunnel, no port-forward, no additional infra.
+- **Interaction pattern:** owner uses VS Code chat panel with model `qwen3-coder:30b` selected; VS Code drives the agentic loop with tool-calling enabled. Model returns code + tool_calls; VS Code executes tools and iterates. Owner reviews diffs before merge (harness = `npm test` mandatory pre-merge, per Story 7.1 AC5).
+- **Model choice:** one model to start (Qwen3-Coder-30B-A3B-Instruct, Apache-2.0); rotate if unsatisfactory. Not a menu of options — decision fatigue is the enemy of internal tooling adoption.
+- **Session pattern:** serverless per-request billing (no on-demand pod lifecycle to manage). Cold start incurred on first request after idle; ~$1.22/hr active on 48GB A6000 tier. Monthly soft cap $60 (Story 7.1 AC6).
 
 **Differentiators from just "using Claude Code":**
-- Zero variable cost per token — flat $0.69/hr while running
-- Fully offline once model is downloaded to `/workspace/`
-- Data never leaves owner's infrastructure (relevant for NDA / sensitive client repos)
-- Same pod infrastructure already used for other model categories → zero additional platform work
+- Per-second serverless billing ($1.22/hr active on 48GB tier) — zero cost when idle (vs monthly Claude subscription burn regardless of activity)
+- Data stays within owner's Cloudflare + RunPod infrastructure — no traversal through Anthropic (relevant for NDA / sensitive client repos)
+- Redundancy against Anthropic outages / rate-limits — owner keeps working when Claude degrades
+- Reuses existing servegate gateway infrastructure (deploy `c737cd5c` 2026-07-25) → no new gateway build, no new SDK surface
 
 **Non-differentiators (and OK with that):**
 - Quality — open agentic coders are ~6-12 months behind Claude Sonnet-class. Fine for "second option," not a replacement.
@@ -87,9 +87,9 @@ Install **one** open-weights agentic-coding LLM on the existing pod, expose it a
 
 ### Success Signals
 
-- **SS1.** At least **1 real coding task** completed using the local model via CLI (curl/httpie prompts → code returned → copied to IDE → applied → shipped or reviewed). Task chosen from actual servegate backlog — not a synthetic benchmark
-- **SS2.** A 1-page memo at `docs/research/agentic-coding-mvp-outcome-<date>.md` capturing: what the model got right, what it got wrong, wall-clock cost per task, and gut-feel comparison to how Claude Code would have handled the same task
-- **SS3.** Total pod hours spent on this category tracked; cost/month reported in monthly review (target ≤ 60h/mo)
+- **SS1.** **≥20% of owner's PRs (T1-T5 buckets) in a 30-day window** are drafted or completed via local Qwen through VS Code BYOK — measured against a pre-spike baseline period. Metric definition + counting rule authored in Story 7.1 AC10 memo. Superseded prior "1 real coding task via CLI" signal on 2026-07-25.
+- **SS2.** A memo at `docs/research/agentic-coding-outcome-<D+30>.md` (skeleton pre-authored in Story 7.1 AC10) capturing: % PRs migrated, cost accounting vs $60/mo cap, quality issues per bucket (T1-T5), delta in Anthropic usage, and go/kill/extend decision feeding ADR-0007
+- **SS3.** Total serverless runtime spent on this category tracked; cost/month reported in monthly review (soft cap $60/mo per Story 7.1 AC6)
 
 ### Anti-signals (things that would mean this failed)
 
@@ -101,30 +101,33 @@ Install **one** open-weights agentic-coding LLM on the existing pod, expose it a
 
 ## MVP Scope
 
-### Core Features (Must Have)
+### Core Features (Must Have) — amended 2026-07-25 for VS Code BYOK path
 
-- **Model installed** on the mounted persistent volume `/workspace/coding/models/{name}/` with weights, config, and vLLM version pinned to specific tags — survives pod stop/start
-- **OpenAI-compatible endpoint** on `http://localhost:8000/v1/chat/completions` responding to tool-call requests with well-formed `tool_calls[]` in the response
-- **SSH tunnel one-liner** (`ssh -L 8000:localhost:8000 ...`) documented in `spike/agentic-coding/README.md` so owner opens the tunnel and starts making calls in <1 min
-- **CLI helper alias / small wrapper** (`~/.local/bin/agentcode 'prompt here'`) that shapes the OpenAI-compat request and prints the response — keeps friction minimal
-- **Install/teardown script** at `spike/agentic-coding/` mirroring the existing spike pattern (`spike/hidream-poc/` etc.) — reproducible, self-documented
-- **MVP outcome memo** at `docs/research/agentic-coding-mvp-outcome-<date>.md` capturing one real task run + qualitative assessment
+- **Model deployed** as new RunPod Serverless endpoint (48GB A6000/L40S tier), weights pinned by HuggingFace commit hash, vLLM version pinned; weights persist on Network Volume `mqqgzwnfp1` (150GB US-IL-1) or dedicated fallback volume
+- **Gateway routing by model field** — `gateway/src/generate.ts` extended with helper resolving `body.model` → endpoint ID (`gemma4:e4b` → text endpoint; `qwen3-coder:30b` → new `RUNPOD_CODER_ENDPOINT_ID`; unknown → 400 `model_not_found`)
+- **`RUNPOD_CODER_ENDPOINT_ID` secret** provisioned in production Worker (via `wrangler secret put`)
+- **`/v1/models` catalog** updated to advertise `qwen3-coder:30b`
+- **VS Code BYOK setup guide** at `docs/guides/vscode-agentic-setup.pt-BR.md` — customendpoint vendor config, tool-calling enabled, `wrangler tail` validation flow, troubleshooting
+- **Install/teardown scripts** at `spike/qwen3-coder-vscode/` mirroring existing spike pattern — reproducible, self-documented, includes License Stack Audit output
+- **Outcome memo** at `docs/research/agentic-coding-outcome-<D+30>.md` (skeleton pre-authored) capturing PRs migrated %, cost, quality per bucket, decision feed for ADR-0007
 
-### Out of Scope for MVP
+### Out of Scope for MVP — amended 2026-07-25
 
-- SDK method / public gateway endpoint (excluded per elicitation)
-- IDE integration / MCP shim (excluded per elicitation Q4 — CLI-only)
-- Multi-model comparison ("try 5 models") — pick one on paper, use that one; if it fails, pivot to next single model, not a bake-off
+- SDK method / public multi-tenant endpoint — gateway route is single-tenant (owner API key only)
+- IDE integration beyond VS Code BYOK (Cursor, Zed, JetBrains, MCP shim, Claude Code custom provider) — VS Code chosen as single agentic surface
+- Multi-model comparison ("try 5 models") — pick one on paper (Qwen3-Coder-30B), use that one; if it fails, pivot to next single model, not a bake-off
 - Fine-tuning / LoRA
-- Persistent chat history / owner-facing UI beyond the CLI wrapper
-- Formal evaluation harness with multiple tasks and wall-clock stats (excluded per elicitation Q5 — single subjective session is enough)
-- Automatic pod lifecycle (auto-start on client connect, auto-stop after idle) — manual `pod.sh start/stop` for MVP
-- Cost dashboards / usage tracking beyond the manual monthly note
-- Always-on serving pattern
+- Persistent chat history / owner-facing UI beyond VS Code's native chat panel
+- Rate-limit KV separation (Qwen shares `RATE_LIMIT_KV` counter with existing paths — separate KV deferred to post-MVP if usage justifies)
+- Formal evaluation harness with multiple tasks and wall-clock stats beyond the SS1 %-migrated metric
+- Automatic pod lifecycle (serverless handles it — no persistent pod involved in this scope)
+- Cost dashboards / usage tracking beyond the manual monthly note + `wrangler tail` inspection
+- Always-on serving pattern (serverless min_workers=0 by design)
+- Persistent POD `xzn1mf6skopp5m` involvement (deferred — serverless-only for MVP to avoid Q1 GPU-capacity blocker from 2026-07-02)
 
-### MVP Success Criteria
+### MVP Success Criteria — amended 2026-07-25
 
-Owner uses the local model to accomplish at least one **real coding task** from the servegate backlog (any TD / FU / small story) via the CLI wrapper, and writes a 1-page memo summarizing what worked, what didn't, and whether it displaced any fraction of the effort that would have gone to Claude Code. Ship-or-scrap decision made from that memo.
+Owner uses the local model **through VS Code BYOK** across a 30-day post-deploy window; **≥20% of PRs merged in that window trace to Qwen-drafted contributions** (measured per Story 7.1 AC10 counting rule). Owner writes the outcome memo (D+30) capturing quantitative + qualitative findings; ship-or-scrap decision made from that memo and formalized in ADR-0007. Kill signal: <20% AND no credible path to improvement → teardown per `spike/qwen3-coder-vscode/teardown.sh`.
 
 ---
 
@@ -235,10 +238,10 @@ Output the audit as a section in the eventual PoC report or spike README, in the
 ### Open Questions
 
 - **Q1.** ⏳ **In progress via background retry:** exact GPU tier confirmed via `nvidia-smi`. Pod couldn't start on 2026-07-02 at 13:14 BRT — RunPod host has no free GPUs. Retry loop scheduled: 10 attempts × 10min = 1h40min max window. Status log at `/tmp/claude-1000/.../scratchpad/pod-start-status.log`. If loop times out, owner should try starting later from own shell or file a RunPod support ticket for capacity.
-- **Q2.** ✅ **Resolved by Q4 answer:** no Claude Code custom-provider integration needed. CLI-only path selected by owner.
+- **Q2.** ✅ **Resolved by Q4 answer (superseded 2026-07-25):** originally no custom-provider integration needed for CLI-only path. AMENDED: VS Code BYOK now in scope — customendpoint vendor with `toolCalling: true`, URL pointing to gateway `/v1/chat/completions`. Setup guide at `docs/guides/vscode-agentic-setup.pt-BR.md` (Story 7.1 AC8).
 - **Q3.** ✅ **Resolved:** DeepSeek-V3 (MIT+ModelLicense with RAI clauses — clean for owner-internal), GLM-4.5-Air (MIT clean), Kimi-K2 (Modified MIT with attribution triggered at >100M MAU or >$20M/mo revenue — unreachable). All 4 candidates approved for owner-internal use. Full findings in Technical Considerations table.
-- **Q4.** ✅ **Resolved 2026-07-02:** CLI-only. MCP shim work dropped from scope; no IDE integration in MVP.
-- **Q5.** ✅ **Resolved 2026-07-02:** single subjective session — one real coding task from servegate backlog, memo captured. Evaluation harness deferred to post-MVP if this category ever gets promoted.
+- **Q4.** ✅ **Resolved 2026-07-02 (SUPERSEDED 2026-07-25):** originally CLI-only, no IDE integration. AMENDED per empirical PM analysis 2026-07-25 (98 PRs Onety, distribuição T1-T5) — VS Code BYOK via gateway is the primary surface. MCP shim still out of scope; Cursor/Zed/JetBrains still out of scope; only VS Code Copilot BYOK.
+- **Q5.** ✅ **Resolved 2026-07-02 (SUPERSEDED 2026-07-25):** originally single subjective session with 1 real task memo. AMENDED to objective metric: `≥20% PRs migrated in 30-day window` (Story 7.1 AC10). This raises the evaluation bar deliberately — owner ampliou escopo pra VS Code + agentic loop, e o kill-signal precisa ser proporcionalmente objetivo.
 - **Q6.** ⏳ **Awaiting pod boot:** can `/pods/{podId}/update` accept `networkVolumeId` at runtime to attach `mqqgzwnfp1` to the existing pod without recreation? If not, pod recreation in `US-IL-1` is the plan.
 
 ---
@@ -272,3 +275,4 @@ Output the audit as a section in the eventual PoC report or spike README, in the
 | 2026-07-02 | @analyst (Alex) | Initial YOLO draft. Scope: internal-only tooling, tool-use-native models, single-model spike-first path. 5 VERIFY items flagged for owner confirmation. Candidates triaged license-first per repo precedent (Qwen3-Coder + Qwen2.5-Coder-32B lead; Codestral + StarCoder2 rejected upstream). |
 | 2026-07-02 | @analyst (Alex) | Verification pass (Q3 fully resolved; Q1/Q6 in progress via background retry). LICENSE-MODEL / LICENSE files read directly for DeepSeek-V3, GLM-4.5-Air, Kimi-K2 — all 4 non-rejected candidates cleared for owner-internal use. Repo rejection pattern (revenue cliff) confirmed NOT triggered. Pod metadata queried: 20GB container disk + 0GB persistent volume = design blocker for anything above 7B tier. **Resolution locked:** an existing 150GB Network Volume `mqqgzwnfp1` (`ollama-models`, `US-IL-1`) already provisioned in the RunPod account — attach path pending same-DC confirmation once pod boots. Pod start currently blocked by RunPod host capacity; retry loop scheduled 10× at 10min intervals. GPU tier inferred to A6000/A40 48GB from cost + RAM + vCPU profile; empirical confirm pending. |
 | 2026-07-02 | @analyst (Alex) | **Q4 + Q5 locked by owner.** Q4: CLI-only (no IDE, no MCP shim). Q5: single subjective session (no eval harness). Scope tightening cascaded: MVP core features reduced (CLI wrapper `~/.local/bin/agentcode` replaces IDE integration); SS1 rewritten as CLI-driven task from real backlog; R5 downgraded Low/Low (no downstream consumer to break); Q2 fully retired (no Claude Code custom-provider needed). Brief is now scope-complete for merge — only Q1/Q6 remain PENDING as verification-in-flight, and those feed the downstream spike story, not the brief itself. |
+| 2026-07-25 | @pm (Morgan) | **Scope AMENDMENT authorized by owner (session 2026-07-25).** Original CLI-only path (locked 2026-07-02 via Q4) SUPERSEDED after empirical PM analysis (98 PRs from `contabhub/onety` over 14 days revealed T1-T5 distribution + agentic-loop workload profile). New scope: **VS Code BYOK via existing Cloudflare Worker gateway** with routing by `model` field (extends `RUNPOD_TEXT_ENDPOINT_ID` pattern from Epic 4). Cascade: §Proposed Solution rewritten (gateway URL instead of SSH tunnel; agentic loop instead of episodic); §MVP Core Features rewritten (RunPod Serverless endpoint + gateway routing helper + VS Code setup guide replace CLI wrapper + SSH one-liner); §Out of Scope rewritten (IDE integration beyond VS Code stays out; POD persistente removed from scope; rate-limit KV separation deferred); SS1 upgraded from "1 real task via CLI" to **"≥20% PRs migrated in 30-day window"** (objective metric feeding ADR-0007); Q2/Q4/Q5 marked SUPERSEDED with reason. Downstream: Story 7.1 (`docs/stories/7.1.qwen3-coder-vscode-spike.story.md`, Ready per @po 9.1/10) executes this amended scope. Brief now consistent with Story 7.1 in-flight. |
