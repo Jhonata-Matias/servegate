@@ -29,6 +29,11 @@ Thumbs.db
 .claude/settings.local.json
 .aiox/install-log.txt
 
+# Story 7.1 dev captures — mitmnode dumps contain live Bearer tokens and
+# 50KB+ Copilot Chat request bodies. Keep local, never commit.
+flows.jsonl
+flows-*.jsonl
+
 # Handoff artifacts (runtime)
 .aiox/handoffs/
 
